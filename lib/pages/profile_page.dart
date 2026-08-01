@@ -15,6 +15,7 @@ import 'dart:async';
 import 'paywall_page.dart';
 import 'manage_subscription_page.dart';
 import 'plus_unlocked_page.dart';
+import '../widgets/achievement_unlock_toast.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -82,11 +83,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
       // Antes corrían una tras otra (4 round-trips en serie); en paralelo
       // el tiempo total es el de la más lenta, no la suma de todas.
+      List<String> newlyUnlockedIds = [];
       final results = await Future.wait<dynamic>([
         _supabase.from('profiles').select().eq('id', userId).maybeSingle(),
-        _achievementsService
-            .checkAndUnlock()
-            .then((_) => _achievementsService.getAllWithStatus()),
+        _achievementsService.checkAndUnlock().then((ids) {
+          newlyUnlockedIds = ids;
+          return _achievementsService.getAllWithStatus();
+        }),
         _karmaService.getMyKarma(),
       ]);
       final data = results[0] as Map<String, dynamic>?;
@@ -108,6 +111,22 @@ class _ProfilePageState extends State<ProfilePage> {
           _emergencyPhoneCtrl.text = data?['emergency_contact_phone'] ?? '';
           _loading = false;
         });
+        if (newlyUnlockedIds.isNotEmpty) {
+          final unlockedDetails = newlyUnlockedIds
+              .map((id) => achievements.firstWhere(
+                    (a) => a['id'] == id,
+                    orElse: () => <String, dynamic>{},
+                  ))
+              .where((a) => a.isNotEmpty)
+              .map((a) => {
+                    'icon': a['icon'] as String? ?? '🏅',
+                    'title': a['title'] as String? ?? 'Nuevo logro',
+                  })
+              .toList();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) showAchievementUnlockedToasts(context, unlockedDetails);
+          });
+        }
       }
     } catch (e) {
       // Sin internet u otro error de red: mostrar lo último que se guardó en

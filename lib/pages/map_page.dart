@@ -42,6 +42,8 @@ import '../services/notification_service.dart';
 import '../services/ride_stats_service.dart';
 import '../services/subscription_service.dart';
 import '../services/poi_photos_service.dart';
+import '../services/achievements_service.dart';
+import '../widgets/achievement_unlock_toast.dart';
 import '../core/route_observer.dart';
 import '../core/confirm_word_dialog.dart';
 import '../widgets/event_photo_gallery.dart';
@@ -1186,7 +1188,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   // hace Google Maps. Esto es SOLO un panel de comparación — el puck nativo
   // (arriba) sigue siendo la única flecha visible en el mapa; no se dibuja
   // ningún marcador manual encima.
-  static const bool _kEnableHeadingDiagnostics = true;
+  static const bool _kEnableHeadingDiagnostics = false;
   static const bool _kShowHeadingDiagPanel = false;
   static const double _kHeadingSmoothingAlpha = 0.15;
 
@@ -1746,6 +1748,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             duration: Duration(seconds: 2),
           ),
         );
+        _checkAchievementsAndNotify();
       }
     } catch (e) {
       debugPrint('❌ Error creando alerta: $e');
@@ -4525,6 +4528,36 @@ class _MapPageState extends State<MapPage> with RouteAware {
         debugPrint('Error guardando km: $e');
       }
     }
+    _checkAchievementsAndNotify();
+  }
+
+  final _achievementsService = AchievementsService();
+
+  /// Chequea los logros justo después de guardar km (o cualquier otro
+  /// avance) para que la notificación de "logro completado" salga al
+  /// toque, en vez de tener que esperar a abrir el perfil.
+  Future<void> _checkAchievementsAndNotify() async {
+    try {
+      final newIds = await _achievementsService.checkAndUnlock();
+      if (newIds.isEmpty || !mounted) return;
+      final all = await _achievementsService.getAllWithStatus();
+      final details = newIds
+          .map((id) => all.firstWhere(
+                (a) => a['id'] == id,
+                orElse: () => <String, dynamic>{},
+              ))
+          .where((a) => a.isNotEmpty)
+          .map((a) => {
+                'icon': a['icon'] as String? ?? '🏅',
+                'title': a['title'] as String? ?? 'Nuevo logro',
+              })
+          .toList();
+      if (mounted && details.isNotEmpty) {
+        showAchievementUnlockedToasts(context, details);
+      }
+    } catch (e) {
+      debugPrint('Error chequeando logros tras guardar km: $e');
+    }
   }
 
   Future<void> _confirmLogout() async {
@@ -4812,7 +4845,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const EventsPage()),
-                    );
+                    ).then((_) => _checkAchievementsAndNotify());
                   },
                 ),
                 ListTile(
@@ -4834,7 +4867,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const CreateEventPage()),
-                    );
+                    ).then((_) => _checkAchievementsAndNotify());
                   },
                 ),
               ],
