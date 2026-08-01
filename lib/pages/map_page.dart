@@ -5072,6 +5072,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 ],
               ),
             ),
+            const _DrawerPlusBanner(),
             const Divider(color: Colors.white24, height: 1),
             const Padding(
               padding: EdgeInsets.only(left: 16, top: 8, bottom: 8),
@@ -7839,6 +7840,166 @@ class AlertTypeInfo {
   final String label;
 
   AlertTypeInfo(this.icon, this.color, this.label);
+}
+
+/// Banner promocional de Pedalea Plus dentro del drawer, justo arriba de
+/// "CUENTA". Si el usuario ya es Plus, en vez del anuncio muestra un
+/// mensaje de agradecimiento.
+class _DrawerPlusBanner extends StatefulWidget {
+  const _DrawerPlusBanner();
+
+  @override
+  State<_DrawerPlusBanner> createState() => _DrawerPlusBannerState();
+}
+
+class _DrawerPlusBannerState extends State<_DrawerPlusBanner> {
+  final _supabase = Supabase.instance.client;
+  bool? _isPlus;
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid != null &&
+        uid == _ProfileButtonState.cachedForUid &&
+        _ProfileButtonState.cachedProfile != null) {
+      _isPlus = _ProfileButtonState.cachedProfile!['is_plus'] as bool? ?? false;
+    } else {
+      final cached = CacheService.loadProfile();
+      _isPlus = cached?['is_plus'] as bool? ?? false;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      final data = await _supabase
+          .from('profiles')
+          .select('is_plus')
+          .eq('id', uid)
+          .maybeSingle();
+      if (mounted && data != null) {
+        setState(() => _isPlus = data['is_plus'] as bool? ?? false);
+      }
+    } catch (_) {
+      // Sin conexión: se queda con lo último que había en caché.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const goldColor = Color(0xFFF2C94C);
+    final isPlus = _isPlus ?? false;
+
+    if (isPlus) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: goldColor.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: goldColor.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.workspace_premium_rounded,
+                  color: goldColor, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Gracias por ser Pedalea Plus 💛',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const PaywallPage(
+                reason: 'Desbloquea funciones exclusivas con Pedalea Plus.',
+              ),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                goldColor.withOpacity(0.20),
+                goldColor.withOpacity(0.06),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: goldColor.withOpacity(0.35)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: goldColor.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.workspace_premium_rounded,
+                    color: goldColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Hazte Pedalea Plus',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Más funciones, sin límites',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  color: goldColor, size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Encabezado del drawer: nombre real del usuario (no el correo) + avatar
