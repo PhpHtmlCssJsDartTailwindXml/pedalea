@@ -4564,7 +4564,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
       ),
     );
     if (confirm == true) {
-      if (mounted) Navigator.pop(context);
       await _logout();
     }
   }
@@ -5450,28 +5449,35 @@ class _MapPageState extends State<MapPage> with RouteAware {
           Builder(builder: (context) {
             final size = MediaQuery.of(context).size;
             final pos = _helpBubblePos ?? Offset(size.width - 64, size.height - 220);
-            return Positioned(
-              left: pos.dx,
-              top: pos.dy,
-              child: GestureDetector(
-                onPanUpdate: (details) {
-                  setState(() {
-                    final newX = (pos.dx + details.delta.dx).clamp(4.0, size.width - 52.0);
-                    final newY = (pos.dy + details.delta.dy).clamp(60.0, size.height - 100.0);
-                    _helpBubblePos = Offset(newX, newY);
-                  });
-                },
-                onTap: _onHelpBubbleTap,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    AnimatedScale(
+            const bubbleSize = 48.0;
+            const tipMaxWidth = 220.0;
+            const gap = 8.0;
+            // Si no hay espacio a la derecha del burbuja para el tip, lo
+            // mostramos a la izquierda en su lugar (y viceversa) para que
+            // nunca se salga de la pantalla.
+            final spaceRight = size.width - (pos.dx + bubbleSize) - gap;
+            final showTipOnRight = spaceRight >= tipMaxWidth;
+            return Stack(
+              children: [
+                Positioned(
+                  left: pos.dx,
+                  top: pos.dy,
+                  child: GestureDetector(
+                    onPanUpdate: (details) {
+                      setState(() {
+                        final newX = (pos.dx + details.delta.dx).clamp(4.0, size.width - 52.0);
+                        final newY = (pos.dy + details.delta.dy).clamp(60.0, size.height - 100.0);
+                        _helpBubblePos = Offset(newX, newY);
+                      });
+                    },
+                    onTap: _onHelpBubbleTap,
+                    child: AnimatedScale(
                       scale: _helpBubbleBounce ? 1.18 : 1.0,
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.elasticOut,
                       child: Container(
-                        width: 48,
-                        height: 48,
+                        width: bubbleSize,
+                        height: bubbleSize,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: const Color(0xFF12213F),
@@ -5483,31 +5489,38 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         child: const Icon(Icons.tips_and_updates_rounded, color: Color(0xFFC9FF5C), size: 24),
                       ),
                     ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 220),
-                      child: _showHelpTipText
-                          ? Container(
-                              constraints: const BoxConstraints(maxWidth: 220),
-                              margin: const EdgeInsets.only(left: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0E0E18),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.white.withOpacity(0.1)),
-                                boxShadow: [
-                                  BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 4)),
-                                ],
-                              ),
-                              child: Text(
-                                _helpTips[_helpTipIndex],
-                                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 12, height: 1.3),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: pos.dy,
+                  left: showTipOnRight ? pos.dx + bubbleSize + gap : null,
+                  right: showTipOnRight ? null : size.width - pos.dx + gap,
+                  child: IgnorePointer(
+                    ignoring: !_showHelpTipText,
+                    child: AnimatedOpacity(
+                      opacity: _showHelpTipText ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOut,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: tipMaxWidth),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0E0E18),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 4)),
+                          ],
+                        ),
+                        child: Text(
+                          _helpTips[_helpTipIndex],
+                          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 12, height: 1.3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             );
           }),
         ],

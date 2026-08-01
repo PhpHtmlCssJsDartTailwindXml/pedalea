@@ -94,11 +94,11 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
     );
     _welcomeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 700),
     );
     _loopCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1300),
+      duration: const Duration(milliseconds: 1000),
     );
     _runWelcomeSequence();
 
@@ -138,7 +138,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
     if (!mounted) return;
     await _welcomeCtrl.forward();
     if (!mounted) return;
-    await Future.delayed(const Duration(milliseconds: 1600));
+    await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     await Future.wait([
       _welcomeCtrl.reverse(),

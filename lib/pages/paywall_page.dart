@@ -112,7 +112,7 @@ class _PaywallPageState extends State<PaywallPage> {
           TextButton(
             onPressed: () async {
               await _service.restorePurchases();
-              if (mounted) {
+              if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Buscando compras anteriores...',
