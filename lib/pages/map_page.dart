@@ -56,6 +56,7 @@ import '../pages/profile_page.dart';
 import '../pages/ranking_page.dart';
 import '../pages/route_planner_page.dart';
 import '../pages/stats_page.dart';
+import '../pages/settings_page.dart';
 import '../core/glass.dart';
 import '../core/constants.dart';
 import '../widgets/weather_widget.dart';
@@ -5162,6 +5163,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   color: Colors.redAccent,
                   fontWeight: FontWeight.w600,
                 ),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.settings_rounded,
+                    color: Colors.white70),
+                tooltip: 'Configuración',
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsPage()),
+                  );
+                },
               ),
               onTap: _confirmLogout,
             ),
