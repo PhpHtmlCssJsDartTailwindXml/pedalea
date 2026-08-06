@@ -59,6 +59,8 @@ import '../pages/stats_page.dart';
 import '../core/glass.dart';
 import '../core/constants.dart';
 import '../widgets/weather_widget.dart';
+import '../widgets/rain_overlay.dart';
+import '../services/weather_service.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -80,6 +82,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   bool _isFollowingUser = false;
   bool _cicloviasAdded = false;
+
+  // Overlay de lluvia: refleja el clima detectado por WeatherService.
+  bool _isRaining = false;
+  bool _isHeavyRain = false;
   // false mientras el estilo del mapa está cargando/transicionando (justo
   // después de loadStyleURI y hasta que onStyleLoadedListener confirma que
   // el nuevo StyleManager ya está listo). Sin esto, una actualización de
@@ -404,6 +410,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _checkLocationPermission();
     _loadMyUsername();
     _loadFallDetectionPref();
+    _loadRainState();
 
     // Restaurar preferencia de conteo en segundo plano.
     SharedPreferences.getInstance().then((p) {
@@ -682,6 +689,31 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // Sin conexión: se queda con el valor por defecto (activado).
     } finally {
       if (_fallDetectionEnabled) _fallService.start(_onFallDetected);
+    }
+  }
+
+  /// Consulta el clima actual y activa el overlay de lluvia si corresponde.
+  /// Se reintenta cada 10 minutos para reflejar cambios de clima en vivo.
+  Future<void> _loadRainState() async {
+    try {
+      geo.Position? pos = await geo.Geolocator.getLastKnownPosition();
+      pos ??= await geo.Geolocator.getCurrentPosition(
+        desiredAccuracy: geo.LocationAccuracy.medium,
+      ).timeout(const Duration(seconds: 8));
+      final data = await WeatherService().fetch(pos.latitude, pos.longitude);
+      if (!mounted || data == null) return;
+      final heavy = data.precipitation > 5 ||
+          (data.weatherCode >= 63 && data.weatherCode <= 67);
+      setState(() {
+        _isRaining = data.isRaining;
+        _isHeavyRain = heavy;
+      });
+    } catch (e) {
+      debugPrint('No se pudo cargar el estado de lluvia: $e');
+    } finally {
+      if (mounted) {
+        Timer(const Duration(minutes: 10), _loadRainState);
+      }
     }
   }
 
@@ -5177,6 +5209,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
               },
             ),
           ),
+          // ── Overlay de gotas de lluvia (según clima detectado) ────────────
+          if (_isRaining)
+            Positioned.fill(
+              child: RainOverlay(heavy: _isHeavyRain),
+            ),
           // ── Banner sin conexión ───────────────────────────────────────────
           if (_isOffline)
             Positioned(
