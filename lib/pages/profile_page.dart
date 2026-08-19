@@ -51,9 +51,32 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    _showCachedDataImmediately();
     _loadProfile();
     _connectivitySub = ConnectivityService.stream.listen((online) {
       if (mounted) setState(() => _isOffline = !online);
+    });
+  }
+
+  /// Muestra perfil y logros guardados en disco de inmediato, sin esperar
+  /// red, mientras _loadProfile() los refresca por detrás. Evita el spinner
+  /// en cada entrada al perfil cuando ya se cargó antes.
+  void _showCachedDataImmediately() {
+    final cachedProfile = CacheService.loadProfile();
+    final cachedAchievements = CacheService.loadAchievements(ignoreExpiry: true);
+    if (cachedProfile == null && cachedAchievements == null) return;
+    setState(() {
+      if (cachedProfile != null) {
+        _profile = cachedProfile;
+        _usernameCtrl.text = cachedProfile['username'] ?? '';
+        _fullNameCtrl.text = cachedProfile['full_name'] ?? '';
+        _avatarUrlCtrl.text = cachedProfile['avatar_url'] ?? '';
+        _communeCtrl.text = cachedProfile['commune'] ?? '';
+        _emergencyNameCtrl.text = cachedProfile['emergency_contact_name'] ?? '';
+        _emergencyPhoneCtrl.text = cachedProfile['emergency_contact_phone'] ?? '';
+        _loading = false;
+      }
+      if (cachedAchievements != null) _achievements = cachedAchievements;
     });
   }
 
@@ -81,27 +104,22 @@ class _ProfilePageState extends State<ProfilePage> {
       final userId = _user?.id;
       if (userId == null) return;
 
-      // Antes corrían una tras otra (4 round-trips en serie); en paralelo
-      // el tiempo total es el de la más lenta, no la suma de todas.
-      List<String> newlyUnlockedIds = [];
+      // Perfil y karma son 2 consultas rápidas: con eso ya se puede mostrar
+      // la pantalla. Los logros (checkAndUnlock) pueden implicar hasta ~14
+      // consultas en serie contra Supabase, así que se cargan aparte en
+      // segundo plano en vez de bloquear el spinner inicial.
       final results = await Future.wait<dynamic>([
         _supabase.from('profiles').select().eq('id', userId).maybeSingle(),
-        _achievementsService.checkAndUnlock().then((ids) {
-          newlyUnlockedIds = ids;
-          return _achievementsService.getAllWithStatus();
-        }),
         _karmaService.getMyKarma(),
       ]);
       final data = results[0] as Map<String, dynamic>?;
-      final achievements = results[1] as List<Map<String, dynamic>>;
-      final karma = results[2] as int;
+      final karma = results[1] as int;
 
       if (data != null) await CacheService.saveProfile(data);
 
       if (mounted) {
         setState(() {
           _profile = data;
-          _achievements = achievements;
           _karma = karma;
           _usernameCtrl.text = data?['username'] ?? '';
           _fullNameCtrl.text = data?['full_name'] ?? '';
@@ -111,22 +129,7 @@ class _ProfilePageState extends State<ProfilePage> {
           _emergencyPhoneCtrl.text = data?['emergency_contact_phone'] ?? '';
           _loading = false;
         });
-        if (newlyUnlockedIds.isNotEmpty) {
-          final unlockedDetails = newlyUnlockedIds
-              .map((id) => achievements.firstWhere(
-                    (a) => a['id'] == id,
-                    orElse: () => <String, dynamic>{},
-                  ))
-              .where((a) => a.isNotEmpty)
-              .map((a) => {
-                    'icon': a['icon'] as String? ?? '🏅',
-                    'title': a['title'] as String? ?? 'Nuevo logro',
-                  })
-              .toList();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) showAchievementUnlockedToasts(context, unlockedDetails);
-          });
-        }
+        _loadAchievementsInBackground();
       }
     } catch (e) {
       // Sin internet u otro error de red: mostrar lo último que se guardó en
@@ -150,6 +153,40 @@ class _ProfilePageState extends State<ProfilePage> {
         // muestra solo via ConnectivityService — no hace falta un SnackBar
         // extra con el error crudo.
       }
+    }
+  }
+
+  /// Chequea y trae los logros después de que el perfil ya se mostró, para
+  /// no bloquear la pantalla con las ~14 consultas en serie que puede hacer
+  /// checkAndUnlock(). Si el caché de logros sigue vigente (< 15 min), se
+  /// omite por completo para no repetir esas consultas cada vez que se
+  /// entra al perfil.
+  Future<void> _loadAchievementsInBackground() async {
+    if (CacheService.loadAchievements() != null) return;
+    try {
+      final newlyUnlockedIds = await _achievementsService.checkAndUnlock();
+      final achievements = await _achievementsService.getAllWithStatus();
+      await CacheService.saveAchievements(achievements);
+      if (!mounted) return;
+      setState(() => _achievements = achievements);
+      if (newlyUnlockedIds.isNotEmpty) {
+        final unlockedDetails = newlyUnlockedIds
+            .map((id) => achievements.firstWhere(
+                  (a) => a['id'] == id,
+                  orElse: () => <String, dynamic>{},
+                ))
+            .where((a) => a.isNotEmpty)
+            .map((a) => {
+                  'icon': a['icon'] as String? ?? '🏅',
+                  'title': a['title'] as String? ?? 'Nuevo logro',
+                })
+            .toList();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) showAchievementUnlockedToasts(context, unlockedDetails);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando logros en segundo plano: $e');
     }
   }
 

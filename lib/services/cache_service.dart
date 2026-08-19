@@ -9,9 +9,12 @@ class CacheService {
   static const _keyEvents     = 'cache_events_v1';
   static const _keyCiclovias  = 'cache_ciclovias_v1';
   static const _keyProfile   = 'cache_profile_v1';
+  static const _keyAchievements = 'cache_achievements_v1';
   static const _keyAlertTs    = 'cache_alerts_ts_v1';
   static const _keyEventTs    = 'cache_events_ts_v1';
+  static const _keyAchievementsTs = 'cache_achievements_ts_v1';
   static const _maxAge        = Duration(minutes: 30);
+  static const _achievementsMaxAge = Duration(minutes: 15);
 
   static SharedPreferences? _prefs;
 
@@ -21,11 +24,11 @@ class CacheService {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  static bool _isExpired(String? tsStr) {
+  static bool _isExpired(String? tsStr, [Duration maxAge = _maxAge]) {
     if (tsStr == null) return true;
     final ts = DateTime.tryParse(tsStr);
     if (ts == null) return true;
-    return DateTime.now().difference(ts) > _maxAge;
+    return DateTime.now().difference(ts) > maxAge;
   }
 
   static List<Map<String, dynamic>>? _readList(String key) {
@@ -106,6 +109,22 @@ class CacheService {
       debugPrint('CacheService: error leyendo perfil: $e');
       return null;
     }
+  }
+
+  // ── Logros del usuario (expira a los 15 min: checkAndUnlock() hace hasta
+  // ~14 consultas en serie, así que no vale la pena repetirlo cada vez que
+  // se entra al perfil) ────────────────────────────────────────────────────
+
+  static Future<void> saveAchievements(List<Map<String, dynamic>> achievements) async {
+    await _writeList(_keyAchievements, achievements);
+    await _prefs?.setString(_keyAchievementsTs, DateTime.now().toIso8601String());
+  }
+
+  static List<Map<String, dynamic>>? loadAchievements({bool ignoreExpiry = false}) {
+    if (!ignoreExpiry && _isExpired(_prefs?.getString(_keyAchievementsTs), _achievementsMaxAge)) {
+      return null;
+    }
+    return _readList(_keyAchievements);
   }
 
   // ── Limpieza ──────────────────────────────────────────────────────────────
