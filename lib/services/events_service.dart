@@ -15,7 +15,9 @@ class EventsService {
   // Obtener eventos próximos (desde ahora hasta futuro)
   Future<List<Map<String, dynamic>>> getUpcomingEvents() async {
     try {
-      final now = DateTime.now().toIso8601String();
+      // event_date es timestamptz → comparar en UTC, si no el filtro queda
+      // corrido varias horas y esconde u oculta eventos cerca del límite.
+      final now = DateTime.now().toUtc().toIso8601String();
       final response = await _supabase
           .from('events')
           .select()

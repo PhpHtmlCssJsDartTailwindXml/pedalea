@@ -101,10 +101,10 @@ flutter:
     - logos/imagen1.png
     - logos/imagen2.png
     - logos/imagen3.png
-    - assets/data/bike_services_scl.json
-    - assets/data/bike_parkings_scl.json
-    - assets/data/ciclovias_scl.json
     - assets/data/ciclorecreovia.json
+    - assets/data/ciclovias_chile.json
+    - assets/data/bike_services_chile.json
+    - assets/data/bike_parkings_chile.json
 
   # 🔥 FUENTES - POPPINS
   fonts:

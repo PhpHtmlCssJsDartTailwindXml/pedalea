@@ -7,7 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 class CacheService {
   static const _keyAlerts     = 'cache_alerts_v1';
   static const _keyEvents     = 'cache_events_v1';
-  static const _keyCiclovias  = 'cache_ciclovias_v1';
+  // v2: antes solo cubría Santiago; se sube de versión para que los
+  // usuarios que ya tenían la caché vieja guardada reciban el dataset
+  // nuevo de todo Chile en vez de quedar pegados con el de Santiago.
+  static const _keyCiclovias  = 'cache_ciclovias_v2';
   static const _keyProfile   = 'cache_profile_v1';
   static const _keyAchievements = 'cache_achievements_v1';
   static const _keyAlertTs    = 'cache_alerts_ts_v1';

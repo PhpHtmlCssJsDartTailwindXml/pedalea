@@ -80,7 +80,11 @@ class AlertsService {
         'voters_up': [],
         'voters_down': [],
         'is_active': true,
-        'created_at': DateTime.now().toIso8601String(),
+        // created_at es timestamptz: hay que mandar la hora en UTC explícito
+        // (toUtc()), si no Postgres asume que la hora local ya es UTC y la
+        // alerta queda guardada varias horas antes de lo real (por eso una
+        // alerta recién creada mostraba "hace 3 horas").
+        'created_at': DateTime.now().toUtc().toIso8601String(),
         'photo_url': photoUrl,
       };
 

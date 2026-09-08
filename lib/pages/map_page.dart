@@ -137,6 +137,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       if (mounted) setState(() => _showHelpTipText = false);
     });
   }
+
   double _layersTipOpacity = 0.0;
   int _layersTipSecondsLeft = 20;
   Timer? _layersTipTimer;
@@ -165,6 +166,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       }
     });
   }
+
   String?
   _cicloviasGeoJson; // caché para no re-llamar a Overpass tras cambio de estilo
   final bool _cyclistsLayerAdded = false;
@@ -326,14 +328,34 @@ class _MapPageState extends State<MapPage> with RouteAware {
   // ── Estaciones Metro de Santiago con BiciMetro ────────────────────────────
   static const _kBicimetroStations = <Map<String, Object>>[
     {'name': 'Baquedano', 'line': 'L1 / L2', 'lat': -33.4372, 'lng': -70.6326},
-    {'name': 'Universidad de Chile', 'line': 'L1', 'lat': -33.4423, 'lng': -70.6503},
+    {
+      'name': 'Universidad de Chile',
+      'line': 'L1',
+      'lat': -33.4423,
+      'lng': -70.6503,
+    },
     {'name': 'Los Héroes', 'line': 'L1 / L2', 'lat': -33.4514, 'lng': -70.6623},
     {'name': 'Tobalaba', 'line': 'L1 / L4', 'lat': -33.4208, 'lng': -70.5979},
     {'name': 'Salvador', 'line': 'L1', 'lat': -33.4381, 'lng': -70.6142},
     {'name': 'Manuel Montt', 'line': 'L1', 'lat': -33.4274, 'lng': -70.6219},
-    {'name': 'La Cisterna', 'line': 'L2 / L4A', 'lat': -33.5316, 'lng': -70.6591},
-    {'name': 'Parque O\'Higgins', 'line': 'L2 / L6', 'lat': -33.4591, 'lng': -70.6552},
-    {'name': 'Puente Cal y Canto', 'line': 'L2 / L3', 'lat': -33.4391, 'lng': -70.6571},
+    {
+      'name': 'La Cisterna',
+      'line': 'L2 / L4A',
+      'lat': -33.5316,
+      'lng': -70.6591,
+    },
+    {
+      'name': 'Parque O\'Higgins',
+      'line': 'L2 / L6',
+      'lat': -33.4591,
+      'lng': -70.6552,
+    },
+    {
+      'name': 'Puente Cal y Canto',
+      'line': 'L2 / L3',
+      'lat': -33.4391,
+      'lng': -70.6571,
+    },
     {'name': 'Santa Ana', 'line': 'L1 / L5', 'lat': -33.4388, 'lng': -70.6749},
     {'name': 'Ñuble', 'line': 'L5 / L9', 'lat': -33.4618, 'lng': -70.6258},
     {'name': 'Ñuñoa', 'line': 'L6', 'lat': -33.4564, 'lng': -70.6012},
@@ -424,13 +446,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // prender/apagar los pines de BiciMetro, estacionamientos, etc.
       final lastShownMs = p.getInt('layers_tip_last_shown_ms');
       final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-      final dueAgain = lastShownMs == null ||
+      final dueAgain =
+          lastShownMs == null ||
           DateTime.fromMillisecondsSinceEpoch(lastShownMs).isBefore(weekAgo);
       if (dueAgain) {
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) _startLayersTipCountdown();
         });
-        p.setInt('layers_tip_last_shown_ms', DateTime.now().millisecondsSinceEpoch);
+        p.setInt(
+          'layers_tip_last_shown_ms',
+          DateTime.now().millisecondsSinceEpoch,
+        );
       }
     });
 
@@ -492,14 +518,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _cicloviasGeoJson = cachedCiclovias;
     } else {
       // Sin caché → usar las ciclovías incluidas en la app (no dependen de red).
-      rootBundle.loadString('assets/data/ciclovias_scl.json').then((geo) {
-        if (!mounted || _cicloviasGeoJson != null) return;
-        _cicloviasGeoJson = geo;
-        _cicloviasAdded = false;
-        _addCicloviasLayer();
-      }).catchError((Object e) {
-        debugPrint('Error ciclovías incluidas: $e');
-      });
+      rootBundle
+          .loadString('assets/data/ciclovias_chile.json')
+          .then((geo) {
+            if (!mounted || _cicloviasGeoJson != null) return;
+            _cicloviasGeoJson = geo;
+            _cicloviasAdded = false;
+            _addCicloviasLayer();
+          })
+          .catchError((Object e) {
+            debugPrint('Error ciclovías incluidas: $e');
+          });
     }
   }
 
@@ -590,7 +619,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
               context,
               MaterialPageRoute(
                 builder: (_) => const PaywallPage(
-                  reason: 'Comparte tus viajes y estadísticas en historias con Pedalea Plus.',
+                  reason:
+                      'Comparte tus viajes y estadísticas en historias con Pedalea Plus.',
                 ),
               ),
             );
@@ -703,7 +733,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       ).timeout(const Duration(seconds: 8));
       final data = await WeatherService().fetch(pos.latitude, pos.longitude);
       if (!mounted || data == null) return;
-      final heavy = data.precipitation > 5 ||
+      final heavy =
+          data.precipitation > 5 ||
           (data.weatherCode >= 63 && data.weatherCode <= 67);
       setState(() {
         _isRaining = data.isRaining;
@@ -751,7 +782,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _maxRecentSpeedAt = now;
     }
 
-    final withinWindow = _maxRecentSpeedAt != null &&
+    final withinWindow =
+        _maxRecentSpeedAt != null &&
         now.difference(_maxRecentSpeedAt!) <= _suddenStopWindow;
 
     if (withinWindow &&
@@ -762,7 +794,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
         return; // en enfriamiento, evita disparos repetidos
       }
       _lastSuddenStopTrigger = now;
-      _maxRecentSpeedAt = null; // reinicia para no re-disparar con el mismo evento
+      _maxRecentSpeedAt =
+          null; // reinicia para no re-disparar con el mismo evento
       _onFallDetected();
     }
   }
@@ -884,78 +917,80 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   void _startFollowing() {
     if (_positionStreamSubscription != null) return;
-    _positionStreamSubscription = geo.Geolocator.getPositionStream(
-      locationSettings: _gpsSettings(),
-    ).listen((position) async {
-      if (!mounted) return;
+    _positionStreamSubscription =
+        geo.Geolocator.getPositionStream(
+          locationSettings: _gpsSettings(),
+        ).listen((position) async {
+          if (!mounted) return;
 
-      final curSpeedKmh = position.speed < 0 ? 0.0 : position.speed * 3.6;
-      _speedNotifier.value = curSpeedKmh;
+          final curSpeedKmh = position.speed < 0 ? 0.0 : position.speed * 3.6;
+          _speedNotifier.value = curSpeedKmh;
 
-      // Detección de modo pasajero (auto/micro/metro) según la velocidad.
-      _maybeHandlePassengerMode(curSpeedKmh);
+          // Detección de modo pasajero (auto/micro/metro) según la velocidad.
+          _maybeHandlePassengerMode(curSpeedKmh);
 
-      // Detección de choque por frenada imposible (solo pedaleando de verdad,
-      // no en modo pasajero, donde frenar fuerte en auto/micro es normal).
-      if (_fallDetectionEnabled && _modoActivo && !_isPassenger) {
-        _checkSuddenDeceleration(curSpeedKmh, DateTime.now());
-      }
-
-      // Tracking de km — solo cuenta cuando el usuario realmente se mueve,
-      // para no sumar el "ruido" del GPS estando quieto. En modo pasajero NO
-      // se cuenta (esos km no son pedaleo).
-      if (_modoActivo && !_isPassenger && _lastPosition != null) {
-        final distM = geo.Geolocator.distanceBetween(
-          _lastPosition!.latitude,
-          _lastPosition!.longitude,
-          position.latitude,
-          position.longitude,
-        );
-        final speedKmh = position.speed < 0 ? 0 : position.speed * 3.6;
-        final accuracyOk = position.accuracy <= 30; // descartar fixes imprecisos
-        final isMoving = speedKmh >= 3.0;            // ~ritmo de pedaleo lento
-        // Cuenta solo desplazamientos reales (8 m–200 m), con buena precisión
-        // y velocidad de movimiento; así el jitter estando detenido no suma.
-        if (distM >= 8 && distM < 200 && accuracyOk && isMoving) {
-          _sessionKm += distM / 1000;
-          _unsavedKm += distM / 1000;
-          _routePoints.add(position);
-          if (_unsavedKm >= 0.5) {
-            _saveKmToProfile(_unsavedKm); // total histórico (Supabase)
-            RideStatsService.addKm(_unsavedKm); // registro diario local
-            _unsavedKm = 0;
+          // Detección de choque por frenada imposible (solo pedaleando de verdad,
+          // no en modo pasajero, donde frenar fuerte en auto/micro es normal).
+          if (_fallDetectionEnabled && _modoActivo && !_isPassenger) {
+            _checkSuddenDeceleration(curSpeedKmh, DateTime.now());
           }
-        }
-      }
-      _lastPosition = position;
 
-      // Refresca el HUD de navegación (ETA, progreso, distancia a la
-      // próxima parada) en cada fix de GPS mientras se está navegando.
-      if (_navigating && mounted) setState(() {});
+          // Tracking de km — solo cuenta cuando el usuario realmente se mueve,
+          // para no sumar el "ruido" del GPS estando quieto. En modo pasajero NO
+          // se cuenta (esos km no son pedaleo).
+          if (_modoActivo && !_isPassenger && _lastPosition != null) {
+            final distM = geo.Geolocator.distanceBetween(
+              _lastPosition!.latitude,
+              _lastPosition!.longitude,
+              position.latitude,
+              position.longitude,
+            );
+            final speedKmh = position.speed < 0 ? 0 : position.speed * 3.6;
+            final accuracyOk =
+                position.accuracy <= 30; // descartar fixes imprecisos
+            final isMoving = speedKmh >= 3.0; // ~ritmo de pedaleo lento
+            // Cuenta solo desplazamientos reales (8 m–200 m), con buena precisión
+            // y velocidad de movimiento; así el jitter estando detenido no suma.
+            if (distM >= 8 && distM < 200 && accuracyOk && isMoving) {
+              _sessionKm += distM / 1000;
+              _unsavedKm += distM / 1000;
+              _routePoints.add(position);
+              if (_unsavedKm >= 0.5) {
+                _saveKmToProfile(_unsavedKm); // total histórico (Supabase)
+                RideStatsService.addKm(_unsavedKm); // registro diario local
+                _unsavedKm = 0;
+              }
+            }
+          }
+          _lastPosition = position;
 
-      // Primer fix de GPS → cargar las capas por defecto alrededor del usuario.
-      _maybeAutoLoadLayers();
+          // Refresca el HUD de navegación (ETA, progreso, distancia a la
+          // próxima parada) en cada fix de GPS mientras se está navegando.
+          if (_navigating && mounted) setState(() {});
 
-      if (_navigating && _routeCoords.isNotEmpty) {
-        _advanceRouteProgress(position.latitude, position.longitude);
-      }
+          // Primer fix de GPS → cargar las capas por defecto alrededor del usuario.
+          _maybeAutoLoadLayers();
 
-      // Alertas push de proximidad: avisar al acercarse a un incidente activo.
-      if (_proximityAlertsEnabled) {
-        _checkProximityAlerts(position);
-      }
+          if (_navigating && _routeCoords.isNotEmpty) {
+            _advanceRouteProgress(position.latitude, position.longitude);
+          }
 
-      if (_modoActivo) {
-        await _presenceService.upsertMyLocation(
-          position: position,
-          username: _myUsername,
-        );
-      }
+          // Alertas push de proximidad: avisar al acercarse a un incidente activo.
+          if (_proximityAlertsEnabled) {
+            _checkProximityAlerts(position);
+          }
 
-      if (mapboxMap != null && _isFollowingUser) {
-        _moveCameraInstant(position);
-      }
-    });
+          if (_modoActivo) {
+            await _presenceService.upsertMyLocation(
+              position: position,
+              username: _myUsername,
+            );
+          }
+
+          if (mapboxMap != null && _isFollowingUser) {
+            _moveCameraInstant(position);
+          }
+        });
   }
 
   /// Reinicia el stream de GPS con la configuración correcta para el estado actual.
@@ -992,8 +1027,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _highSpeedSince ??= now;
       final sustained =
           now.difference(_highSpeedSince!) > const Duration(seconds: 6);
-      final snoozed = _passengerSnoozeUntil != null &&
-          now.isBefore(_passengerSnoozeUntil!);
+      final snoozed =
+          _passengerSnoozeUntil != null && now.isBefore(_passengerSnoozeUntil!);
       if (sustained && !_passengerPromptOpen && !snoozed && mounted) {
         _showPassengerPrompt();
       }
@@ -1046,8 +1081,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _lowSpeedSince = null;
       _highSpeedSince = null;
       // Tras salir, deja un pequeño margen antes de volver a preguntar.
-      _passengerSnoozeUntil =
-          DateTime.now().add(const Duration(seconds: 30));
+      _passengerSnoozeUntil = DateTime.now().add(const Duration(seconds: 30));
     });
     if (auto && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1115,7 +1149,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
     if (uid == null) return const [];
     return events.where((event) {
       if (event['user_id'] == uid) return true;
-      final participantsIds = List<String>.from(event['participants_ids'] ?? []);
+      final participantsIds = List<String>.from(
+        event['participants_ids'] ?? [],
+      );
       return participantsIds.contains(uid);
     }).toList();
   }
@@ -1175,14 +1211,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     try {
       final Uint8List bikeBytes = (await rootBundle.load(
         "assets/icons/gps_puck_top.png",
-      ))
-          .buffer
-          .asUint8List();
+      )).buffer.asUint8List();
       final Uint8List arrowBytes = (await rootBundle.load(
         "assets/icons/gps_puck_bearing.png",
-      ))
-          .buffer
-          .asUint8List();
+      )).buffer.asUint8List();
 
       await mapboxMap!.location.updateSettings(
         LocationComponentSettings(
@@ -1225,8 +1257,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
   static const bool _kShowHeadingDiagPanel = false;
   static const double _kHeadingSmoothingAlpha = 0.15;
 
-  late final MethodChannel _geomagneticChannel =
-      const MethodChannel('com.pedalea.app/geomagnetic');
+  late final MethodChannel _geomagneticChannel = const MethodChannel(
+    'com.pedalea.app/geomagnetic',
+  );
 
   StreamSubscription<CompassEvent>? _diagCompassSub;
   geo.Position? _lastGeoPosition;
@@ -1266,11 +1299,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
     try {
       _testConeBytes ??= (await rootBundle.load(
         "assets/icons/gps_puck_bearing_test.png",
-      ))
-          .buffer
-          .asUint8List();
-      _testConeManager ??=
-          await mapboxMap!.annotations.createPointAnnotationManager();
+      )).buffer.asUint8List();
+      _testConeManager ??= await mapboxMap!.annotations
+          .createPointAnnotationManager();
 
       final start = _lastGeoPosition;
       if (_testConeAnnotation == null && start != null) {
@@ -1343,12 +1374,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   void _applyDiagnosticHeading(double magneticHeadingDeg) {
     final prevRaw = _rawMagneticHeadingDeg;
-    final smoothedRaw = _smoothCircular(prevRaw, magneticHeadingDeg, _kHeadingSmoothingAlpha);
+    final smoothedRaw = _smoothCircular(
+      prevRaw,
+      magneticHeadingDeg,
+      _kHeadingSmoothingAlpha,
+    );
     final corrected = _normalizeHeading(smoothedRaw + _declinationDeg);
 
     // Evita reconstruir la UI por cada micro-ruido del sensor: solo si el
     // cambio visible es >= 0.5°.
-    final changedEnough = prevRaw == null ||
+    final changedEnough =
+        prevRaw == null ||
         (smoothedRaw - prevRaw).abs() >= 0.5 ||
         _correctedHeadingDeg == null ||
         (corrected - _correctedHeadingDeg!).abs() >= 0.5;
@@ -1367,9 +1403,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Future<void> _maybeRefreshDeclination(geo.Position position) async {
     final prev = _lastDeclinationPosition;
     final now = DateTime.now();
-    final tooSoon = _lastDeclinationFetch != null &&
+    final tooSoon =
+        _lastDeclinationFetch != null &&
         now.difference(_lastDeclinationFetch!) < const Duration(seconds: 20);
-    final movedEnough = prev == null ||
+    final movedEnough =
+        prev == null ||
         geo.Geolocator.distanceBetween(
               prev.latitude,
               prev.longitude,
@@ -1424,24 +1462,50 @@ class _MapPageState extends State<MapPage> with RouteAware {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('DIAGNÓSTICO DE HEADING',
-                style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
-            Text('Heading magnético (crudo): ${fmt(raw)}',
-                style: const TextStyle(color: Colors.white, fontSize: 11)),
-            Text('Declinación calculada: ${fmt(_declinationDeg)}',
-                style: const TextStyle(color: Colors.white, fontSize: 11)),
-            Text('Heading corregido (geográfico): ${fmt(corrected)}',
-                style: const TextStyle(color: Colors.white, fontSize: 11)),
-            Text('Bearing de cámara: ${fmt(_cameraBearingDeg)}',
-                style: const TextStyle(color: Colors.white, fontSize: 11)),
-            Text('Diferencia nativo vs corregido: ${fmt(diff)}',
-                style: const TextStyle(color: Colors.lime, fontSize: 11, fontWeight: FontWeight.bold)),
-            Text('Precisión del sensor (accuracy): ${fmt(_compassAccuracy)}',
-                style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            const Text(
+              'DIAGNÓSTICO DE HEADING',
+              style: TextStyle(
+                color: Colors.amber,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              'Heading magnético (crudo): ${fmt(raw)}',
+              style: const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+            Text(
+              'Declinación calculada: ${fmt(_declinationDeg)}',
+              style: const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+            Text(
+              'Heading corregido (geográfico): ${fmt(corrected)}',
+              style: const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+            Text(
+              'Bearing de cámara: ${fmt(_cameraBearingDeg)}',
+              style: const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+            Text(
+              'Diferencia nativo vs corregido: ${fmt(diff)}',
+              style: const TextStyle(
+                color: Colors.lime,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              'Precisión del sensor (accuracy): ${fmt(_compassAccuracy)}',
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            ),
             const SizedBox(height: 4),
             const Text(
               'Cono LIME = Mapbox nativo (Modo A)  ·  Cono CIAN = manual corregido (Modo B)',
-              style: TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: Colors.cyanAccent,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -1476,7 +1540,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
           height: frame.image.height,
           data: byteData.buffer.asUint8List(),
         ),
-        false, [], [], null,
+        false,
+        [],
+        [],
+        null,
       );
       _cyclistsIconAdded = true;
     } catch (e) {
@@ -1493,11 +1560,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Future<bool> _ensureEventsIcon() async {
     final map = mapboxMap;
     final generation = _mapGeneration;
-    if (!mounted || map == null || !_styleIsLoaded || !_routeIsCurrent || _eventsIconAdded) {
+    if (!mounted ||
+        map == null ||
+        !_styleIsLoaded ||
+        !_routeIsCurrent ||
+        _eventsIconAdded) {
       return false;
     }
 
-    bool stillValid() => mounted &&
+    bool stillValid() =>
+        mounted &&
         mapboxMap == map &&
         _mapGeneration == generation &&
         _styleIsLoaded &&
@@ -1523,13 +1595,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
         _eventsIconImageId,
         1.0, // scale 1:1 → 80dp nativos, igual que las alertas
         MbxImage(width: 80, height: 80, data: bytes),
-        false, [], [], null,
+        false,
+        [],
+        [],
+        null,
       );
       _eventsIconAdded = true;
       debugPrint('✅ Ícono de eventos registrado');
       return true;
     } on PlatformException catch (e) {
-      debugPrint('Error nativo agregando ícono de eventos: ${e.code} | ${e.message}');
+      debugPrint(
+        'Error nativo agregando ícono de eventos: ${e.code} | ${e.message}',
+      );
       return false;
     } catch (e) {
       debugPrint("Error agregando icono de eventos: $e");
@@ -1975,7 +2052,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
           id: _eventsLayerId,
           sourceId: _eventsSourceId,
           iconImage: _eventsIconImageId,
-          iconSize: 0.55, // más grande que las alertas (28dp) para destacar que es un evento
+          iconSize:
+              0.55, // más grande que las alertas (28dp) para destacar que es un evento
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
         ),
@@ -2107,7 +2185,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
           ),
         ),
         RenderedQueryOptions(
-          layerIds: [_alertsLayerId, _eventsLayerId, _parkingLyrId, _bicimetroLyrId, _servicesLyrId, _crvLyrId],
+          layerIds: [
+            _alertsLayerId,
+            _eventsLayerId,
+            _parkingLyrId,
+            _bicimetroLyrId,
+            _servicesLyrId,
+            _crvLyrId,
+          ],
           filter: null,
         ),
       );
@@ -2149,10 +2234,22 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
       if (best == null) return;
 
-      if (bestLayers.contains(_parkingLyrId)) { _showBikeParkingModal(best); return; }
-      if (bestLayers.contains(_servicesLyrId)) { _showBikeServiceModal(best); return; }
-      if (bestLayers.contains(_crvLyrId)) { _showCicloRecreoModal(best); return; }
-      if (bestLayers.contains(_bicimetroLyrId)) { _showBicimetroModal(best); return; }
+      if (bestLayers.contains(_parkingLyrId)) {
+        _showBikeParkingModal(best);
+        return;
+      }
+      if (bestLayers.contains(_servicesLyrId)) {
+        _showBikeServiceModal(best);
+        return;
+      }
+      if (bestLayers.contains(_crvLyrId)) {
+        _showCicloRecreoModal(best);
+        return;
+      }
+      if (bestLayers.contains(_bicimetroLyrId)) {
+        _showBicimetroModal(best);
+        return;
+      }
 
       final idStr = best["id"]?.toString() ?? '';
       if (idStr.isNotEmpty) {
@@ -2160,12 +2257,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
           (a) => a["id"].toString() == idStr,
           orElse: () => {},
         );
-        if (alert.isNotEmpty) { _showAlertModal(alert); return; }
+        if (alert.isNotEmpty) {
+          _showAlertModal(alert);
+          return;
+        }
         final event = _currentEvents.firstWhere(
           (e) => e["id"].toString() == idStr,
           orElse: () => {},
         );
-        if (event.isNotEmpty) { _showEventModal(event); return; }
+        if (event.isNotEmpty) {
+          _showEventModal(event);
+          return;
+        }
       }
     } catch (e) {
       debugPrint('❌ Error procesando tap: $e');
@@ -2414,13 +2517,15 @@ class _MapPageState extends State<MapPage> with RouteAware {
                               final confirm = await _showDeleteAlertDialog();
                               if (confirm != true) return;
                               final id = alert['id'].toString();
-                              final ok =
-                                  await _alertsService.deleteAlert(alert['id']);
+                              final ok = await _alertsService.deleteAlert(
+                                alert['id'],
+                              );
                               if (!ok) {
                                 messenger.showSnackBar(
                                   const SnackBar(
                                     content: Text(
-                                        '⚠️ No se pudo eliminar: falta permiso en la base de datos (RLS)'),
+                                      '⚠️ No se pudo eliminar: falta permiso en la base de datos (RLS)',
+                                    ),
                                     backgroundColor: Colors.redAccent,
                                     duration: Duration(seconds: 4),
                                   ),
@@ -2429,8 +2534,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
                               }
                               // Quitar el pin de inmediato (sin esperar al tiempo real)
                               if (mounted) {
-                                setState(() => _currentAlerts.removeWhere(
-                                    (a) => a['id'].toString() == id));
+                                setState(
+                                  () => _currentAlerts.removeWhere(
+                                    (a) => a['id'].toString() == id,
+                                  ),
+                                );
                               }
                               await _updateAlertsLayer(_currentAlerts);
                               CacheService.saveAlerts(_currentAlerts);
@@ -2670,23 +2778,45 @@ class _MapPageState extends State<MapPage> with RouteAware {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Evento privado',
-                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+              const Text(
+                'Evento privado',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 6),
-              const Text('Pide la contraseña a quien lo creó para unirte.',
-                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white60, fontSize: 13)),
+              const Text(
+                'Pide la contraseña a quien lo creó para unirte.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white60,
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: controller,
                 obscureText: true,
                 autofocus: true,
-                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Contraseña',
-                  hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white38),
+                  hintStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white38,
+                  ),
                   filled: true,
                   fillColor: Colors.white.withOpacity(0.06),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -2695,12 +2825,21 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar', style: TextStyle(fontFamily: 'Poppins', color: Colors.white38)),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white38,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(ctx, controller.text),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.greenAccent,
+                      foregroundColor: Colors.black,
+                    ),
                     child: const Text('Unirme'),
                   ),
                 ],
@@ -2718,9 +2857,13 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final isCreator = event['user_id'] == uid;
     final isJoined = participantsIds.contains(uid);
     final maxParticipants = event['max_participants'] as int?;
-    final participantsCount = event['participants_count'] as int? ?? participantsIds.length;
-    final isFull = maxParticipants != null && participantsCount >= maxParticipants;
-    final eventDate = DateTime.tryParse(event['event_date']?.toString() ?? '')?.toLocal();
+    final participantsCount =
+        event['participants_count'] as int? ?? participantsIds.length;
+    final isFull =
+        maxParticipants != null && participantsCount >= maxParticipants;
+    final eventDate = DateTime.tryParse(
+      event['event_date']?.toString() ?? '',
+    )?.toLocal();
 
     showModalBottomSheet(
       context: context,
@@ -2737,7 +2880,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const PaywallPage(
-                      reason: 'Unirte a eventos privados es una función de Pedalea Plus.',
+                      reason:
+                          'Unirte a eventos privados es una función de Pedalea Plus.',
                     ),
                   ),
                 );
@@ -2746,7 +2890,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
               password = await _askEventPassword();
               if (password == null) return;
             }
-            final result = await _eventsService.joinEvent(event['id'].toString(), password: password);
+            final result = await _eventsService.joinEvent(
+              event['id'].toString(),
+              password: password,
+            );
             if (result == 'ok') {
               setModalState(() => participantsIds.add(uid!));
               await _refreshEventsNow(); // muestra/oculta el pin al instante
@@ -2795,36 +2942,59 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
-                      child: const Icon(Icons.event, color: Colors.white, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              event['title']?.toString() ?? 'Evento',
-                              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (event['is_private'] == true) ...[
-                            const SizedBox(width: 6),
-                            const Icon(Icons.lock, size: 15, color: Colors.amber),
-                          ],
-                        ],
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.event,
+                          color: Colors.white,
+                          size: 22,
+                        ),
                       ),
-                    ),
-                  ]),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                event['title']?.toString() ?? 'Evento',
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (event['is_private'] == true) ...[
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.lock,
+                                size: 15,
+                                color: Colors.amber,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                   if ((event['description']?.toString() ?? '').isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
                       event['description'].toString(),
-                      style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 13, height: 1.3),
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white70,
+                        fontSize: 13,
+                        height: 1.3,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -2835,14 +3005,23 @@ class _MapPageState extends State<MapPage> with RouteAware {
                       '${eventDate.day}/${eventDate.month}/${eventDate.year} ${eventDate.hour.toString().padLeft(2, '0')}:${eventDate.minute.toString().padLeft(2, '0')}',
                     ),
                   if ((event['location_name']?.toString() ?? '').isNotEmpty)
-                    _infoRow(Icons.place, 'Lugar', event['location_name'].toString()),
+                    _infoRow(
+                      Icons.place,
+                      'Lugar',
+                      event['location_name'].toString(),
+                    ),
                   _infoRow(
                     Icons.people,
                     'Participantes',
-                    maxParticipants != null ? '$participantsCount / $maxParticipants' : '$participantsCount',
+                    maxParticipants != null
+                        ? '$participantsCount / $maxParticipants'
+                        : '$participantsCount',
                   ),
                   const SizedBox(height: 16),
-                  EventPhotoGallery(eventId: event['id'].toString(), accentColor: Colors.orange),
+                  EventPhotoGallery(
+                    eventId: event['id'].toString(),
+                    accentColor: Colors.orange,
+                  ),
                   const SizedBox(height: 18),
                   Row(
                     children: [
@@ -2851,15 +3030,28 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           child: SizedBox(
                             height: 46,
                             child: ElevatedButton(
-                              onPressed: isJoined ? handleLeave : (isFull ? null : handleJoin),
+                              onPressed: isJoined
+                                  ? handleLeave
+                                  : (isFull ? null : handleJoin),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: isJoined ? Colors.white10 : Colors.greenAccent,
-                                foregroundColor: isJoined ? Colors.white : Colors.black,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                backgroundColor: isJoined
+                                    ? Colors.white10
+                                    : Colors.greenAccent,
+                                foregroundColor: isJoined
+                                    ? Colors.white
+                                    : Colors.black,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
                               child: Text(
-                                isJoined ? 'Salir del evento' : (isFull ? 'Sin cupo' : 'Unirme'),
-                                style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+                                isJoined
+                                    ? 'Salir del evento'
+                                    : (isFull ? 'Sin cupo' : 'Unirme'),
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -2877,17 +3069,26 @@ class _MapPageState extends State<MapPage> with RouteAware {
                                   MaterialPageRoute(
                                     builder: (_) => EventChatPage(
                                       eventId: event['id'].toString(),
-                                      eventTitle: event['title']?.toString() ?? 'Evento',
+                                      eventTitle:
+                                          event['title']?.toString() ??
+                                          'Evento',
                                     ),
                                   ),
                                 );
                               },
-                              icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                              icon: const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 16,
+                              ),
                               label: const Text('Chatear'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.greenAccent,
-                                side: const BorderSide(color: Colors.greenAccent),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                side: const BorderSide(
+                                  color: Colors.greenAccent,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
                             ),
                           ),
@@ -2987,18 +3188,20 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   Widget _buildTopBar() {
-    final statusColor =
-        _isPassenger ? Colors.lightBlueAccent : Colors.greenAccent;
+    final statusColor = _isPassenger
+        ? Colors.lightBlueAccent
+        : Colors.greenAccent;
     final vInfo = _vehicleInfo(_passengerVehicle);
     final statusIcon = _isPassenger
         ? (_passengerVehicle == 'micro'
               ? Icons.directions_bus_rounded
               : _passengerVehicle == 'metro'
-                    ? Icons.subway_rounded
-                    : Icons.directions_car_rounded)
+              ? Icons.subway_rounded
+              : Icons.directions_car_rounded)
         : Icons.directions_bike;
-    final statusText =
-        _isPassenger ? 'PASAJERO · ${vInfo.label.toUpperCase()}' : 'CICLISTA ACTIVO';
+    final statusText = _isPassenger
+        ? 'PASAJERO · ${vInfo.label.toUpperCase()}'
+        : 'CICLISTA ACTIVO';
     return Container(
       decoration: _dayNightBox(radius: 16),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
@@ -3045,12 +3248,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
               onTap: () => _exitPassengerMode(),
               child: Container(
                 margin: const EdgeInsets.only(right: 4),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.greenAccent.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                  border: Border.all(
+                    color: Colors.greenAccent.withOpacity(0.4),
+                  ),
                 ),
                 child: const Text(
                   '🚴 Pedalear',
@@ -3145,15 +3352,22 @@ class _MapPageState extends State<MapPage> with RouteAware {
         'circle-color',
         jsonEncode([
           'case',
-          ['get', 'isFirst'], '#00E676',
-          ['get', 'isLast'], '#FF1744',
+          ['get', 'isFirst'],
+          '#00E676',
+          ['get', 'isLast'],
+          '#FF1744',
           '#FF9100',
         ]),
       );
       await style.setStyleLayerProperty(
         _rpWpLyr,
         'circle-radius',
-        jsonEncode(['case', ['get', 'isLast'], 18.0, 13.0]),
+        jsonEncode([
+          'case',
+          ['get', 'isLast'],
+          18.0,
+          13.0,
+        ]),
       );
     } catch (e) {
       debugPrint('Error redrawRoutePins: $e');
@@ -3183,7 +3397,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             'type': 'Feature',
             'geometry': {'type': 'LineString', 'coordinates': positions},
             'properties': {},
-          }
+          },
         ],
       });
       await style.addSource(GeoJsonSource(id: _rpRouteSrc, data: fc));
@@ -3246,9 +3460,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Future<bool> _reachedFreeRoutePlanLimit() async {
     if (SubscriptionService.instance.isPlus.value) return false;
     final prefs = await SharedPreferences.getInstance();
-    final todayKey = DateTime.now().toIso8601String().substring(0, 10); // YYYY-MM-DD
+    final todayKey = DateTime.now().toIso8601String().substring(
+      0,
+      10,
+    ); // YYYY-MM-DD
     final storedDay = prefs.getString('route_plan_day');
-    final count = storedDay == todayKey ? (prefs.getInt('route_plan_count') ?? 0) : 0;
+    final count = storedDay == todayKey
+        ? (prefs.getInt('route_plan_count') ?? 0)
+        : 0;
     return count >= _kFreeRoutePlansPerDay;
   }
 
@@ -3257,7 +3476,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final prefs = await SharedPreferences.getInstance();
     final todayKey = DateTime.now().toIso8601String().substring(0, 10);
     final storedDay = prefs.getString('route_plan_day');
-    final count = storedDay == todayKey ? (prefs.getInt('route_plan_count') ?? 0) : 0;
+    final count = storedDay == todayKey
+        ? (prefs.getInt('route_plan_count') ?? 0)
+        : 0;
     await prefs.setString('route_plan_day', todayKey);
     await prefs.setInt('route_plan_count', count + 1);
   }
@@ -3274,7 +3495,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
         context,
         MaterialPageRoute(
           builder: (_) => const PaywallPage(
-            reason: 'El plan gratis permite planificar hasta 2 rutas por día. Hazte Plus para planificar ilimitadas.',
+            reason:
+                'El plan gratis permite planificar hasta 2 rutas por día. Hazte Plus para planificar ilimitadas.',
           ),
         ),
       );
@@ -3286,7 +3508,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // La ruta siempre parte de tu ubicación real en vivo, no de la primera
       // parada que tocaste en el mapa — por eso se antepone acá, en vez de
       // depender de que el usuario agregue su propia posición como parada.
-      final current = _lastPosition ?? await geo.Geolocator.getCurrentPosition();
+      final current =
+          _lastPosition ?? await geo.Geolocator.getCurrentPosition();
 
       // Se respeta el orden exacto en que tocaste las paradas (Parada 1,
       // 2, 3...) — no se reordenan por cercanía.
@@ -3319,7 +3542,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
         for (var i = 0; i < waypoints.length; i++) {
           final snapDist = (waypoints[i]['distance'] as num?)?.toDouble() ?? 0;
           if (snapDist > 20) {
-            debugPrint('⚠️ Punto $i quedó a ${snapDist.toStringAsFixed(0)}m de la calle ajustada');
+            debugPrint(
+              '⚠️ Punto $i quedó a ${snapDist.toStringAsFixed(0)}m de la calle ajustada',
+            );
           }
         }
       }
@@ -3327,11 +3552,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // Con alternatives=true, Mapbox puede devolver más de una opción
       // razonable — nos quedamos con la de mejor puntaje (tiempo + un poco
       // de peso a la distancia) en vez de aceptar ciegamente la primera.
-      final route = routes.reduce((a, b) {
-        double score(Map r) =>
-            (r['duration'] as num).toDouble() + (r['distance'] as num).toDouble() * 0.02;
-        return score(a as Map) <= score(b as Map) ? a : b;
-      }) as Map<String, dynamic>;
+      final route =
+          routes.reduce((a, b) {
+                double score(Map r) =>
+                    (r['duration'] as num).toDouble() +
+                    (r['distance'] as num).toDouble() * 0.02;
+                return score(a as Map) <= score(b as Map) ? a : b;
+              })
+              as Map<String, dynamic>;
 
       setState(() {
         _routeDistKm = (route['distance'] as num).toDouble() / 1000;
@@ -3839,18 +4067,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
             _elevationLoading
                 ? '...'
                 : (_routeDifficulty != null
-                    ? (_routeElevGain != null
-                        ? '${_routeElevGain!.toStringAsFixed(0)}m'
-                        : _routeDifficulty!)
-                    : '—'),
+                      ? (_routeElevGain != null
+                            ? '${_routeElevGain!.toStringAsFixed(0)}m'
+                            : _routeDifficulty!)
+                      : '—'),
             _routeDifficulty ?? 'Dificultad',
             _routeDifficulty == 'Fácil'
                 ? Colors.greenAccent
                 : _routeDifficulty == 'Moderada'
-                    ? Colors.orangeAccent
-                    : _routeDifficulty == 'Difícil'
-                        ? Colors.redAccent
-                        : Colors.white38,
+                ? Colors.orangeAccent
+                : _routeDifficulty == 'Difícil'
+                ? Colors.redAccent
+                : Colors.white38,
           ),
         ],
       ),
@@ -4066,7 +4294,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _offRouteStreak = 0;
     }
 
-    final canRerouteNow = _lastRerouteAt == null ||
+    final canRerouteNow =
+        _lastRerouteAt == null ||
         now.difference(_lastRerouteAt!).inSeconds >= minSecondsBetweenReroutes;
 
     if (_offRouteStreak >= requiredStreak && canRerouteNow && !_rerouting) {
@@ -4116,7 +4345,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             'type': 'Feature',
             'geometry': {'type': 'LineString', 'coordinates': remaining},
             'properties': {},
-          }
+          },
         ],
       });
       await style.addSource(GeoJsonSource(id: _rpRouteSrc, data: fc));
@@ -4166,8 +4395,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     double meters = 0;
     for (var i = 0; i < remaining.length - 1; i++) {
       meters += geo.Geolocator.distanceBetween(
-        remaining[i][1], remaining[i][0],
-        remaining[i + 1][1], remaining[i + 1][0],
+        remaining[i][1],
+        remaining[i][0],
+        remaining[i + 1][1],
+        remaining[i + 1][0],
       );
     }
     return meters / 1000;
@@ -4210,11 +4441,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final pos = _lastPosition;
     if (pos == null) return null;
     final wp = _routeWps[_navNextWpIndex];
-    return geo.Geolocator.distanceBetween(pos.latitude, pos.longitude, wp.lat, wp.lng) / 1000;
+    return geo.Geolocator.distanceBetween(
+          pos.latitude,
+          pos.longitude,
+          wp.lat,
+          wp.lng,
+        ) /
+        1000;
   }
 
-  String get _navNextStopLabel =>
-      _navNextWpIndex < _routeWps.length ? _routeWps[_navNextWpIndex].label : 'Destino final';
+  String get _navNextStopLabel => _navNextWpIndex < _routeWps.length
+      ? _routeWps[_navNextWpIndex].label
+      : 'Destino final';
 
   /// Salta la próxima parada de verdad: la saca de la ruta, recalcula el
   /// trayecto desde tu posición actual (saltándosela) y redibuja pines y
@@ -4235,8 +4473,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
   /// CO₂ ahorrado) antes de limpiar todo el estado de la ruta.
   Future<void> _stopNavigation() async {
     final doneKm = _navDoneDistanceKm;
-    final elapsed = _navStartTime != null ? DateTime.now().difference(_navStartTime!) : Duration.zero;
-    final avgSpeed = elapsed.inSeconds > 0 ? doneKm / (elapsed.inSeconds / 3600.0) : 0.0;
+    final elapsed = _navStartTime != null
+        ? DateTime.now().difference(_navStartTime!)
+        : Duration.zero;
+    final avgSpeed = elapsed.inSeconds > 0
+        ? doneKm / (elapsed.inSeconds / 3600.0)
+        : 0.0;
     final co2 = Co2Service.savedKg(doneKm);
 
     if (mounted) {
@@ -4244,26 +4486,54 @@ class _MapPageState extends State<MapPage> with RouteAware {
         context: context,
         builder: (ctx) => Dialog(
           backgroundColor: const Color(0xFF0E0E18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(22),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('¡Buen recorrido! 🚴',
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                const Text(
+                  '¡Buen recorrido! 🚴',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 16),
-                _infoRow(Icons.route, 'Distancia', '${doneKm.toStringAsFixed(1)} km'),
-                _infoRow(Icons.timer_outlined, 'Tiempo', _formatDuration(elapsed)),
-                _infoRow(Icons.speed, 'Velocidad promedio', '${avgSpeed.toStringAsFixed(1)} km/h'),
-                _infoRow(Icons.eco_outlined, 'CO₂ ahorrado', Co2Service.format(co2)),
+                _infoRow(
+                  Icons.route,
+                  'Distancia',
+                  '${doneKm.toStringAsFixed(1)} km',
+                ),
+                _infoRow(
+                  Icons.timer_outlined,
+                  'Tiempo',
+                  _formatDuration(elapsed),
+                ),
+                _infoRow(
+                  Icons.speed,
+                  'Velocidad promedio',
+                  '${avgSpeed.toStringAsFixed(1)} km/h',
+                ),
+                _infoRow(
+                  Icons.eco_outlined,
+                  'CO₂ ahorrado',
+                  Co2Service.format(co2),
+                ),
                 const SizedBox(height: 18),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.greenAccent,
+                      foregroundColor: Colors.black,
+                    ),
                     child: const Text('Cerrar'),
                   ),
                 ),
@@ -4300,7 +4570,13 @@ class _MapPageState extends State<MapPage> with RouteAware {
           color: const Color(0xFF0E0E18).withOpacity(0.94),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4311,13 +4587,22 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 child: Row(
                   children: [
                     const SizedBox(
-                      width: 12, height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orangeAccent),
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.orangeAccent,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       'Te saliste de la ruta — recalculando…',
-                      style: const TextStyle(fontFamily: 'Poppins', color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.orangeAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -4334,7 +4619,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
             const SizedBox(height: 4),
             Text(
               '${done.toStringAsFixed(1)} / ${total.toStringAsFixed(1)} km  ·  ${(progress * 100).round()}%',
-              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 11.5),
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white70,
+                fontSize: 11.5,
+              ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -4343,12 +4632,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 _hudStat(
                   Icons.speed,
                   'Prom.',
-                  avgSpeed != null ? '${avgSpeed.toStringAsFixed(1)} km/h' : '—',
+                  avgSpeed != null
+                      ? '${avgSpeed.toStringAsFixed(1)} km/h'
+                      : '—',
                 ),
                 ValueListenableBuilder<double>(
                   valueListenable: _speedNotifier,
-                  builder: (context, speed, _) =>
-                      _hudStat(Icons.pedal_bike, 'Ahora', '${speed.round()} km/h'),
+                  builder: (context, speed, _) => _hudStat(
+                    Icons.pedal_bike,
+                    'Ahora',
+                    '${speed.round()} km/h',
+                  ),
                 ),
               ],
             ),
@@ -4362,7 +4656,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
                     nextStopKm != null
                         ? '$_navNextStopLabel a ${nextStopKm.toStringAsFixed(1)} km'
                         : _navNextStopLabel,
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[300], fontSize: 12),
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.grey[300],
+                      fontSize: 12,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -4379,9 +4677,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         foregroundColor: Colors.white70,
                         side: const BorderSide(color: Colors.white24),
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Text('Saltar parada', style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                      child: const Text(
+                        'Saltar parada',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                      ),
                     ),
                   ),
                 if (_routeWps.isNotEmpty) const SizedBox(width: 8),
@@ -4392,9 +4695,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                    child: const Text('Detener', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'Detener',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -4411,8 +4723,23 @@ class _MapPageState extends State<MapPage> with RouteAware {
         children: [
           Icon(icon, size: 15, color: Colors.greenAccent),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-          Text(label, style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[500], fontSize: 10)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.grey[500],
+              fontSize: 10,
+            ),
+          ),
         ],
       ),
     );
@@ -4526,9 +4853,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(val
-              ? '✅ Contando km en segundo plano'
-              : 'Conteo en segundo plano desactivado'),
+          content: Text(
+            val
+                ? '✅ Contando km en segundo plano'
+                : 'Conteo en segundo plano desactivado',
+          ),
           backgroundColor: val ? Colors.green : Colors.grey[800],
           duration: const Duration(seconds: 2),
         ),
@@ -4575,15 +4904,19 @@ class _MapPageState extends State<MapPage> with RouteAware {
       if (newIds.isEmpty || !mounted) return;
       final all = await _achievementsService.getAllWithStatus();
       final details = newIds
-          .map((id) => all.firstWhere(
-                (a) => a['id'] == id,
-                orElse: () => <String, dynamic>{},
-              ))
+          .map(
+            (id) => all.firstWhere(
+              (a) => a['id'] == id,
+              orElse: () => <String, dynamic>{},
+            ),
+          )
           .where((a) => a.isNotEmpty)
-          .map((a) => {
-                'icon': a['icon'] as String? ?? '🏅',
-                'title': a['title'] as String? ?? 'Nuevo logro',
-              })
+          .map(
+            (a) => {
+              'icon': a['icon'] as String? ?? '🏅',
+              'title': a['title'] as String? ?? 'Nuevo logro',
+            },
+          )
           .toList();
       if (mounted && details.isNotEmpty) {
         showAchievementUnlockedToasts(context, details);
@@ -4645,7 +4978,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
-  Widget _drawerIconTile(IconData icon, {Color color = const Color(0xFF7CF0BC)}) {
+  Widget _drawerIconTile(
+    IconData icon, {
+    Color color = const Color(0xFF7CF0BC),
+  }) {
     return Container(
       width: 38,
       height: 38,
@@ -4673,8 +5009,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
           ),
           Row(
             children: [
-              Icon(Icons.location_on_rounded,
-                  color: Colors.white.withOpacity(0.28), size: 13),
+              Icon(
+                Icons.location_on_rounded,
+                color: Colors.white.withOpacity(0.28),
+                size: 13,
+              ),
               const SizedBox(width: 3),
               Text(
                 'Región Metropolitana',
@@ -4698,9 +5037,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         borderRadius: BorderRadius.horizontal(right: Radius.circular(28)),
       ),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF12121C),
-        ),
+        decoration: const BoxDecoration(color: Color(0xFF12121C)),
         child: Column(
           children: [
             Expanded(
@@ -4708,433 +5045,523 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 padding: EdgeInsets.zero,
                 children: [
                   _DrawerProfileHeader(),
-            ExpansionTile(
-              tilePadding: const EdgeInsets.only(left: 16, right: 20),
-              iconColor: const Color(0xFF7CF0BC),
-              collapsedIconColor: Colors.white38,
-              leading: _drawerIconTile(Icons.monitor_heart_rounded),
-              title: const Text(
-                "Actividad",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              children: [
-                ListTile(
-                  leading: _drawerIconTile(Icons.bar_chart_rounded),
-                  title: const Text(
-                    "Mis estadísticas",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "Km de hoy, semana y racha",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Colors.white38, size: 20),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const StatsPage()),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: _drawerIconTile(Icons.route,
-                      color: Colors.lightBlueAccent),
-                  title: const Text(
-                    "Planificar ruta",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "Multiparada con CO₂ estimado",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    setState(() => _routePlannerOpen = true);
-                    _loadFavorites();
-                  },
-                ),
-                SwitchListTile(
-                  value: _modoActivo,
-                  activeThumbColor: Colors.greenAccent,
-                  title: const Text(
-                    "Modo activo",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    _modoActivo ? "Visible para otros" : "No visible",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  onChanged: (value) {
-                    if (value) {
-                      // Empieza una sesión nueva: limpia el trazado anterior.
-                      setState(() {
-                        _modoActivo = value;
-                        _sessionKm = 0;
-                        _routePoints.clear();
-                        _sessionStartAt = DateTime.now();
-                      });
-                    } else {
-                      setState(() => _modoActivo = value);
-                      _presenceService.clearMyLocation();
-                      _maybeOfferRouteShare();
-                    }
-                  },
-                ),
-                SwitchListTile(
-                  value: _bgTrackingEnabled,
-                  activeThumbColor: Colors.greenAccent,
-                  secondary:
-                      const Icon(Icons.gps_fixed, color: Colors.greenAccent),
-                  title: const Text(
-                    "Contar km en segundo plano",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "Suma tus km aunque no tengas la app abierta (usa más batería)",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  onChanged: _toggleBgTracking,
-                ),
-              ],
-            ),
-            const Divider(color: Colors.white24, height: 16),
-            ExpansionTile(
-              tilePadding: const EdgeInsets.only(left: 16, right: 20),
-              iconColor: const Color(0xFF7CF0BC),
-              collapsedIconColor: Colors.white38,
-              leading: _drawerIconTile(Icons.groups_rounded),
-              title: const Text(
-                "Comunidad",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              children: [
-                ListTile(
-                  leading: _drawerIconTile(Icons.leaderboard,
-                      color: Colors.amberAccent),
-                  title: const Text(
-                    "Ranking local",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "Top comunas y ciclistas",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const RankingPage()),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: _drawerIconTile(Icons.event),
-                  title: const Text(
-                    "Próximos eventos",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "Encuentra ciclistas cerca",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const EventsPage()),
-                    ).then((_) => _checkAchievementsAndNotify());
-                  },
-                ),
-                ListTile(
-                  leading: _drawerIconTile(Icons.add_location),
-                  title: const Text(
-                    "Crear evento",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "Organiza una salida",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CreateEventPage()),
-                    ).then((_) => _checkAchievementsAndNotify());
-                  },
-                ),
-              ],
-            ),
-            const Divider(color: Colors.white24, height: 16),
-            ExpansionTile(
-              tilePadding: const EdgeInsets.only(left: 16, right: 20),
-              iconColor: const Color(0xFF7CF0BC),
-              collapsedIconColor: Colors.white38,
-              leading: _drawerIconTile(Icons.notifications_rounded),
-              title: const Text(
-                "Alertas",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              children: [
-            ListTile(
-              leading: _drawerIconTile(Icons.add_alert, color: Colors.redAccent),
-              title: const Text(
-                "Reportar problema",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-              ),
-              subtitle: const Text(
-                "Mantén presionado el mapa donde ocurre el problema",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.grey),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      '💡 Mantén presionado el mapa en el lugar del problema para crear una alerta',
-                    ),
-                    backgroundColor: Colors.blue,
-                    duration: Duration(seconds: 3),
-                  ),
-                );
-              },
-            ),
-              ],
-            ),
-            const Divider(color: Colors.white24, height: 16),
-            ExpansionTile(
-              tilePadding: const EdgeInsets.only(left: 16, right: 20),
-              iconColor: const Color(0xFF7CF0BC),
-              collapsedIconColor: Colors.white38,
-              leading: _drawerIconTile(Icons.map_rounded),
-              title: const Text(
-                "Mapa",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              children: [
-                SwitchListTile(
-                  value: _autoDarkMode,
-                  activeThumbColor: Colors.blueAccent,
-                  title: const Text(
-                    "Modo oscuro automático",
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    _autoDarkMode
-                        ? "Noche 7pm–7am, día 7am–7pm"
-                        : "Siempre modo noche",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                  onChanged: (val) {
-                    setState(() {
-                      _autoDarkMode = val;
-                      _currentStyle = val ? autoDarkMapStyle() : kMapStyleNight;
-                    });
-                    _styleIsLoaded = false;
-                    mapboxMap?.loadStyleURI(_currentStyle);
-                  },
-                ),
-                SwitchListTile(
-              value: _showBikeParkings,
-              activeThumbColor: const Color(0xFF00BCD4),
-              secondary: _bikeParkingsLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF00BCD4),
-                        strokeWidth: 2,
+                  ExpansionTile(
+                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
+                    iconColor: const Color(0xFF7CF0BC),
+                    collapsedIconColor: Colors.white38,
+                    leading: _drawerIconTile(Icons.monitor_heart_rounded),
+                    title: const Text(
+                      "Actividad",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
                       ),
-                    )
-                  : const Icon(Icons.local_parking, color: Color(0xFF00BCD4)),
-              title: const Text(
-                "Estacionamientos de bici",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-              ),
-              subtitle: Text(
-                "Biciparkings de OpenStreetMap",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12),
-              ),
-              onChanged: (_) => _toggleBikeParkings(),
-            ),
-            SwitchListTile(
-              value: _showBicimetro,
-              activeThumbColor: const Color(0xFF7C3AED),
-              secondary: const Icon(Icons.train, color: Color(0xFF7C3AED)),
-              title: const Text(
-                "BiciMetro",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-              ),
-              subtitle: Text(
-                "Estaciones Metro que permiten bici",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12),
-              ),
-              onChanged: (_) => _toggleBicimetro(),
-            ),
-            SwitchListTile(
-              value: _showBikeServices,
-              activeThumbColor: const Color(0xFF22C55E),
-              secondary: _bikeServicesLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF22C55E),
-                        strokeWidth: 2,
+                    ),
+                    children: [
+                      ListTile(
+                        leading: _drawerIconTile(Icons.bar_chart_rounded),
+                        title: const Text(
+                          "Mis estadísticas",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Km de hoy, semana y racha",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        trailing: const Icon(
+                          Icons.chevron_right,
+                          color: Colors.white38,
+                          size: 20,
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const StatsPage(),
+                            ),
+                          );
+                        },
                       ),
-                    )
-                  : const Icon(Icons.pedal_bike, color: Color(0xFF22C55E)),
-              title: const Text(
-                "Inflado, talleres y agua",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-              ),
-              subtitle: Text(
-                "Aire, talleres, gasolineras y puntos de agua",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.grey[400],
-                  fontSize: 12,
-                ),
-              ),
-              onChanged: (_) => _toggleBikeServices(),
-            ),
-            SwitchListTile(
-              value: _showCicloRecreo,
-              activeThumbColor: const Color(0xFF7CB342),
-              secondary: const Icon(Icons.event_available, color: Color(0xFF7CB342)),
-              title: const Text(
-                "CicloRecreoVía",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-              ),
-              subtitle: Text(
-                "Calles cerradas para ciclistas los domingos",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.grey[400],
-                  fontSize: 12,
-                ),
-              ),
-              onChanged: (_) => _toggleCicloRecreo(),
-            ),
-              ],
-            ),
-            const Divider(color: Colors.white24, height: 16),
-            ExpansionTile(
-              tilePadding: const EdgeInsets.only(left: 16, right: 20),
-              iconColor: const Color(0xFF7CF0BC),
-              collapsedIconColor: Colors.white38,
-              leading: _drawerIconTile(Icons.shield_rounded),
-              title: const Text(
-                "Seguridad",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              children: [
-            SwitchListTile(
-              value: _fallDetectionEnabled,
-              activeThumbColor: Colors.redAccent,
-              secondary: const Icon(
-                Icons.health_and_safety,
-                color: Colors.redAccent,
-              ),
-              title: const Text(
-                "Detección de caídas",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-              ),
-              subtitle: Text(
-                "Llama a emergencias si detecta una caída brusca",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.grey[400],
-                  fontSize: 12,
-                ),
-              ),
-              onChanged: _setFallDetectionEnabled,
-            ),
-            SwitchListTile(
-              value: _proximityAlertsEnabled,
-              activeThumbColor: Colors.orangeAccent,
-              secondary: const Icon(
-                Icons.notifications_active,
-                color: Colors.orangeAccent,
-              ),
-              title: const Text(
-                "Alertas de proximidad",
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-              ),
-              subtitle: Text(
-                "Notifica al acercarte a un incidente reportado",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.grey[400],
-                  fontSize: 12,
-                ),
-              ),
-              onChanged: (val) {
-                setState(() => _proximityAlertsEnabled = val);
-                _proximityService.reset();
-              },
-            ),
-              ],
-            ),
+                      ListTile(
+                        leading: _drawerIconTile(
+                          Icons.route,
+                          color: Colors.lightBlueAccent,
+                        ),
+                        title: const Text(
+                          "Planificar ruta",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Multiparada con CO₂ estimado",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          setState(() => _routePlannerOpen = true);
+                          _loadFavorites();
+                        },
+                      ),
+                      SwitchListTile(
+                        value: _modoActivo,
+                        activeThumbColor: Colors.greenAccent,
+                        title: const Text(
+                          "Modo activo",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          _modoActivo ? "Visible para otros" : "No visible",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (value) {
+                          if (value) {
+                            // Empieza una sesión nueva: limpia el trazado anterior.
+                            setState(() {
+                              _modoActivo = value;
+                              _sessionKm = 0;
+                              _routePoints.clear();
+                              _sessionStartAt = DateTime.now();
+                            });
+                          } else {
+                            setState(() => _modoActivo = value);
+                            _presenceService.clearMyLocation();
+                            _maybeOfferRouteShare();
+                          }
+                        },
+                      ),
+                      SwitchListTile(
+                        value: _bgTrackingEnabled,
+                        activeThumbColor: Colors.greenAccent,
+                        secondary: const Icon(
+                          Icons.gps_fixed,
+                          color: Colors.greenAccent,
+                        ),
+                        title: const Text(
+                          "Contar km en segundo plano",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Suma tus km aunque no tengas la app abierta (usa más batería)",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: _toggleBgTracking,
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white24, height: 16),
+                  ExpansionTile(
+                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
+                    iconColor: const Color(0xFF7CF0BC),
+                    collapsedIconColor: Colors.white38,
+                    leading: _drawerIconTile(Icons.groups_rounded),
+                    title: const Text(
+                      "Comunidad",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    children: [
+                      ListTile(
+                        leading: _drawerIconTile(
+                          Icons.leaderboard,
+                          color: Colors.amberAccent,
+                        ),
+                        title: const Text(
+                          "Ranking local",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Top comunas y ciclistas",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const RankingPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: _drawerIconTile(Icons.event),
+                        title: const Text(
+                          "Próximos eventos",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Encuentra ciclistas cerca",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const EventsPage(),
+                            ),
+                          ).then((_) => _checkAchievementsAndNotify());
+                        },
+                      ),
+                      ListTile(
+                        leading: _drawerIconTile(Icons.add_location),
+                        title: const Text(
+                          "Crear evento",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Organiza una salida",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CreateEventPage(),
+                            ),
+                          ).then((_) => _checkAchievementsAndNotify());
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white24, height: 16),
+                  ExpansionTile(
+                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
+                    iconColor: const Color(0xFF7CF0BC),
+                    collapsedIconColor: Colors.white38,
+                    leading: _drawerIconTile(Icons.notifications_rounded),
+                    title: const Text(
+                      "Alertas",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    children: [
+                      ListTile(
+                        leading: _drawerIconTile(
+                          Icons.add_alert,
+                          color: Colors.redAccent,
+                        ),
+                        title: const Text(
+                          "Reportar problema",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          "Mantén presionado el mapa donde ocurre el problema",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '💡 Mantén presionado el mapa en el lugar del problema para crear una alerta',
+                              ),
+                              backgroundColor: Colors.blue,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white24, height: 16),
+                  ExpansionTile(
+                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
+                    iconColor: const Color(0xFF7CF0BC),
+                    collapsedIconColor: Colors.white38,
+                    leading: _drawerIconTile(Icons.map_rounded),
+                    title: const Text(
+                      "Mapa",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    children: [
+                      SwitchListTile(
+                        value: _autoDarkMode,
+                        activeThumbColor: Colors.blueAccent,
+                        title: const Text(
+                          "Modo oscuro automático",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          _autoDarkMode
+                              ? "Noche 7pm–7am, día 7am–7pm"
+                              : "Siempre modo noche",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() {
+                            _autoDarkMode = val;
+                            _currentStyle = val
+                                ? autoDarkMapStyle()
+                                : kMapStyleNight;
+                          });
+                          _styleIsLoaded = false;
+                          mapboxMap?.loadStyleURI(_currentStyle);
+                        },
+                      ),
+                      SwitchListTile(
+                        value: _showBikeParkings,
+                        activeThumbColor: const Color(0xFF00BCD4),
+                        secondary: _bikeParkingsLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFF00BCD4),
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.local_parking,
+                                color: Color(0xFF00BCD4),
+                              ),
+                        title: const Text(
+                          "Estacionamientos de bici",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Biciparkings de OpenStreetMap",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (_) => _toggleBikeParkings(),
+                      ),
+                      SwitchListTile(
+                        value: _showBicimetro,
+                        activeThumbColor: const Color(0xFF7C3AED),
+                        secondary: const Icon(
+                          Icons.train,
+                          color: Color(0xFF7C3AED),
+                        ),
+                        title: const Text(
+                          "BiciMetro",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Estaciones Metro que permiten bici",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (_) => _toggleBicimetro(),
+                      ),
+                      SwitchListTile(
+                        value: _showBikeServices,
+                        activeThumbColor: const Color(0xFF22C55E),
+                        secondary: _bikeServicesLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFF22C55E),
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.pedal_bike,
+                                color: Color(0xFF22C55E),
+                              ),
+                        title: const Text(
+                          "Inflado, talleres y agua",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Aire, talleres, gasolineras y puntos de agua",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (_) => _toggleBikeServices(),
+                      ),
+                      SwitchListTile(
+                        value: _showCicloRecreo,
+                        activeThumbColor: const Color(0xFF7CB342),
+                        secondary: const Icon(
+                          Icons.event_available,
+                          color: Color(0xFF7CB342),
+                        ),
+                        title: const Text(
+                          "CicloRecreoVía",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Calles cerradas para ciclistas los domingos",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (_) => _toggleCicloRecreo(),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white24, height: 16),
+                  ExpansionTile(
+                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
+                    iconColor: const Color(0xFF7CF0BC),
+                    collapsedIconColor: Colors.white38,
+                    leading: _drawerIconTile(Icons.shield_rounded),
+                    title: const Text(
+                      "Seguridad",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    children: [
+                      SwitchListTile(
+                        value: _fallDetectionEnabled,
+                        activeThumbColor: Colors.redAccent,
+                        secondary: const Icon(
+                          Icons.health_and_safety,
+                          color: Colors.redAccent,
+                        ),
+                        title: const Text(
+                          "Detección de caídas",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Llama a emergencias si detecta una caída brusca",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: _setFallDetectionEnabled,
+                      ),
+                      SwitchListTile(
+                        value: _proximityAlertsEnabled,
+                        activeThumbColor: Colors.orangeAccent,
+                        secondary: const Icon(
+                          Icons.notifications_active,
+                          color: Colors.orangeAccent,
+                        ),
+                        title: const Text(
+                          "Alertas de proximidad",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Notifica al acercarte a un incidente reportado",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() => _proximityAlertsEnabled = val);
+                          _proximityService.reset();
+                        },
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -5154,8 +5581,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             ),
             ListTile(
-              leading: _drawerIconTile(Icons.logout_rounded,
-                  color: Colors.redAccent),
+              leading: _drawerIconTile(
+                Icons.logout_rounded,
+                color: Colors.redAccent,
+              ),
               title: const Text(
                 "Cerrar sesión",
                 style: TextStyle(
@@ -5165,8 +5594,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 ),
               ),
               trailing: IconButton(
-                icon: const Icon(Icons.settings_rounded,
-                    color: Colors.white70),
+                icon: const Icon(Icons.settings_rounded, color: Colors.white70),
                 tooltip: 'Configuración',
                 onPressed: () {
                   Navigator.pop(context);
@@ -5224,13 +5652,13 @@ class _MapPageState extends State<MapPage> with RouteAware {
           ),
           // ── Overlay de gotas de lluvia (según clima detectado) ────────────
           if (_isRaining)
-            Positioned.fill(
-              child: RainOverlay(heavy: _isHeavyRain),
-            ),
+            Positioned.fill(child: RainOverlay(heavy: _isHeavyRain)),
           // ── Banner sin conexión ───────────────────────────────────────────
           if (_isOffline)
             Positioned(
-              bottom: 0, left: 0, right: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
               child: SafeArea(
                 top: false,
                 child: Container(
@@ -5239,7 +5667,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.wifi_off_rounded, color: Colors.white, size: 14),
+                      Icon(
+                        Icons.wifi_off_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
                       SizedBox(width: 6),
                       Text(
                         'Sin conexión · Mostrando datos en caché',
@@ -5268,55 +5700,78 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 duration: const Duration(milliseconds: 400),
                 curve: Curves.easeOut,
                 child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0E0E18),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.1)),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 6)),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.layers_outlined, color: Color(0xFFC9FF5C), size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '¿Sabías que puedes ocultar los pines?',
-                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0E0E18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.4),
+                          blurRadius: 20,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.layers_outlined,
+                          color: Color(0xFFC9FF5C),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '¿Sabías que puedes ocultar los pines?',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Puedes activar o desactivar BiciMetro, estacionamientos, talleres y CicloRecreoVía desde el menú ☰ → MAPA.',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.grey[400],
+                                  fontSize: 12,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          width: 22,
+                          height: 22,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Text(
+                            '$_layersTipSecondsLeft',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white54,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Puedes activar o desactivar BiciMetro, estacionamientos, talleres y CicloRecreoVía desde el menú ☰ → MAPA.',
-                              style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12, height: 1.3),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.only(left: 8),
-                        width: 22,
-                        height: 22,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: Text(
-                          '$_layersTipSecondsLeft',
-                          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
                 ),
               ),
             ),
@@ -5444,18 +5899,29 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 child: GestureDetector(
                   onTap: _closeRoutePlanner,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red.shade700.withOpacity(0.92),
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4)),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
                       ],
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                        Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                         SizedBox(width: 6),
                         Text(
                           'Cancelar ruta',
@@ -5530,83 +5996,119 @@ class _MapPageState extends State<MapPage> with RouteAware {
           // ── Burbuja flotante de ayuda: se puede arrastrar por todo el
           // mapa; al tocarla hace un pequeño efecto y muestra un tip corto
           // al lado, sin abrir ningún modal.
-          Builder(builder: (context) {
-            final size = MediaQuery.of(context).size;
-            final pos = _helpBubblePos ?? Offset(size.width - 64, size.height - 220);
-            const bubbleSize = 48.0;
-            const tipMaxWidth = 220.0;
-            const gap = 8.0;
-            // Si no hay espacio a la derecha del burbuja para el tip, lo
-            // mostramos a la izquierda en su lugar (y viceversa) para que
-            // nunca se salga de la pantalla.
-            final spaceRight = size.width - (pos.dx + bubbleSize) - gap;
-            final showTipOnRight = spaceRight >= tipMaxWidth;
-            return Stack(
-              children: [
-                Positioned(
-                  left: pos.dx,
-                  top: pos.dy,
-                  child: GestureDetector(
-                    onPanUpdate: (details) {
-                      setState(() {
-                        final newX = (pos.dx + details.delta.dx).clamp(4.0, size.width - 52.0);
-                        final newY = (pos.dy + details.delta.dy).clamp(60.0, size.height - 100.0);
-                        _helpBubblePos = Offset(newX, newY);
-                      });
-                    },
-                    onTap: _onHelpBubbleTap,
-                    child: AnimatedScale(
-                      scale: _helpBubbleBounce ? 1.18 : 1.0,
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.elasticOut,
-                      child: Container(
-                        width: bubbleSize,
-                        height: bubbleSize,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF12213F),
-                          border: Border.all(color: const Color(0xFFC9FF5C), width: 2),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4)),
-                          ],
-                        ),
-                        child: const Icon(Icons.tips_and_updates_rounded, color: Color(0xFFC9FF5C), size: 24),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: pos.dy,
-                  left: showTipOnRight ? pos.dx + bubbleSize + gap : null,
-                  right: showTipOnRight ? null : size.width - pos.dx + gap,
-                  child: IgnorePointer(
-                    ignoring: !_showHelpTipText,
-                    child: AnimatedOpacity(
-                      opacity: _showHelpTipText ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 320),
-                      curve: Curves.easeOut,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: tipMaxWidth),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0E0E18),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white.withOpacity(0.1)),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 4)),
-                          ],
-                        ),
-                        child: Text(
-                          _helpTips[_helpTipIndex],
-                          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 12, height: 1.3),
+          Builder(
+            builder: (context) {
+              final size = MediaQuery.of(context).size;
+              final pos =
+                  _helpBubblePos ?? Offset(size.width - 64, size.height - 220);
+              const bubbleSize = 48.0;
+              const tipMaxWidth = 220.0;
+              const gap = 8.0;
+              // Si no hay espacio a la derecha del burbuja para el tip, lo
+              // mostramos a la izquierda en su lugar (y viceversa) para que
+              // nunca se salga de la pantalla.
+              final spaceRight = size.width - (pos.dx + bubbleSize) - gap;
+              final showTipOnRight = spaceRight >= tipMaxWidth;
+              return Stack(
+                children: [
+                  Positioned(
+                    left: pos.dx,
+                    top: pos.dy,
+                    child: GestureDetector(
+                      onPanUpdate: (details) {
+                        setState(() {
+                          final newX = (pos.dx + details.delta.dx).clamp(
+                            4.0,
+                            size.width - 52.0,
+                          );
+                          final newY = (pos.dy + details.delta.dy).clamp(
+                            60.0,
+                            size.height - 100.0,
+                          );
+                          _helpBubblePos = Offset(newX, newY);
+                        });
+                      },
+                      onTap: _onHelpBubbleTap,
+                      child: AnimatedScale(
+                        scale: _helpBubbleBounce ? 1.18 : 1.0,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.elasticOut,
+                        child: Container(
+                          width: bubbleSize,
+                          height: bubbleSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF12213F),
+                            border: Border.all(
+                              color: const Color(0xFFC9FF5C),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.tips_and_updates_rounded,
+                            color: Color(0xFFC9FF5C),
+                            size: 24,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            );
-          }),
+                  Positioned(
+                    top: pos.dy,
+                    left: showTipOnRight ? pos.dx + bubbleSize + gap : null,
+                    right: showTipOnRight ? null : size.width - pos.dx + gap,
+                    child: IgnorePointer(
+                      ignoring: !_showHelpTipText,
+                      child: AnimatedOpacity(
+                        opacity: _showHelpTipText ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOut,
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            maxWidth: tipMaxWidth,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0E0E18),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.1),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            _helpTips[_helpTipIndex],
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
       drawer: _buildDrawer(),
@@ -5714,12 +6216,20 @@ class _MapPageState extends State<MapPage> with RouteAware {
       await _addCicloviasLayer();
       // Re-agregar alertas/eventos con los datos que ya tenemos en memoria
       if (_currentAlerts.isNotEmpty) await _updateAlertsLayer(_currentAlerts);
-      if (_currentEvents.isNotEmpty) await _updateEventsLayer(_visibleEventPinsForMap(_currentEvents));
+      if (_currentEvents.isNotEmpty) {
+        await _updateEventsLayer(_visibleEventPinsForMap(_currentEvents));
+      }
       // Re-agregar capas opcionales si estaban activas
-      if (_showBikeParkings && _bikeParkings.isNotEmpty) await _updateBikeParkingsLayer();
+      if (_showBikeParkings && _bikeParkings.isNotEmpty) {
+        await _updateBikeParkingsLayer();
+      }
       if (_showBicimetro) await _updateBicimetroLayer();
-      if (_showBikeServices && _bikeServices.isNotEmpty) await _updateBikeServicesLayer();
-      if (_showCicloRecreo && _cicloRecreoPoints.isNotEmpty) await _updateCicloRecreoLayer();
+      if (_showBikeServices && _bikeServices.isNotEmpty) {
+        await _updateBikeServicesLayer();
+      }
+      if (_showCicloRecreo && _cicloRecreoPoints.isNotEmpty) {
+        await _updateCicloRecreoLayer();
+      }
 
       // El primer cargado de las capas por defecto se dispara tras el primer
       // fix de GPS (ver _maybeAutoLoadLayers), para usar un área pequeña
@@ -5744,7 +6254,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   'type': 'Feature',
                   'geometry': {'type': 'LineString', 'coordinates': remaining},
                   'properties': {},
-                }
+                },
               ],
             });
             await style.addSource(GeoJsonSource(id: _rpRouteSrc, data: fc));
@@ -5774,11 +6284,35 @@ class _MapPageState extends State<MapPage> with RouteAware {
     // del mapa — usamos un azul mucho más saturado y opaco. En modo oscuro
     // cambiamos a lima (el acento de marca de Pedalea), que resalta mucho
     // más contra el navy oscuro que el celeste que había antes.
-    final mainColor = _isDayMode ? const Color(0xFF0B5FFF) : const Color(0xFFC9FF5C);
-    final centerColor = _isDayMode ? const Color(0xFF6FA8FF) : const Color(0xFFE6FFB0);
+    final mainColor = _isDayMode
+        ? const Color(0xFF0B5FFF)
+        : const Color(0xFFC9FF5C);
+    final centerColor = _isDayMode
+        ? const Color(0xFF6FA8FF)
+        : const Color(0xFFE6FFB0);
     final mainOpacity = _isDayMode
-        ? ['interpolate', ['linear'], ['zoom'], 11, 0.55, 13, 0.75, 15, 0.9]
-        : ['interpolate', ['linear'], ['zoom'], 11, 0.35, 13, 0.6, 15, 0.85];
+        ? [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            0.55,
+            13,
+            0.75,
+            15,
+            0.9,
+          ]
+        : [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            0.35,
+            13,
+            0.6,
+            15,
+            0.85,
+          ];
 
     return [
       // Halo blanco debajo, solo en modo claro, para que la línea azul no se
@@ -5791,17 +6325,28 @@ class _MapPageState extends State<MapPage> with RouteAware {
           lineCap: LineCap.ROUND,
           lineJoin: LineJoin.ROUND,
           lineWidthExpression: [
-            'interpolate', ['linear'], ['zoom'],
-            11, 1.4,
-            13, 2.6,
-            15, 5.0,
-            17, 7.5,
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            1.4,
+            13,
+            2.6,
+            15,
+            5.0,
+            17,
+            7.5,
           ],
           lineOpacityExpression: [
-            'interpolate', ['linear'], ['zoom'],
-            11, 0.35,
-            13, 0.55,
-            15, 0.75,
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            0.35,
+            13,
+            0.55,
+            15,
+            0.75,
           ],
         ),
       // Línea principal
@@ -5812,11 +6357,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
         lineCap: LineCap.ROUND,
         lineJoin: LineJoin.ROUND,
         lineWidthExpression: [
-          'interpolate', ['linear'], ['zoom'],
-          11, 0.6,
-          13, 1.4,
-          15, 3.0,
-          17, 5.0,
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11,
+          0.6,
+          13,
+          1.4,
+          15,
+          3.0,
+          17,
+          5.0,
         ],
         lineOpacityExpression: mainOpacity,
       ),
@@ -5828,15 +6379,24 @@ class _MapPageState extends State<MapPage> with RouteAware {
         lineCap: LineCap.ROUND,
         lineJoin: LineJoin.ROUND,
         lineWidthExpression: [
-          'interpolate', ['linear'], ['zoom'],
-          14, 0.0,
-          16, 1.0,
-          18, 1.8,
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          14,
+          0.0,
+          16,
+          1.0,
+          18,
+          1.8,
         ],
         lineOpacityExpression: [
-          'interpolate', ['linear'], ['zoom'],
-          14, 0.0,
-          16, 0.6,
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          14,
+          0.0,
+          16,
+          0.6,
         ],
       ),
     ];
@@ -5851,21 +6411,34 @@ class _MapPageState extends State<MapPage> with RouteAware {
       if (_cicloviasGeoJson != null) {
         final sourceExists = await style.styleSourceExists("ciclovias-source");
         if (sourceExists) await style.removeStyleSource("ciclovias-source");
-        for (var lyr in ["ciclovias-glow-layer", "ciclovias-halo-layer", "ciclovias-main-layer", "ciclovias-center-layer"]) {
-          if (await style.styleLayerExists(lyr)) await style.removeStyleLayer(lyr);
+        for (var lyr in [
+          "ciclovias-glow-layer",
+          "ciclovias-halo-layer",
+          "ciclovias-main-layer",
+          "ciclovias-center-layer",
+        ]) {
+          if (await style.styleLayerExists(lyr)) {
+            await style.removeStyleLayer(lyr);
+          }
         }
-        await style.addSource(GeoJsonSource(id: "ciclovias-source", data: _cicloviasGeoJson!));
+        await style.addSource(
+          GeoJsonSource(id: "ciclovias-source", data: _cicloviasGeoJson!),
+        );
         for (final l in _cicloviaLayers()) {
           await style.addLayer(l);
         }
         _cicloviasAdded = true;
         if (_currentAlerts.isNotEmpty) await _updateAlertsLayer(_currentAlerts);
-        if (_currentEvents.isNotEmpty) await _updateEventsLayer(_visibleEventPinsForMap(_currentEvents));
+        if (_currentEvents.isNotEmpty) {
+          await _updateEventsLayer(_visibleEventPinsForMap(_currentEvents));
+        }
         return;
       }
 
       // Ciclovías incluidas en la app (sin depender de internet).
-      final data = await rootBundle.loadString('assets/data/ciclovias_scl.json');
+      final data = await rootBundle.loadString(
+        'assets/data/ciclovias_chile.json',
+      );
       debugPrint("📊 Datos de ciclovías recibidos: ${data.length} caracteres");
       if (data.isEmpty) {
         debugPrint("⚠️ No se recibieron datos de ciclovías");
@@ -5989,8 +6562,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       }
 
       // Usar la última posición conocida para un salto instantáneo…
-      geo.Position? pos = _lastPosition ??
-          await geo.Geolocator.getLastKnownPosition();
+      geo.Position? pos =
+          _lastPosition ?? await geo.Geolocator.getLastKnownPosition();
       if (pos != null) _moveCameraInstant(pos);
 
       // …y luego refinar con una lectura fresca.
@@ -6020,10 +6593,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
         _bikeParkingsIconAdded = true;
         return;
       }
-      final bytes = await _renderAlertIcon(const Color(0xFF00BCD4), Icons.local_parking);
+      final bytes = await _renderAlertIcon(
+        const Color(0xFF00BCD4),
+        Icons.local_parking,
+      );
       await style.addStyleImage(
-        _parkingIconId, 1.0, MbxImage(width: 80, height: 80, data: bytes),
-        false, [], [], null,
+        _parkingIconId,
+        1.0,
+        MbxImage(width: 80, height: 80, data: bytes),
+        false,
+        [],
+        [],
+        null,
       );
       _bikeParkingsIconAdded = true;
     } catch (e) {
@@ -6040,8 +6621,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
       //    igual). Overpass en vivo fallaba en redes móviles, por lo que los
       //    estacionamientos no aparecían en algunos teléfonos.
       try {
-        final raw = await rootBundle
-            .loadString('assets/data/bike_parkings_scl.json');
+        final raw = await rootBundle.loadString(
+          'assets/data/bike_parkings_chile.json',
+        );
         final decoded = jsonDecode(raw);
         elements = (decoded is Map ? decoded['elements'] : decoded) as List?;
         debugPrint('🅿️ Parkings empacados: ${elements?.length ?? 0}');
@@ -6053,38 +6635,44 @@ class _MapPageState extends State<MapPage> with RouteAware {
         final p = _lastPosition;
         final bbox = p != null
             ? '(${p.latitude - 0.12},${p.longitude - 0.12},'
-                '${p.latitude + 0.12},${p.longitude + 0.12})'
+                  '${p.latitude + 0.12},${p.longitude + 0.12})'
             : '(-33.70,-70.95,-33.30,-70.45)';
-        final query = '[out:json][timeout:25];'
+        final query =
+            '[out:json][timeout:25];'
             '(node["amenity"="bicycle_parking"]$bbox;'
             'way["amenity"="bicycle_parking"]$bbox;);'
             'out center;';
         elements = await _fetchOverpass(query);
       }
       if (elements != null) {
-        _bikeParkings = elements.map<Map<String, dynamic>>((e) {
-          double lat = 0, lng = 0;
-          if (e['type'] == 'node') {
-            lat = (e['lat'] as num).toDouble();
-            lng = (e['lon'] as num).toDouble();
-          } else {
-            lat = (e['center']?['lat'] as num?)?.toDouble() ?? 0;
-            lng = (e['center']?['lon'] as num?)?.toDouble() ?? 0;
-          }
-          final tags = (e['tags'] as Map?)?.cast<String, dynamic>() ?? {};
-          final isCovered = tags['covered'] == 'yes' ||
-              tags['bicycle_parking'] == 'shed' ||
-              tags['bicycle_parking'] == 'lockers';
-          return {
-            'id': e['id'].toString(),
-            'lat': lat,
-            'lng': lng,
-            'name': tags['name'] ?? tags['description'] ?? 'Estacionamiento',
-            'capacity': tags['capacity'],
-            'covered': isCovered ? 'Cubierto' : 'Descubierto',
-            'type': tags['bicycle_parking'] ?? 'stands',
-          };
-        }).where((p) => (p['lat'] as double) != 0.0).toList();
+        _bikeParkings = elements
+            .map<Map<String, dynamic>>((e) {
+              double lat = 0, lng = 0;
+              if (e['type'] == 'node') {
+                lat = (e['lat'] as num).toDouble();
+                lng = (e['lon'] as num).toDouble();
+              } else {
+                lat = (e['center']?['lat'] as num?)?.toDouble() ?? 0;
+                lng = (e['center']?['lon'] as num?)?.toDouble() ?? 0;
+              }
+              final tags = (e['tags'] as Map?)?.cast<String, dynamic>() ?? {};
+              final isCovered =
+                  tags['covered'] == 'yes' ||
+                  tags['bicycle_parking'] == 'shed' ||
+                  tags['bicycle_parking'] == 'lockers';
+              return {
+                'id': e['id'].toString(),
+                'lat': lat,
+                'lng': lng,
+                'name':
+                    tags['name'] ?? tags['description'] ?? 'Estacionamiento',
+                'capacity': tags['capacity'],
+                'covered': isCovered ? 'Cubierto' : 'Descubierto',
+                'type': tags['bicycle_parking'] ?? 'stands',
+              };
+            })
+            .where((p) => (p['lat'] as double) != 0.0)
+            .toList();
         debugPrint('🅿️ Parkings cargados: ${_bikeParkings.length}');
       }
     } catch (e) {
@@ -6097,28 +6685,47 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Future<void> _updateBikeParkingsLayer() async {
     if (mapboxMap == null) return;
     final style = mapboxMap!.style;
-    if (await style.styleLayerExists(_parkingLyrId)) await style.removeStyleLayer(_parkingLyrId);
-    if (await style.styleSourceExists(_parkingSrcId)) await style.removeStyleSource(_parkingSrcId);
+    if (await style.styleLayerExists(_parkingLyrId)) {
+      await style.removeStyleLayer(_parkingLyrId);
+    }
+    if (await style.styleSourceExists(_parkingSrcId)) {
+      await style.removeStyleSource(_parkingSrcId);
+    }
     if (!_showBikeParkings || _bikeParkings.isEmpty) return;
     await _ensureParkingIcon();
-    final features = _bikeParkings.map((p) => {
-      'type': 'Feature',
-      'properties': {'id': p['id'], 'name': p['name'], 'capacity': p['capacity'], 'covered': p['covered'], 'type': p['type']},
-      'geometry': {'type': 'Point', 'coordinates': [p['lng'], p['lat']]},
-    }).toList();
+    final features = _bikeParkings
+        .map(
+          (p) => {
+            'type': 'Feature',
+            'properties': {
+              'id': p['id'],
+              'name': p['name'],
+              'capacity': p['capacity'],
+              'covered': p['covered'],
+              'type': p['type'],
+            },
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [p['lng'], p['lat']],
+            },
+          },
+        )
+        .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _parkingSrcId, data: fc));
-    await style.addLayer(SymbolLayer(
-      id: _parkingLyrId,
-      sourceId: _parkingSrcId,
-      iconImage: _parkingIconId,
-      iconSize: 0.35,
-      // Detección de colisiones: Mapbox oculta los pines que se encimarían y
-      // muestra un conjunto representativo y legible en cualquier zoom (ni
-      // amontonado ni vacío). Al acercarse aparecen más.
-      iconAllowOverlap: false,
-      iconIgnorePlacement: false,
-    ));
+    await style.addLayer(
+      SymbolLayer(
+        id: _parkingLyrId,
+        sourceId: _parkingSrcId,
+        iconImage: _parkingIconId,
+        iconSize: 0.35,
+        // Detección de colisiones: Mapbox oculta los pines que se encimarían y
+        // muestra un conjunto representativo y legible en cualquier zoom (ni
+        // amontonado ni vacío). Al acercarse aparecen más.
+        iconAllowOverlap: false,
+        iconIgnorePlacement: false,
+      ),
+    );
   }
 
   void _toggleBikeParkings() async {
@@ -6150,39 +6757,77 @@ class _MapPageState extends State<MapPage> with RouteAware {
           color: const Color(0xFF0E0E18),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 8))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 30,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(color: Color(0xFF00BCD4), shape: BoxShape.circle),
-                child: const Icon(Icons.local_parking, color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    destName,
-                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF00BCD4),
+                    shape: BoxShape.circle,
                   ),
-                  Text(
-                    parking['covered']?.toString() ?? 'Descubierto',
-                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.grey, fontSize: 13),
+                  child: const Icon(
+                    Icons.local_parking,
+                    color: Colors.white,
+                    size: 22,
                   ),
-                ],
-              )),
-            ]),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        destName,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        parking['covered']?.toString() ?? 'Descubierto',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             if (parking['capacity'] != null)
-              _infoRow(Icons.bike_scooter, 'Capacidad', '${parking['capacity']} bicis'),
-            _infoRow(Icons.inventory_2_outlined, 'Tipo', parking['type']?.toString() ?? 'stands'),
+              _infoRow(
+                Icons.bike_scooter,
+                'Capacidad',
+                '${parking['capacity']} bicis',
+              ),
+            _infoRow(
+              Icons.inventory_2_outlined,
+              'Tipo',
+              parking['type']?.toString() ?? 'stands',
+            ),
             const SizedBox(height: 16),
-            _PoiPhotoGallery(poiType: 'bike_parking', poiId: id, accentColor: const Color(0xFF00BCD4)),
+            _PoiPhotoGallery(
+              poiType: 'bike_parking',
+              poiId: id,
+              accentColor: const Color(0xFF00BCD4),
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -6196,8 +6841,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00BCD4),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                   elevation: 0,
                 ),
               ),
@@ -6220,10 +6871,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
         _bicimetroIconAdded = true;
         return;
       }
-      final bytes = await _renderAlertIcon(const Color(0xFF7C3AED), Icons.train);
+      final bytes = await _renderAlertIcon(
+        const Color(0xFF7C3AED),
+        Icons.train,
+      );
       await style.addStyleImage(
-        _bicimetroIconId, 1.0, MbxImage(width: 80, height: 80, data: bytes),
-        false, [], [], null,
+        _bicimetroIconId,
+        1.0,
+        MbxImage(width: 80, height: 80, data: bytes),
+        false,
+        [],
+        [],
+        null,
       );
       _bicimetroIconAdded = true;
     } catch (e) {
@@ -6234,25 +6893,41 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Future<void> _updateBicimetroLayer() async {
     if (mapboxMap == null) return;
     final style = mapboxMap!.style;
-    if (await style.styleLayerExists(_bicimetroLyrId)) await style.removeStyleLayer(_bicimetroLyrId);
-    if (await style.styleSourceExists(_bicimetroSrcId)) await style.removeStyleSource(_bicimetroSrcId);
+    if (await style.styleLayerExists(_bicimetroLyrId)) {
+      await style.removeStyleLayer(_bicimetroLyrId);
+    }
+    if (await style.styleSourceExists(_bicimetroSrcId)) {
+      await style.removeStyleSource(_bicimetroSrcId);
+    }
     if (!_showBicimetro) return;
     await _ensureBicimetroIcon();
-    final features = _kBicimetroStations.map((s) => {
-      'type': 'Feature',
-      'properties': {'name': s['name'].toString(), 'line': s['line'].toString()},
-      'geometry': {'type': 'Point', 'coordinates': [s['lng'], s['lat']]},
-    }).toList();
+    final features = _kBicimetroStations
+        .map(
+          (s) => {
+            'type': 'Feature',
+            'properties': {
+              'name': s['name'].toString(),
+              'line': s['line'].toString(),
+            },
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [s['lng'], s['lat']],
+            },
+          },
+        )
+        .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _bicimetroSrcId, data: fc));
-    await style.addLayer(SymbolLayer(
-      id: _bicimetroLyrId,
-      sourceId: _bicimetroSrcId,
-      iconImage: _bicimetroIconId,
-      iconSize: 0.35,
-      iconAllowOverlap: false,
-      iconIgnorePlacement: false,
-    ));
+    await style.addLayer(
+      SymbolLayer(
+        id: _bicimetroLyrId,
+        sourceId: _bicimetroSrcId,
+        iconImage: _bicimetroIconId,
+        iconSize: 0.35,
+        iconAllowOverlap: false,
+        iconIgnorePlacement: false,
+      ),
+    );
   }
 
   void _toggleBicimetro() async {
@@ -6280,27 +6955,55 @@ class _MapPageState extends State<MapPage> with RouteAware {
           color: const Color(0xFF0E0E18),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 8))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 30,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(color: Color(0xFF7C3AED), shape: BoxShape.circle),
-                child: const Icon(Icons.train, color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-                  Text('Metro $line', style: const TextStyle(fontFamily: 'Poppins', color: Color(0xFF9CA3AF), fontSize: 13)),
-                ],
-              )),
-            ]),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF7C3AED),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.train, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'Metro $line',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Color(0xFF9CA3AF),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
@@ -6313,17 +7016,37 @@ class _MapPageState extends State<MapPage> with RouteAware {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Horarios BiciMetro', style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text(
+                    'Horarios BiciMetro',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 10),
-                  _infoRow(Icons.check_circle, 'Fin de semana', 'Todo el día ✔'),
-                  _infoRow(Icons.check_circle, 'Lunes – viernes', '9:00 – 18:00  ·  20:00 en adelante ✔'),
+                  _infoRow(
+                    Icons.check_circle,
+                    'Fin de semana',
+                    'Todo el día ✔',
+                  ),
+                  _infoRow(
+                    Icons.check_circle,
+                    'Lunes – viernes',
+                    '9:00 – 18:00  ·  20:00 en adelante ✔',
+                  ),
                   _infoRow(Icons.block, 'Punta mañana', '7:00 – 9:00 ✖'),
                   _infoRow(Icons.block, 'Punta tarde', '18:00 – 20:00 ✖'),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            _PoiPhotoGallery(poiType: 'bicimetro', poiId: name, accentColor: const Color(0xFF7C3AED)),
+            _PoiPhotoGallery(
+              poiType: 'bicimetro',
+              poiId: name,
+              accentColor: const Color(0xFF7C3AED),
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -6337,8 +7060,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF7C3AED),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                   elevation: 0,
                 ),
               ),
@@ -6394,26 +7123,33 @@ class _MapPageState extends State<MapPage> with RouteAware {
         final (color, icon) = _serviceStyle(cat);
         final bytes = await _renderPinIcon(color, icon);
         await style.addStyleImage(
-          iconId, 1.0, MbxImage(width: 84, height: 108, data: bytes),
-          false, [], [], null,
+          iconId,
+          1.0,
+          MbxImage(width: 84, height: 108, data: bytes),
+          false,
+          [],
+          [],
+          null,
         );
       }
 
       // Pin especial con el logo de Copec dentro de la cabeza.
       if (!await style.hasStyleImage('svc-icon-fuel-copec')) {
         final data = await rootBundle.load('assets/brands/copec.png');
-        final codec = await ui.instantiateImageCodec(
-          data.buffer.asUint8List(),
-        );
+        final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
         final frame = await codec.getNextFrame();
         final bytes = await _renderLogoPin(
           frame.image,
           const Color(0xFFE2231A),
         );
         await style.addStyleImage(
-          'svc-icon-fuel-copec', 1.0,
+          'svc-icon-fuel-copec',
+          1.0,
           MbxImage(width: 88, height: 112, data: bytes),
-          false, [], [], null,
+          false,
+          [],
+          [],
+          null,
         );
       }
 
@@ -6454,8 +7190,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     // Logo recortado dentro de la cabeza (contain por el lado mayor)
     canvas.save();
     canvas.clipPath(
-      ui.Path()
-        ..addOval(ui.Rect.fromCircle(center: center, radius: headR - 6)),
+      ui.Path()..addOval(ui.Rect.fromCircle(center: center, radius: headR - 6)),
     );
     final d = (headR - 8) * 2;
     final lw = logo.width.toDouble();
@@ -6466,12 +7201,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       width: lw * scale,
       height: lh * scale,
     );
-    canvas.drawImageRect(
-      logo,
-      ui.Rect.fromLTWH(0, 0, lw, lh),
-      dst,
-      ui.Paint(),
-    );
+    canvas.drawImageRect(logo, ui.Rect.fromLTWH(0, 0, lw, lh), dst, ui.Paint());
     canvas.restore();
 
     final picture = recorder.endRecording();
@@ -6509,34 +7239,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
     return null;
   }
 
-  /// Carga el dataset de servicios (talleres, aire, Copec y otras gasolineras).
-  /// Usa el archivo incluido en la app (siempre disponible, sin internet) y,
-  /// si la red responde, lo refresca desde OpenStreetMap.
+  /// Carga el dataset de servicios (talleres, aire, Copec y otras gasolineras)
+  /// de todo Chile. Usa el archivo incluido en la app — cubre el país
+  /// completo y siempre está disponible, sin depender de internet ni de
+  /// una consulta pesada a Overpass en cada sesión.
   Future<void> _loadBikeServices() async {
     if (_bikeServicesLoading) return;
     setState(() => _bikeServicesLoading = true);
     try {
-      // 1) Dataset incluido en la app → garantiza que siempre haya puntos.
       if (_bikeServices.isEmpty) {
         _bikeServices = await _loadBundledServices();
-        debugPrint('🔧 Servicios (incluidos): ${_bikeServices.length}');
-      }
-
-      // 2) Refresco opcional desde Overpass (mejor esfuerzo, no bloquea).
-      const bbox = '(-33.70,-70.95,-33.30,-70.45)';
-      final query = '[out:json][timeout:25];'
-          '('
-          'nwr["amenity"="bicycle_repair_station"]$bbox;'
-          'nwr["amenity"="compressed_air"]$bbox;'
-          'nwr["shop"="bicycle"]$bbox;'
-          'nwr["amenity"="fuel"]["brand"]$bbox;'
-          'nwr["amenity"="fuel"]["compressed_air"="yes"]$bbox;'
-          ');'
-          'out center;';
-      final elements = await _fetchOverpass(query);
-      if (elements != null && elements.length > 50) {
-        _bikeServices = _mapServiceElements(elements);
-        debugPrint('🔧 Servicios (Overpass): ${_bikeServices.length}');
+        debugPrint('🔧 Servicios (incluidos, Chile): ${_bikeServices.length}');
       }
     } catch (e) {
       debugPrint('Error cargando servicios bici: $e');
@@ -6545,11 +7258,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
-  /// Lee el dataset de servicios incluido en los assets de la app.
+  /// Lee el dataset de servicios (todo Chile) incluido en los assets de la app.
   Future<List<Map<String, dynamic>>> _loadBundledServices() async {
     try {
-      final raw =
-          await rootBundle.loadString('assets/data/bike_services_scl.json');
+      final raw = await rootBundle.loadString(
+        'assets/data/bike_services_chile.json',
+      );
       final list = (jsonDecode(raw) as List);
       return list.map<Map<String, dynamic>>((e) {
         final m = e as Map<String, dynamic>;
@@ -6570,58 +7284,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
-  /// Convierte los elementos crudos de Overpass al formato de la capa.
-  List<Map<String, dynamic>> _mapServiceElements(List elements) {
-    return elements.map<Map<String, dynamic>>((e) {
-      double lat = 0, lng = 0;
-      if (e['type'] == 'node') {
-        lat = (e['lat'] as num).toDouble();
-        lng = (e['lon'] as num).toDouble();
-      } else {
-        lat = (e['center']?['lat'] as num?)?.toDouble() ?? 0;
-        lng = (e['center']?['lon'] as num?)?.toDouble() ?? 0;
-      }
-      final tags = (e['tags'] as Map?)?.cast<String, dynamic>() ?? {};
-
-      String category;
-      if (tags['shop'] == 'bicycle') {
-        category = 'shop';
-      } else if (tags['amenity'] == 'fuel') {
-        category = 'fuel';
-      } else if (tags['amenity'] == 'drinking_water') {
-        category = 'water';
-      } else {
-        category = 'repair';
-      }
-
-      final hasPump = tags['service:bicycle:pump'] == 'yes' ||
-          tags['compressed_air'] == 'yes' ||
-          tags['amenity'] == 'compressed_air' ||
-          tags['amenity'] == 'bicycle_repair_station';
-
-      final brand = (tags['brand'] ?? tags['operator'] ?? '').toString();
-      final displayName = category == 'fuel'
-          ? (brand.isNotEmpty ? brand : (tags['name']?.toString() ?? 'Gasolinera'))
-          : (tags['name']?.toString() ??
-                (brand.isNotEmpty ? brand : _serviceLabel(category)));
-
-      final isCopec =
-          category == 'fuel' && brand.toLowerCase().contains('copec');
-      final iconId = isCopec ? 'svc-icon-fuel-copec' : 'svc-icon-$category';
-
-      return {
-        'id': e['id'].toString(),
-        'lat': lat,
-        'lng': lng,
-        'name': displayName,
-        'brand': brand,
-        'category': category,
-        'icon_id': iconId,
-        'has_pump': hasPump,
-      };
-    }).where((p) => (p['lat'] as double) != 0.0).toList();
-  }
-
   Future<void> _updateBikeServicesLayer() async {
     if (mapboxMap == null) return;
     final style = mapboxMap!.style;
@@ -6633,29 +7295,38 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
     if (!_showBikeServices || _bikeServices.isEmpty) return;
     await _ensureServicesIcons();
-    final features = _bikeServices.map((p) => {
-      'type': 'Feature',
-      'properties': {
-        'id': p['id'],
-        'name': p['name'],
-        'category': p['category'],
-        'icon_id': p['icon_id'],
-        'has_pump': p['has_pump'],
-      },
-      'geometry': {'type': 'Point', 'coordinates': [p['lng'], p['lat']]},
-    }).toList();
+    final features = _bikeServices
+        .map(
+          (p) => {
+            'type': 'Feature',
+            'properties': {
+              'id': p['id'],
+              'name': p['name'],
+              'category': p['category'],
+              'icon_id': p['icon_id'],
+              'has_pump': p['has_pump'],
+            },
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [p['lng'], p['lat']],
+            },
+          },
+        )
+        .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _servicesSrcId, data: fc));
-    await style.addLayer(SymbolLayer(
-      id: _servicesLyrId,
-      sourceId: _servicesSrcId,
-      iconImage: 'svc-icon-repair', // se sobreescribe por feature abajo
-      iconSize: 0.42,
-      iconAnchor: IconAnchor.BOTTOM, // la punta del pin marca el lugar
-      // Colisión: declutter automático sin desaparecer del todo al alejarse.
-      iconAllowOverlap: false,
-      iconIgnorePlacement: false,
-    ));
+    await style.addLayer(
+      SymbolLayer(
+        id: _servicesLyrId,
+        sourceId: _servicesSrcId,
+        iconImage: 'svc-icon-repair', // se sobreescribe por feature abajo
+        iconSize: 0.42,
+        iconAnchor: IconAnchor.BOTTOM, // la punta del pin marca el lugar
+        // Colisión: declutter automático sin desaparecer del todo al alejarse.
+        iconAllowOverlap: false,
+        iconIgnorePlacement: false,
+      ),
+    );
     // Ícono según la categoría de cada punto.
     await style.setStyleLayerProperty(
       _servicesLyrId,
@@ -6683,22 +7354,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final newVal = !_showBikeServices;
     setState(() => _showBikeServices = newVal);
     if (newVal && _bikeServices.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🔍 Buscando talleres y puntos de aire…'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
       await _loadBikeServices();
       if (mounted) {
         final n = _bikeServices.length;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(n > 0
-                ? '✅ $n puntos cargados (talleres, aire y gasolineras)'
-                : '⚠️ No se encontraron puntos (revisa tu conexión)'),
+            content: Text(
+              n > 0
+                  ? '✅ $n puntos cargados (talleres, aire y gasolineras)'
+                  : '⚠️ No se encontraron puntos',
+            ),
             backgroundColor: n > 0 ? Colors.green : Colors.redAccent,
             duration: const Duration(seconds: 3),
           ),
@@ -6731,27 +7396,55 @@ class _MapPageState extends State<MapPage> with RouteAware {
           color: const Color(0xFF0E0E18),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 8))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 30,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                child: Icon(icon, color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-                  Text(_serviceLabel(category), style: const TextStyle(fontFamily: 'Poppins', color: Colors.grey, fontSize: 13)),
-                ],
-              )),
-            ]),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        _serviceLabel(category),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             _infoRow(
               hasPump ? Icons.check_circle : Icons.help_outline,
@@ -6762,24 +7455,41 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         ? 'Consultar en el local'
                         : 'No confirmado'),
             ),
-            if (category == 'fuel' && svc['brand'] != null &&
+            if (category == 'fuel' &&
+                svc['brand'] != null &&
                 svc['brand'].toString().isNotEmpty)
-              _infoRow(Icons.local_gas_station, 'Marca', svc['brand'].toString()),
+              _infoRow(
+                Icons.local_gas_station,
+                'Marca',
+                svc['brand'].toString(),
+              ),
             const SizedBox(height: 16),
-            _PoiPhotoGallery(poiType: 'bike_service', poiId: id, accentColor: color),
+            _PoiPhotoGallery(
+              poiType: 'bike_service',
+              poiId: id,
+              accentColor: color,
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: destLat != 0 ? () => _navigateTo(destLat, destLng, name) : null,
+                onPressed: destLat != 0
+                    ? () => _navigateTo(destLat, destLng, name)
+                    : null,
                 icon: const Icon(Icons.navigation_rounded, size: 18),
                 label: const Text('Ir aquí'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: color,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                   elevation: 0,
                 ),
               ),
@@ -6796,8 +7506,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   Future<List<Map<String, dynamic>>> _loadCicloRecreo() async {
     try {
-      final raw =
-          await rootBundle.loadString('assets/data/ciclorecreovia.json');
+      final raw = await rootBundle.loadString(
+        'assets/data/ciclorecreovia.json',
+      );
       return (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
     } catch (e) {
       debugPrint('Error cargando CicloRecreoVía: $e');
@@ -6814,11 +7525,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
         return;
       }
       // Pin lima con ícono de evento/bici (cierre recreativo).
-      final bytes =
-          await _renderPinIcon(const Color(0xFF7CB342), Icons.event_available);
+      final bytes = await _renderPinIcon(
+        const Color(0xFF7CB342),
+        Icons.event_available,
+      );
       await style.addStyleImage(
-        'crv-icon', 1.0, MbxImage(width: 84, height: 108, data: bytes),
-        false, [], [], null,
+        'crv-icon',
+        1.0,
+        MbxImage(width: 84, height: 108, data: bytes),
+        false,
+        [],
+        [],
+        null,
       );
       _cicloRecreoIconAdded = true;
     } catch (e) {
@@ -6837,28 +7555,34 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
     if (!_showCicloRecreo || _cicloRecreoPoints.isEmpty) return;
     await _ensureCicloRecreoIcon();
-    final features = _cicloRecreoPoints.map((p) => {
-      'type': 'Feature',
-      'properties': {'id': p['id'], 'comuna': p['comuna']},
-      'geometry': {
-        'type': 'Point',
-        'coordinates': [
-          (p['lng'] as num).toDouble(),
-          (p['lat'] as num).toDouble(),
-        ],
-      },
-    }).toList();
+    final features = _cicloRecreoPoints
+        .map(
+          (p) => {
+            'type': 'Feature',
+            'properties': {'id': p['id'], 'comuna': p['comuna']},
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [
+                (p['lng'] as num).toDouble(),
+                (p['lat'] as num).toDouble(),
+              ],
+            },
+          },
+        )
+        .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _crvSrcId, data: fc));
-    await style.addLayer(SymbolLayer(
-      id: _crvLyrId,
-      sourceId: _crvSrcId,
-      iconImage: 'crv-icon',
-      iconSize: 0.42,
-      iconAnchor: IconAnchor.BOTTOM,
-      iconAllowOverlap: false,
-      iconIgnorePlacement: false,
-    ));
+    await style.addLayer(
+      SymbolLayer(
+        id: _crvLyrId,
+        sourceId: _crvSrcId,
+        iconImage: 'crv-icon',
+        iconSize: 0.42,
+        iconAnchor: IconAnchor.BOTTOM,
+        iconAllowOverlap: false,
+        iconIgnorePlacement: false,
+      ),
+    );
   }
 
   void _toggleCicloRecreo() async {
@@ -6886,49 +7610,101 @@ class _MapPageState extends State<MapPage> with RouteAware {
           color: const Color(0xFF0E0E18),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 8))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 30,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(color: Color(0xFF7CB342), shape: BoxShape.circle),
-                child: const Icon(Icons.event_available, color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('CicloRecreoVía', style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-                  Text(comuna, style: const TextStyle(fontFamily: 'Poppins', color: Colors.grey, fontSize: 13)),
-                ],
-              )),
-            ]),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF7CB342),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.event_available,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'CicloRecreoVía',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        comuna,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             _infoRow(Icons.route, 'Ruta', p['ruta']?.toString() ?? '-'),
-            _infoRow(Icons.calendar_today, 'Días', p['dias']?.toString() ?? 'Domingos'),
-            _infoRow(Icons.schedule, 'Horario', p['horario']?.toString() ?? '09:00 a 14:00'),
+            _infoRow(
+              Icons.calendar_today,
+              'Días',
+              p['dias']?.toString() ?? 'Domingos',
+            ),
+            _infoRow(
+              Icons.schedule,
+              'Horario',
+              p['horario']?.toString() ?? '09:00 a 14:00',
+            ),
             const SizedBox(height: 8),
             Text(
               p['descripcion']?.toString() ?? '',
-              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 13),
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white70,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: lat != 0 ? () => _navigateTo(lat, lng, 'CicloRecreoVía $comuna') : null,
+                onPressed: lat != 0
+                    ? () => _navigateTo(lat, lng, 'CicloRecreoVía $comuna')
+                    : null,
                 icon: const Icon(Icons.navigation_rounded, size: 18),
                 label: const Text('Ir aquí'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF7CB342),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                   elevation: 0,
                 ),
               ),
@@ -7193,13 +7969,32 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   Widget _infoRow(IconData icon, String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(children: [
-      Icon(icon, color: Colors.greenAccent, size: 13),
-      const SizedBox(width: 7),
-      Text(label, style: const TextStyle(fontFamily: 'Poppins', color: Colors.grey, fontSize: 12)),
-      const SizedBox(width: 4),
-      Expanded(child: Text(value, style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 12), textAlign: TextAlign.right)),
-    ]),
+    child: Row(
+      children: [
+        Icon(icon, color: Colors.greenAccent, size: 13),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.grey,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white70,
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    ),
   );
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -7216,30 +8011,50 @@ class _MapPageState extends State<MapPage> with RouteAware {
       final sample = <Map<String, double>>[];
       for (int i = 0; i < total; i += step) {
         // _routeCoords almacena [lng, lat]
-        sample.add({'latitude': _routeCoords[i][1], 'longitude': _routeCoords[i][0]});
+        sample.add({
+          'latitude': _routeCoords[i][1],
+          'longitude': _routeCoords[i][0],
+        });
       }
       // Asegurar que incluimos el último punto
       if (sample.last['latitude'] != _routeCoords.last[1]) {
-        sample.add({'latitude': _routeCoords.last[1], 'longitude': _routeCoords.last[0]});
+        sample.add({
+          'latitude': _routeCoords.last[1],
+          'longitude': _routeCoords.last[0],
+        });
       }
 
       final body = jsonEncode({'locations': sample});
-      final res = await http.post(
-        Uri.parse('https://api.open-elevation.com/api/v1/lookup'),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      ).timeout(const Duration(seconds: 20));
+      final res = await http
+          .post(
+            Uri.parse('https://api.open-elevation.com/api/v1/lookup'),
+            headers: {'Content-Type': 'application/json'},
+            body: body,
+          )
+          .timeout(const Duration(seconds: 20));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final results = data['results'] as List;
         double gain = 0.0;
         for (int i = 1; i < results.length; i++) {
-          final diff = (results[i]['elevation'] as num) - (results[i - 1]['elevation'] as num);
+          final diff =
+              (results[i]['elevation'] as num) -
+              (results[i - 1]['elevation'] as num);
           if (diff > 0) gain += diff.toDouble();
         }
-        final difficulty = gain < 100 ? 'Fácil' : gain < 300 ? 'Moderada' : 'Difícil';
-        if (mounted) setState(() { _routeElevGain = gain; _routeDifficulty = difficulty; _elevationLoading = false; });
+        final difficulty = gain < 100
+            ? 'Fácil'
+            : gain < 300
+            ? 'Moderada'
+            : 'Difícil';
+        if (mounted) {
+          setState(() {
+            _routeElevGain = gain;
+            _routeDifficulty = difficulty;
+            _elevationLoading = false;
+          });
+        }
         debugPrint('🏔️ Desnivel: ${gain.toStringAsFixed(0)}m → $difficulty');
       } else {
         if (mounted) setState(() => _elevationLoading = false);
@@ -7289,7 +8104,12 @@ class _PoiPhotoGalleryState extends State<_PoiPhotoGallery> {
       poiType: widget.poiType,
       poiId: widget.poiId,
     );
-    if (mounted) setState(() { _photos = photos; _loading = false; });
+    if (mounted) {
+      setState(() {
+        _photos = photos;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _addPhoto() async {
@@ -7318,7 +8138,9 @@ class _PoiPhotoGalleryState extends State<_PoiPhotoGallery> {
       setState(() => _photos.insert(0, result));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo subir la foto, intenta de nuevo')),
+        const SnackBar(
+          content: Text('No se pudo subir la foto, intenta de nuevo'),
+        ),
       );
     }
   }
@@ -7328,7 +8150,13 @@ class _PoiPhotoGalleryState extends State<_PoiPhotoGallery> {
     if (_loading) {
       return const SizedBox(
         height: 32,
-        child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
       );
     }
 
@@ -7339,7 +8167,12 @@ class _PoiPhotoGalleryState extends State<_PoiPhotoGallery> {
           children: [
             Text(
               'Fotos del lugar',
-              style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.grey[400],
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const Spacer(),
             GestureDetector(
@@ -7349,12 +8182,28 @@ class _PoiPhotoGalleryState extends State<_PoiPhotoGallery> {
                 children: [
                   _uploading
                       ? SizedBox(
-                          width: 14, height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: widget.accentColor),
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: widget.accentColor,
+                          ),
                         )
-                      : Icon(Icons.add_a_photo_outlined, size: 15, color: widget.accentColor),
+                      : Icon(
+                          Icons.add_a_photo_outlined,
+                          size: 15,
+                          color: widget.accentColor,
+                        ),
                   const SizedBox(width: 4),
-                  Text('Agregar', style: TextStyle(fontFamily: 'Poppins', color: widget.accentColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(
+                    'Agregar',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: widget.accentColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -7364,7 +8213,11 @@ class _PoiPhotoGalleryState extends State<_PoiPhotoGallery> {
         if (_photos.isEmpty)
           Text(
             'Sé el primero en subir una foto de referencia',
-            style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[600], fontSize: 12),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.grey[600],
+              fontSize: 12,
+            ),
           )
         else
           SizedBox(
@@ -7381,9 +8234,13 @@ class _PoiPhotoGalleryState extends State<_PoiPhotoGallery> {
                   height: 76,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => Container(
-                    width: 76, height: 76,
+                    width: 76,
+                    height: 76,
                     color: Colors.white10,
-                    child: const Icon(Icons.broken_image_outlined, color: Colors.white24),
+                    child: const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white24,
+                    ),
                   ),
                 ),
               ),
@@ -7988,8 +8845,11 @@ class _DrawerPlusBannerState extends State<_DrawerPlusBanner> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.workspace_premium_rounded,
-                  color: goldColor, size: 20),
+              const Icon(
+                Icons.workspace_premium_rounded,
+                color: goldColor,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -8046,8 +8906,11 @@ class _DrawerPlusBannerState extends State<_DrawerPlusBanner> {
                   color: goldColor.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.workspace_premium_rounded,
-                    color: goldColor, size: 20),
+                child: const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: goldColor,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -8075,8 +8938,11 @@ class _DrawerPlusBannerState extends State<_DrawerPlusBanner> {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios_rounded,
-                  color: goldColor, size: 14),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: goldColor,
+                size: 14,
+              ),
             ],
           ),
         ),
@@ -8170,11 +9036,7 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
         gradient: LinearGradient(
           begin: Alignment(-0.7, -1),
           end: Alignment(0.7, 1),
-          colors: [
-            Color(0xFF2F8F63),
-            Color(0xFF1E5C41),
-            Color(0xFF153F2E),
-          ],
+          colors: [Color(0xFF2F8F63), Color(0xFF1E5C41), Color(0xFF153F2E)],
           stops: [0.0, 0.55, 1.0],
         ),
       ),
@@ -8226,8 +9088,11 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
                             color: Color(0xFF153F2E),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.workspace_premium_rounded,
-                              color: goldColor, size: 16),
+                          child: const Icon(
+                            Icons.workspace_premium_rounded,
+                            color: goldColor,
+                            size: 16,
+                          ),
                         ),
                       ),
                   ],
@@ -8256,12 +9121,15 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: goldColor.withOpacity(0.18),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                    color: goldColor.withOpacity(0.4)),
+                                  color: goldColor.withOpacity(0.4),
+                                ),
                               ),
                               child: const Text(
                                 'PLUS',
@@ -8293,12 +9161,15 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(22),
                           border: Border.all(
-                              color: Colors.white.withOpacity(0.22)),
+                            color: Colors.white.withOpacity(0.22),
+                          ),
                         ),
                         child: const Center(
                           child: Row(
@@ -8314,8 +9185,11 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
                                 ),
                               ),
                               SizedBox(width: 4),
-                              Icon(Icons.arrow_forward_rounded,
-                                  color: Colors.white, size: 13),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.white,
+                                size: 13,
+                              ),
                             ],
                           ),
                         ),
@@ -8482,8 +9356,11 @@ class _ProfileButtonState extends State<_ProfileButton> {
                   color: Color(0xFF0A1A0A),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.workspace_premium_rounded,
-                    color: Colors.amber, size: 15),
+                child: const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Colors.amber,
+                  size: 15,
+                ),
               ),
             ),
         ],
@@ -8559,7 +9436,10 @@ class _PassengerPrompt extends StatelessWidget {
             children: [
               // Badge de velocidad pulsante
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.redAccent.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(30),
@@ -8568,8 +9448,11 @@ class _PassengerPrompt extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.speed_rounded,
-                        color: Colors.redAccent, size: 18),
+                    const Icon(
+                      Icons.speed_rounded,
+                      color: Colors.redAccent,
+                      size: 18,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       '$speedKmh km/h',
@@ -8636,7 +9519,11 @@ class _PassengerPrompt extends StatelessWidget {
   }
 
   Widget _vehicleOption(
-      BuildContext context, String emoji, String label, String value) {
+    BuildContext context,
+    String emoji,
+    String label,
+    String value,
+  ) {
     return Expanded(
       child: GestureDetector(
         onTap: () => Navigator.pop(context, value),
@@ -8844,8 +9731,7 @@ class _PanicButtonState extends State<_PanicButton>
       scheme: 'sms',
       path: phone,
       queryParameters: {
-        'body':
-            'Necesito ayuda, tuve un problema pedaleando.$locationText',
+        'body': 'Necesito ayuda, tuve un problema pedaleando.$locationText',
       },
     );
     final ok = await canLaunchUrl(uri);
@@ -9380,21 +10266,31 @@ class _ShareUpsellSheet extends StatelessWidget {
                 color: Colors.amber.withOpacity(0.12),
                 border: Border.all(color: Colors.amber.withOpacity(0.35)),
               ),
-              child: const Icon(Icons.ios_share_rounded, color: Colors.amber, size: 30),
+              child: const Icon(
+                Icons.ios_share_rounded,
+                color: Colors.amber,
+                size: 30,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
               '¡Pedaleaste ${distanceKm.toStringAsFixed(1)} km! 🚴',
               style: const TextStyle(
-                fontFamily: 'Poppins', color: Colors.white,
-                fontSize: 17, fontWeight: FontWeight.w700,
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Compartir tu ruta y estadísticas en historias es una función de Pedalea Plus.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontFamily: 'Poppins', color: Colors.white60, fontSize: 13),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white60,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -9408,8 +10304,13 @@ class _ShareUpsellSheet extends StatelessWidget {
                   foregroundColor: Colors.black,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -9417,7 +10318,10 @@ class _ShareUpsellSheet extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.pop(context),
               style: TextButton.styleFrom(foregroundColor: Colors.white38),
-              child: const Text('Ahora no', style: TextStyle(fontFamily: 'Poppins')),
+              child: const Text(
+                'Ahora no',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
             ),
           ],
         ),
@@ -9504,8 +10408,18 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
     final co2 = Co2Service.savedKg(widget.distanceKm);
     final now = DateTime.now();
     const meses = [
-      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-      'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sep',
+      'oct',
+      'nov',
+      'dic',
     ];
     final dateStr = '${now.day} ${meses[now.month - 1]} ${now.year}';
 
@@ -9529,8 +10443,10 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
             const Text(
               '¡Buen viaje! 🚴',
               style: TextStyle(
-                fontFamily: 'Poppins', color: Colors.white,
-                fontSize: 18, fontWeight: FontWeight.w700,
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
@@ -9561,14 +10477,15 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
                   children: [
                     Row(
                       children: [
-                        const Text('🚴',
-                            style: TextStyle(fontSize: 22)),
+                        const Text('🚴', style: TextStyle(fontSize: 22)),
                         const SizedBox(width: 8),
                         const Text(
                           'Pedalea',
                           style: TextStyle(
-                            fontFamily: 'Poppins', color: Colors.white,
-                            fontSize: 16, fontWeight: FontWeight.w800,
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                         const Spacer(),
@@ -9597,14 +10514,8 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
                     const SizedBox(height: 18),
                     Row(
                       children: [
-                        _statBlock(
-                          widget.distanceKm.toStringAsFixed(1),
-                          'km',
-                        ),
-                        _statBlock(
-                          _formatDuration(widget.duration),
-                          'tiempo',
-                        ),
+                        _statBlock(widget.distanceKm.toStringAsFixed(1), 'km'),
+                        _statBlock(_formatDuration(widget.duration), 'tiempo'),
                         _statBlock(
                           _avgSpeedKmh.toStringAsFixed(1),
                           'km/h prom.',
@@ -9614,7 +10525,9 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
                     const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.greenAccent.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(12),
@@ -9646,9 +10559,13 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
                 Expanded(
                   child: TextButton(
                     onPressed: _sharing ? null : () => Navigator.pop(context),
-                    style: TextButton.styleFrom(foregroundColor: Colors.white38),
-                    child: const Text('Ahora no',
-                        style: TextStyle(fontFamily: 'Poppins')),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white38,
+                    ),
+                    child: const Text(
+                      'Ahora no',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -9658,9 +10575,12 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
                     onPressed: _sharing ? null : _share,
                     icon: _sharing
                         ? const SizedBox(
-                            width: 16, height: 16,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.black),
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
                           )
                         : const Icon(Icons.share_rounded, size: 18),
                     label: const Text('Compartir'),
@@ -9673,7 +10593,8 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                       textStyle: const TextStyle(
-                        fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -9693,8 +10614,10 @@ class _RouteShareSheetState extends State<_RouteShareSheet> {
           Text(
             value,
             style: const TextStyle(
-              fontFamily: 'Poppins', color: Colors.white,
-              fontSize: 20, fontWeight: FontWeight.w800,
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 2),
