@@ -18,7 +18,10 @@ android {
     namespace = "com.pedalea.app"
     compileSdk = 36
 buildToolsVersion = "36.0.0"
-    ndkVersion = flutter.ndkVersion
+    // Fijado a la versión instalada del NDK. Con `flutter.ndkVersion` Flutter
+    // buscaba una versión que no está descargada y el build del AAB fallaba al
+    // strippear los símbolos de las .so nativas.
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         // Requerido por flutter_local_notifications (usa APIs de java.time).

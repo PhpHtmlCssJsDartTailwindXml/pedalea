@@ -43,6 +43,9 @@ dependencies:
   in_app_purchase: ^3.2.3
   android_intent_plus: ^5.2.0
 
+  # Actualización obligatoria desde Play Store (in-app update)
+  in_app_update: ^4.2.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

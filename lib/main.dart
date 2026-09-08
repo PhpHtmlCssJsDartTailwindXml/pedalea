@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pages/auth_page.dart';
+import 'services/app_update_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
@@ -52,13 +53,31 @@ class _StartupGate extends StatefulWidget {
   State<_StartupGate> createState() => _StartupGateState();
 }
 
-class _StartupGateState extends State<_StartupGate> {
+class _StartupGateState extends State<_StartupGate> with WidgetsBindingObserver {
   bool _ready = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Actualización obligatoria: bloquea la app si hay versión nueva en Play.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => AppUpdateService.enforceUpdate(),
+    );
     _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      AppUpdateService.resumeIfInProgress();
+    }
   }
 
   Future<void> _check() async {
