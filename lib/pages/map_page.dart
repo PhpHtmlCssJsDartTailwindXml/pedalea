@@ -239,8 +239,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   // Tracking de km
   geo.Position? _lastPosition;
+  DateTime? _lastFixAt; // hora del último fix, para estimar velocidad
   double _sessionKm = 0;
   double _unsavedKm = 0;
+  bool _communeAutofillTried = false; // 1 intento de autocompletar comuna/sesión
 
   // ── Trazado de la sesión actual (para compartir el viaje al terminar) ────
   final List<geo.Position> _routePoints = [];
@@ -249,8 +251,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
   // Nombre de usuario real (cargado desde profiles) para la presencia en vivo
   String _myUsername = 'Ciclista';
 
-  // Conteo de km en segundo plano (servicio en primer plano con GPS)
-  bool _bgTrackingEnabled = false;
+  // Conteo de km en segundo plano (servicio en primer plano con GPS).
+  // Encendido por defecto: contar los km del usuario es prioritario aunque
+  // cueste algo de batería. El usuario lo puede apagar en el menú ☰.
+  bool _bgTrackingEnabled = true;
 
   // ── Seguridad: detección de caídas + alertas de proximidad ────────────────
   final FallDetectionService _fallService = FallDetectionService();
@@ -435,12 +439,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _loadFallDetectionPref();
     _loadRainState();
 
-    // Restaurar preferencia de conteo en segundo plano.
+    // Restaurar preferencia de conteo en segundo plano (encendido por defecto).
     SharedPreferences.getInstance().then((p) {
       if (!mounted) return;
-      if (p.getBool('bg_tracking') ?? false) {
-        setState(() => _bgTrackingEnabled = true);
-        _restartGps();
+      final bgOn = p.getBool('bg_tracking') ?? true;
+      setState(() => _bgTrackingEnabled = bgOn);
+      if (bgOn) {
+        // Pide "Permitir todo el tiempo" para que cuente con la pantalla
+        // apagada; si el usuario lo niega, igual cuenta mientras la app está
+        // abierta. No bloquea el arranque.
+        Permission.locationAlways.request().whenComplete(() {
+          if (mounted) _restartGps();
+        });
       }
       // Aviso recurrente (1 vez por semana): contarles que pueden
       // prender/apagar los pines de BiciMetro, estacionamientos, etc.
@@ -576,6 +586,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
     // _ensureEventsIcon) antes de que el widget termine de destruirse.
     _mapGeneration++;
     _styleIsLoaded = false;
+    // Guarda los km que quedaron por debajo del umbral de persistencia.
+    if (_unsavedKm > 0.02) {
+      _saveKmToProfile(_unsavedKm);
+      RideStatsService.addKm(_unsavedKm);
+      _unsavedKm = 0;
+    }
     _positionStreamSubscription?.cancel();
     _layersTipTimer?.cancel();
     _helpTipHideTimer?.cancel();
@@ -935,9 +951,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
             _checkSuddenDeceleration(curSpeedKmh, DateTime.now());
           }
 
-          // Tracking de km — solo cuenta cuando el usuario realmente se mueve,
-          // para no sumar el "ruido" del GPS estando quieto. En modo pasajero NO
-          // se cuenta (esos km no son pedaleo).
+          // Tracking de km — cuenta los desplazamientos reales del usuario.
+          // NO exige el campo `speed` del GPS (en muchos Android llega en 0 y
+          // hacía que no se contara nada): si no es fiable, la velocidad se
+          // estima con distancia/tiempo entre fixes. En modo pasajero NO se
+          // cuenta (esos km no son pedaleo).
           if (_modoActivo && !_isPassenger && _lastPosition != null) {
             final distM = geo.Geolocator.distanceBetween(
               _lastPosition!.latitude,
@@ -945,17 +963,29 @@ class _MapPageState extends State<MapPage> with RouteAware {
               position.latitude,
               position.longitude,
             );
-            final speedKmh = position.speed < 0 ? 0 : position.speed * 3.6;
-            final accuracyOk =
-                position.accuracy <= 30; // descartar fixes imprecisos
-            final isMoving = speedKmh >= 3.0; // ~ritmo de pedaleo lento
-            // Cuenta solo desplazamientos reales (8 m–200 m), con buena precisión
-            // y velocidad de movimiento; así el jitter estando detenido no suma.
-            if (distM >= 8 && distM < 200 && accuracyOk && isMoving) {
+            final fixAt = position.timestamp;
+            final elapsedSec = _lastFixAt == null
+                ? 0.0
+                : fixAt.difference(_lastFixAt!).inMilliseconds / 1000.0;
+            // Velocidad: usa la del GPS solo si es creíble; si no, la estima.
+            final gpsSpeed = position.speed; // m/s
+            final estSpeed = elapsedSec > 0 ? distM / elapsedSec : 0.0;
+            final speedMs = (gpsSpeed > 0.3 && gpsSpeed < 30) ? gpsSpeed : estSpeed;
+            final speedKmh = speedMs * 3.6;
+
+            final accuracyOk = position.accuracy <= 50;
+            final timeOk = elapsedSec >= 1 && elapsedSec <= 120;
+            // 1,8 km/h descarta el jitter del GPS estando parado; 80 km/h
+            // descarta saltos imposibles (rebote entre edificios, túneles).
+            final speedOk = speedKmh >= 1.8 && speedKmh <= 80;
+
+            if (distM >= 5 && distM < 500 && accuracyOk && timeOk && speedOk) {
               _sessionKm += distM / 1000;
               _unsavedKm += distM / 1000;
               _routePoints.add(position);
-              if (_unsavedKm >= 0.5) {
+              // Se persiste seguido (0,2 km) para no perder km si el SO mata
+              // la app; el RPC de Supabase es incremental, no pesa.
+              if (_unsavedKm >= 0.2) {
                 _saveKmToProfile(_unsavedKm); // total histórico (Supabase)
                 RideStatsService.addKm(_unsavedKm); // registro diario local
                 _unsavedKm = 0;
@@ -963,6 +993,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             }
           }
           _lastPosition = position;
+          _lastFixAt = position.timestamp;
 
           // Refresca el HUD de navegación (ETA, progreso, distancia a la
           // próxima parada) en cada fix de GPS mientras se está navegando.
@@ -990,7 +1021,19 @@ class _MapPageState extends State<MapPage> with RouteAware {
           if (mapboxMap != null && _isFollowingUser) {
             _moveCameraInstant(position);
           }
-        });
+        },
+        onError: (Object e) {
+          // El stream muere si se revoca el permiso o se apaga el GPS. Sin
+          // este handler la excepción quedaba sin capturar y el conteo de km
+          // no volvía a arrancar en toda la sesión.
+          debugPrint('Stream de GPS con error: $e');
+          _positionStreamSubscription?.cancel();
+          _positionStreamSubscription = null;
+          Future.delayed(const Duration(seconds: 5), () {
+            if (mounted) _startFollowing();
+          });
+        },
+        cancelOnError: true);
   }
 
   /// Reinicia el stream de GPS con la configuración correcta para el estado actual.
@@ -4890,7 +4933,56 @@ class _MapPageState extends State<MapPage> with RouteAware {
         debugPrint('Error guardando km: $e');
       }
     }
+    _maybeAutofillCommune(uid); // sin await: no bloquea el conteo
     _checkAchievementsAndNotify();
+  }
+
+  /// Si el perfil no tiene comuna, la deduce por geocodificación inversa de la
+  /// posición actual y la guarda. Así el "Ranking por comuna" funciona sin que
+  /// el usuario tenga que escribirla a mano. Un solo intento por sesión.
+  Future<void> _maybeAutofillCommune(String uid) async {
+    if (_communeAutofillTried) return;
+    final pos = _lastPosition;
+    if (pos == null) return;
+    _communeAutofillTried = true;
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('commune')
+          .eq('id', uid)
+          .maybeSingle();
+      final current = (profile?['commune'] as String?)?.trim() ?? '';
+      if (current.isNotEmpty) return; // el usuario ya la tiene puesta
+
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=${pos.latitude}&lon=${pos.longitude}'
+        '&format=json&accept-language=es&zoom=12',
+      );
+      final res = await http
+          .get(uri, headers: {'User-Agent': 'pedalea/1.0'})
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode != 200) return;
+      final addr =
+          (jsonDecode(res.body) as Map<String, dynamic>)['address']
+              as Map<String, dynamic>?;
+      final commune =
+          (addr?['city'] as String? ??
+                  addr?['town'] as String? ??
+                  addr?['municipality'] as String? ??
+                  addr?['county'] as String? ??
+                  addr?['suburb'] as String? ??
+                  '')
+              .trim();
+      if (commune.isEmpty) return;
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'commune': commune})
+          .eq('id', uid);
+      debugPrint('🏙️ Comuna autocompletada: $commune');
+    } catch (e) {
+      debugPrint('No se pudo autocompletar la comuna: $e');
+    }
   }
 
   final _achievementsService = AchievementsService();
