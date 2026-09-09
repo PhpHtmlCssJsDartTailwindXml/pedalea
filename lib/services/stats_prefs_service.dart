@@ -31,6 +31,7 @@ class StatsPrefsService {
     'activeDays',
     'co2',
     'week',
+    'maxSpeed',
   ];
 
   static Future<void> init() async {

@@ -40,6 +40,7 @@ import '../services/fall_detection_service.dart';
 import '../services/proximity_alert_service.dart';
 import '../services/notification_service.dart';
 import '../services/ride_stats_service.dart';
+import '../services/ride_stats_sync_service.dart';
 import '../services/subscription_service.dart';
 import '../services/poi_photos_service.dart';
 import '../services/achievements_service.dart';
@@ -54,6 +55,7 @@ import '../pages/create_event_page.dart';
 import '../pages/event_chat_page.dart';
 import '../pages/profile_page.dart';
 import '../pages/ranking_page.dart';
+import '../pages/rider_ranking_page.dart';
 import '../pages/route_planner_page.dart';
 import '../pages/stats_page.dart';
 import '../pages/settings_page.dart';
@@ -242,6 +244,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   DateTime? _lastFixAt; // hora del último fix, para estimar velocidad
   double _sessionKm = 0;
   double _unsavedKm = 0;
+  double _sessionMaxSpeedKmh = 0; // velocidad máxima detectada en la sesión
   bool _communeAutofillTried = false; // 1 intento de autocompletar comuna/sesión
 
   // ── Trazado de la sesión actual (para compartir el viaje al terminar) ────
@@ -590,6 +593,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     if (_unsavedKm > 0.02) {
       _saveKmToProfile(_unsavedKm);
       RideStatsService.addKm(_unsavedKm);
+      RideStatsSyncService.instance.pushDelta(
+        km: _unsavedKm,
+        maxSpeedKmh: _sessionMaxSpeedKmh,
+      );
       _unsavedKm = 0;
     }
     _positionStreamSubscription?.cancel();
@@ -982,12 +989,20 @@ class _MapPageState extends State<MapPage> with RouteAware {
             if (distM >= 5 && distM < 500 && accuracyOk && timeOk && speedOk) {
               _sessionKm += distM / 1000;
               _unsavedKm += distM / 1000;
+              if (speedKmh > _sessionMaxSpeedKmh && speedKmh <= 80) {
+                _sessionMaxSpeedKmh = speedKmh;
+              }
               _routePoints.add(position);
               // Se persiste seguido (0,2 km) para no perder km si el SO mata
               // la app; el RPC de Supabase es incremental, no pesa.
               if (_unsavedKm >= 0.2) {
                 _saveKmToProfile(_unsavedKm); // total histórico (Supabase)
                 RideStatsService.addKm(_unsavedKm); // registro diario local
+                RideStatsService.recordMaxSpeed(_sessionMaxSpeedKmh);
+                RideStatsSyncService.instance.pushDelta(
+                  km: _unsavedKm,
+                  maxSpeedKmh: _sessionMaxSpeedKmh,
+                ); // estadísticas por día + ranking (Supabase)
                 _unsavedKm = 0;
               }
             }
@@ -1106,6 +1121,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     if (_unsavedKm > 0) {
       _saveKmToProfile(_unsavedKm);
       RideStatsService.addKm(_unsavedKm);
+      RideStatsSyncService.instance.pushDelta(
+        km: _unsavedKm,
+        maxSpeedKmh: _sessionMaxSpeedKmh,
+      );
       _unsavedKm = 0;
     }
     _fallService.stop(); // sin falsos positivos por frenadas del vehículo
@@ -5312,6 +5331,36 @@ class _MapPageState extends State<MapPage> with RouteAware {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const RankingPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: _drawerIconTile(
+                          Icons.emoji_events_rounded,
+                          color: Colors.amberAccent,
+                        ),
+                        title: const Text(
+                          "Ranking de ciclistas",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Km del día, semana y velocidad máx.",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const RiderRankingPage(),
                             ),
                           );
                         },

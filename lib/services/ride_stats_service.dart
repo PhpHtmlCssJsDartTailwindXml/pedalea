@@ -16,6 +16,7 @@ class DayStat {
 /// de internet ni de la base de datos.
 class RideStatsService {
   static const _key = 'ride_stats_v1';
+  static const _maxSpeedKey = 'ride_max_speed_v1';
   static SharedPreferences? _prefs;
 
   static Future<void> init() async {
@@ -55,6 +56,30 @@ class RideStatsService {
 
   static double kmForDay(DateTime d) => _readAll()[dayKey(d)] ?? 0;
   static double todayKm() => kmForDay(DateTime.now());
+
+  /// Fusiona los km por día que llegan del servidor. El servidor manda, pero
+  /// nunca se baja un valor local mayor (km de un viaje que aún no se subió).
+  static Future<void> mergeServerDays(Map<String, double> serverKm) async {
+    if (serverKm.isEmpty) return;
+    await init();
+    final m = _readAll();
+    serverKm.forEach((day, km) {
+      final local = m[day] ?? 0;
+      if (km > local) m[day] = km;
+    });
+    await _writeAll(m);
+  }
+
+  /// Velocidad máxima detectada por GPS (histórica, km/h).
+  static double maxSpeedKmh() => _prefs?.getDouble(_maxSpeedKey) ?? 0;
+
+  /// Registra una nueva velocidad si supera la máxima guardada. Descarta
+  /// valores absurdos (> 120 km/h ≈ rebote de GPS).
+  static Future<void> recordMaxSpeed(double kmh) async {
+    if (kmh <= 0 || kmh > 120) return;
+    await init();
+    if (kmh > maxSpeedKmh()) await _prefs?.setDouble(_maxSpeedKey, kmh);
+  }
 
   /// Últimos [n] días (hoy incluido), del más antiguo al más reciente.
   static List<DayStat> lastNDays(int n, {DateTime? now}) {

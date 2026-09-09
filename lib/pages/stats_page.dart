@@ -6,11 +6,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../core/glass.dart';
 import '../services/ride_stats_service.dart';
+import '../services/ride_stats_sync_service.dart';
 import '../services/co2_service.dart';
 import '../services/stats_prefs_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/bike_lane_painter.dart';
 import 'paywall_page.dart';
+import 'rider_ranking_page.dart';
 
 const _mesesCortos = [
   'ene', 'feb', 'mar', 'abr', 'may', 'jun',
@@ -40,14 +42,17 @@ class _StatsPageState extends State<StatsPage> {
     'activeDays': ('📅', 'Días activos'),
     'co2': ('🌱', 'CO₂ total'),
     'week': ('🚴', 'Esta semana'),
+    'maxSpeed': ('⚡', 'Vel. máx'),
   };
 
   late List<DayStat> _chartDays;
   int _chartRange = 7; // 7 o 30 días
   int _selectedBar = -1;
 
-  double _today = 0, _weekKm = 0, _total = 0, _bestDay = 0;
+  double _today = 0, _weekKm = 0, _total = 0, _bestDay = 0, _maxSpeed = 0;
   int _streak = 0, _activeDays = 0;
+  double? _serverTotal; // total histórico real (profiles.total_km)
+  bool _syncing = false;
 
   Color _accent = StatsPrefsService.accent;
   final List<String> _order = StatsPrefsService.tileOrder;
@@ -59,18 +64,38 @@ class _StatsPageState extends State<StatsPage> {
     super.initState();
     _chartRange = StatsPrefsService.chartRange;
     _load();
+    _syncFromServer();
   }
 
   void _load() {
     _chartDays = RideStatsService.lastNDays(_chartRange);
     _today = RideStatsService.todayKm();
     _weekKm = RideStatsService.weekKm();
-    _total = RideStatsService.totalKm();
+    _total = _serverTotal ?? RideStatsService.totalKm();
     _streak = RideStatsService.currentStreak();
     _activeDays = RideStatsService.activeDays();
     _bestDay = RideStatsService.bestDayKm();
+    _maxSpeed = RideStatsService.maxSpeedKmh();
     _selectedBar = -1;
     setState(() {});
+  }
+
+  /// Baja las estadísticas del servidor (Supabase) y refresca la vista. Así
+  /// "Mis estadísticas" refleja los km reales aunque se haya reinstalado la
+  /// app o se pedalee desde otro teléfono.
+  Future<void> _syncFromServer() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+    try {
+      final total = await RideStatsSyncService.instance.pull();
+      if (!mounted) return;
+      if (total != null) _serverTotal = total;
+    } finally {
+      if (mounted) {
+        setState(() => _syncing = false);
+        _load();
+      }
+    }
   }
 
   (String, String) _tileValue(String key) {
@@ -87,6 +112,8 @@ class _StatsPageState extends State<StatsPage> {
         return (Co2Service.format(Co2Service.savedKg(_total)), 'ahorrado');
       case 'week':
         return (_weekKm.toStringAsFixed(1), 'km');
+      case 'maxSpeed':
+        return (_maxSpeed <= 0 ? '—' : _maxSpeed.toStringAsFixed(1), 'km/h');
       default:
         return ('', '');
     }
@@ -161,11 +188,28 @@ class _StatsPageState extends State<StatsPage> {
             tooltip: 'Compartir resumen',
             onPressed: _openShareSheet,
           ),
-          if (!_editMode)
+          if (!_editMode) ...[
             IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Colors.white54),
-              onPressed: _load,
+              icon: const Icon(Icons.emoji_events_rounded,
+                  color: Colors.white54),
+              tooltip: 'Ranking de ciclistas',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RiderRankingPage()),
+              ),
             ),
+            IconButton(
+              icon: _syncing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white54),
+                    )
+                  : const Icon(Icons.refresh_rounded, color: Colors.white54),
+              onPressed: _syncing ? null : _syncFromServer,
+            ),
+          ],
         ],
       ),
     );
