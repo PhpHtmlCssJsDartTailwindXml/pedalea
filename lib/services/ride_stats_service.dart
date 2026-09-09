@@ -56,16 +56,19 @@ class RideStatsService {
   static double kmForDay(DateTime d) => _readAll()[dayKey(d)] ?? 0;
   static double todayKm() => kmForDay(DateTime.now());
 
-  /// Últimos 7 días (hoy incluido), del más antiguo al más reciente.
-  static List<DayStat> last7Days({DateTime? now}) {
+  /// Últimos [n] días (hoy incluido), del más antiguo al más reciente.
+  static List<DayStat> lastNDays(int n, {DateTime? now}) {
     final all = _readAll();
     final ref = now ?? DateTime.now();
     final today = DateTime(ref.year, ref.month, ref.day);
-    return List.generate(7, (i) {
-      final d = today.subtract(Duration(days: 6 - i));
+    return List.generate(n, (i) {
+      final d = today.subtract(Duration(days: n - 1 - i));
       return DayStat(d, all[dayKey(d)] ?? 0);
     });
   }
+
+  /// Últimos 7 días (hoy incluido), del más antiguo al más reciente.
+  static List<DayStat> last7Days({DateTime? now}) => lastNDays(7, now: now);
 
   static double weekKm({DateTime? now}) =>
       last7Days(now: now).fold(0.0, (s, e) => s + e.km);

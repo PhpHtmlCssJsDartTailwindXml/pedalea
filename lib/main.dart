@@ -8,6 +8,7 @@ import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
 import 'services/ride_stats_service.dart';
+import 'services/stats_prefs_service.dart';
 import 'services/subscription_service.dart';
 import 'core/route_observer.dart';
 
@@ -23,6 +24,7 @@ Future<void> main() async {
   await ConnectivityService.init();
   await NotificationService.instance.init();
   await RideStatsService.init();
+  await StatsPrefsService.init();
   unawaited(SubscriptionService.instance.init());
 
   runApp(const PedaleaApp());
