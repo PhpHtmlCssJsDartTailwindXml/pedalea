@@ -244,7 +244,6 @@ class _PaywallPageState extends State<PaywallPage> {
     ('🗺️', 'Rutas multiparada ilimitadas'),
     ('🎉', 'Eventos ilimitados (gratis: hasta 2)'),
     ('🔒', 'Crea y únete a eventos privados con contraseña'),
-    ('🚫', 'Sin publicidad'),
     ('🏅', 'Insignia distintiva en tu perfil y en el chat'),
     ('📡', 'Mapas offline (próximamente)'),
   ];
