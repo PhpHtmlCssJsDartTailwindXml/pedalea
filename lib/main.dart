@@ -8,6 +8,7 @@ import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
 import 'services/chat_notifications_service.dart';
+import 'services/social_notifications_service.dart';
 import 'services/ride_stats_service.dart';
 import 'services/stats_prefs_service.dart';
 import 'services/plus_prefs_service.dart';
@@ -33,6 +34,7 @@ Future<void> main() async {
   unawaited(PlusPrefsService.init()); // personalización Plus desde profiles
   unawaited(SubscriptionService.instance.init());
   ChatNotificationsService.instance.start(); // avisa mensajes de grupos
+  SocialNotificationsService.instance.start(); // avisa seguidores / momentos
 
   runApp(const PedaleaApp());
 }

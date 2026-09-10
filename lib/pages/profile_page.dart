@@ -18,6 +18,10 @@ import 'plus_unlocked_page.dart';
 import '../widgets/achievement_unlock_toast.dart';
 import '../widgets/plus_medal.dart';
 import '../services/plus_prefs_service.dart';
+import '../services/social_service.dart';
+import 'public_profile_page.dart';
+import 'follow_requests_page.dart';
+import 'moments_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -50,11 +54,14 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isOffline = !ConnectivityService.isOnline;
   StreamSubscription<bool>? _connectivitySub;
 
+  int _followers = 0, _following = 0, _momentCount = 0, _pendingReqs = 0;
+
   @override
   void initState() {
     super.initState();
     _showCachedDataImmediately();
     _loadProfile();
+    _loadSocial();
     PlusPrefsService.refresh(); // trae medalla/acento/estilo desde la BD
     _connectivitySub = ConnectivityService.stream.listen((online) {
       if (mounted) setState(() => _isOffline = !online);
@@ -100,6 +107,26 @@ class _ProfilePageState extends State<ProfilePage> {
   bool get _isGoogleUser {
     final identities = _user?.identities ?? [];
     return identities.any((id) => id.provider == 'google');
+  }
+
+  Future<void> _loadSocial() async {
+    final uid = _user?.id;
+    if (uid == null) return;
+    try {
+      final results = await Future.wait([
+        SocialService.instance.counts(uid),
+        SocialService.instance.userPosts(uid),
+        SocialService.instance.pendingRequestCount(),
+      ]);
+      if (!mounted) return;
+      final c = results[0] as ({int followers, int following});
+      setState(() {
+        _followers = c.followers;
+        _following = c.following;
+        _momentCount = (results[1] as List).length;
+        _pendingReqs = results[2] as int;
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadProfile() async {
@@ -419,6 +446,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               const SizedBox(height: 8),
                               _buildEmail(),
                               const SizedBox(height: 16),
+                              _buildSocialCard(),
+                              const SizedBox(height: 12),
                               _buildKarmaCard(),
                               const SizedBox(height: 12),
                               _buildPlusCard(),
@@ -960,6 +989,138 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
     ),
+    );
+  }
+
+  /// Momentos + seguidores/siguiendo + acceso al perfil de momentos.
+  Widget _buildSocialCard() {
+    final uid = _user?.id;
+    return Container(
+      decoration: glassDecoration(
+        radius: 20,
+        tint: const Color(0xFF69FF47),
+        opacity: 0.05,
+        borderOpacity: 0.14,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _socialStat('$_momentCount', 'Momentos', () {
+                if (uid != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PublicProfilePage(userId: uid),
+                    ),
+                  ).then((_) => _loadSocial());
+                }
+              }),
+              _socialStat('$_followers', 'Seguidores', null),
+              _socialStat('$_following', 'Siguiendo', null),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Botón: abre tu perfil de momentos (la vista pública, con tu grid).
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: uid == null
+                  ? null
+                  : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PublicProfilePage(userId: uid),
+                        ),
+                      ).then((_) => _loadSocial()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF69FF47),
+                foregroundColor: Colors.black,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.grid_view_rounded, size: 18),
+              label: const Text('Mi perfil de momentos',
+                  style: TextStyle(
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MomentsPage()),
+                  ).then((_) => _loadSocial()),
+                  icon: const Icon(Icons.auto_awesome_rounded,
+                      size: 18, color: Color(0xFF69FF47)),
+                  label: const Text('Ver feed',
+                      style: TextStyle(
+                          fontFamily: 'Poppins', color: Colors.white70)),
+                ),
+              ),
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const FollowRequestsPage()),
+                  ).then((_) => _loadSocial()),
+                  icon: Icon(
+                    _pendingReqs > 0
+                        ? Icons.group_add_rounded
+                        : Icons.group_add_outlined,
+                    size: 18,
+                    color: _pendingReqs > 0
+                        ? Colors.amber
+                        : Colors.white54,
+                  ),
+                  label: Text(
+                    _pendingReqs > 0
+                        ? 'Solicitudes ($_pendingReqs)'
+                        : 'Solicitudes',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: _pendingReqs > 0 ? Colors.amber : Colors.white70,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _socialStat(String value, String label, VoidCallback? onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              Text(value,
+                  style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700)),
+              Text(label,
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 11)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

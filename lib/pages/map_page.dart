@@ -60,6 +60,7 @@ import '../pages/ranking_page.dart';
 import '../pages/rider_ranking_page.dart';
 import '../pages/route_planner_page.dart';
 import '../pages/stats_page.dart';
+import '../pages/moments_page.dart';
 import '../pages/settings_page.dart';
 import '../core/glass.dart';
 import '../core/constants.dart';
@@ -5537,6 +5538,38 @@ class _MapPageState extends State<MapPage> with RouteAware {
                       ),
                     ),
                     children: [
+                      ListTile(
+                        leading: _drawerIconTile(
+                          Icons.auto_awesome_rounded,
+                          color: const Color(0xFF69FF47),
+                        ),
+                        title: const Text(
+                          "Momentos",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Comparte tus mejores fotos pedaleando",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: Colors.white38, size: 20),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MomentsPage(),
+                            ),
+                          );
+                        },
+                      ),
                       ListTile(
                         leading: _drawerIconTile(
                           Icons.leaderboard,

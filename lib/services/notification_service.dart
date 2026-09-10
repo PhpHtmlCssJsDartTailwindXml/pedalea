@@ -4,6 +4,8 @@ import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import '../core/app_navigator.dart';
 import '../pages/event_chat_page.dart';
+import '../pages/follow_requests_page.dart';
+import '../pages/public_profile_page.dart';
 
 /// Servicio centralizado de notificaciones locales (alertas push).
 ///
@@ -27,6 +29,8 @@ class NotificationService {
   static const String _eventReminderChannelName = 'Recordatorios de eventos';
   static const String _chatChannelId = 'group_chat_messages';
   static const String _chatChannelName = 'Mensajes de grupos';
+  static const String _socialChannelId = 'social_activity';
+  static const String _socialChannelName = 'Momentos y seguidores';
 
   /// Inicializa el plugin y solicita permiso de notificaciones (Android 13+).
   Future<void> init() async {
@@ -196,21 +200,63 @@ class NotificationService {
   int _chatNotifId(String eventId) =>
       200000 + (eventId.hashCode.abs() % 700000); // id estable por grupo
 
-  /// Abre el chat del grupo al tocar su notificación.
+  /// Notificación de actividad social: solicitud de seguimiento, aceptación,
+  /// like o comentario en un momento.
+  Future<void> showSocial({
+    required int id,
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    await _ensureInit();
+    try {
+      await _plugin.show(
+        id,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _socialChannelId,
+            _socialChannelName,
+            channelDescription:
+                'Solicitudes de seguimiento y actividad en tus momentos',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            styleInformation: BigTextStyleInformation(body),
+          ),
+        ),
+        payload: payload,
+      );
+    } catch (e) {
+      debugPrint('showSocial error: $e');
+    }
+  }
+
+  /// Abre la pantalla correspondiente al tocar una notificación.
   static void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
-    if (payload == null || !payload.startsWith('chat|')) return;
-    final parts = payload.split('|');
-    if (parts.length < 3) return;
-    final eventId = parts[1];
-    final title = parts.sublist(2).join('|');
+    if (payload == null) return;
     final nav = appNavigatorKey.currentState;
     if (nav == null) return;
-    nav.push(
-      MaterialPageRoute(
-        builder: (_) => EventChatPage(eventId: eventId, eventTitle: title),
-      ),
-    );
+    final parts = payload.split('|');
+
+    if (payload.startsWith('chat|') && parts.length >= 3) {
+      nav.push(MaterialPageRoute(
+        builder: (_) => EventChatPage(
+          eventId: parts[1],
+          eventTitle: parts.sublist(2).join('|'),
+        ),
+      ));
+    } else if (payload == 'follow_req') {
+      nav.push(MaterialPageRoute(builder: (_) => const FollowRequestsPage()));
+    } else if ((payload.startsWith('follow_accept|') ||
+            payload.startsWith('post_activity|')) &&
+        parts.length >= 2) {
+      nav.push(MaterialPageRoute(
+        builder: (_) => PublicProfilePage(userId: parts[1]),
+      ));
+    }
   }
 
   Future<void> _ensureInit() async {
