@@ -16,6 +16,8 @@ import 'paywall_page.dart';
 import 'manage_subscription_page.dart';
 import 'plus_unlocked_page.dart';
 import '../widgets/achievement_unlock_toast.dart';
+import '../widgets/plus_medal.dart';
+import '../services/plus_prefs_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -53,6 +55,7 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _showCachedDataImmediately();
     _loadProfile();
+    PlusPrefsService.refresh(); // trae medalla/acento/estilo desde la BD
     _connectivitySub = ConnectivityService.stream.listen((online) {
       if (mounted) setState(() => _isOffline = !online);
     });
@@ -419,6 +422,10 @@ class _ProfilePageState extends State<ProfilePage> {
                               _buildKarmaCard(),
                               const SizedBox(height: 12),
                               _buildPlusCard(),
+                              if ((_profile?['is_plus'] as bool? ?? false)) ...[
+                                const SizedBox(height: 12),
+                                _buildMedalPicker(),
+                              ],
                               const SizedBox(height: 12),
                               _buildCo2Card(),
                               const SizedBox(height: 24),
@@ -527,21 +534,12 @@ class _ProfilePageState extends State<ProfilePage> {
             child: const Icon(Icons.photo_camera_rounded,
                 color: Colors.black, size: 16),
           ),
-          // Medalla Plus (mismo estilo que en el mapa/drawer/chat)
+          // Medalla Plus con brillo (variante elegida por el ciclista)
           if (isPlus)
-            Positioned(
+            const Positioned(
               bottom: -2,
               left: -2,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.amber,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: kBgDark, width: 2),
-                ),
-                child: const Icon(Icons.workspace_premium_rounded,
-                    color: Colors.black, size: 16),
-              ),
+              child: PlusMedal(size: 26),
             ),
         ],
       ),
@@ -590,29 +588,39 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               if (isPlus) ...[
                 const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.withOpacity(0.4)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 12),
-                      SizedBox(width: 3),
-                      Text(
-                        'PLUS',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.amber,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
+                ValueListenableBuilder<int>(
+                  valueListenable: PlusPrefsService.medalVariant,
+                  builder: (context, variant, _) {
+                    final c = PlusPrefsService.medalVariants[
+                            variant.clamp(0, PlusPrefsService.medalVariants.length - 1)]
+                        .$2;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: c.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: c.withOpacity(0.45)),
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.workspace_premium_rounded,
+                              color: c, size: 12),
+                          const SizedBox(width: 3),
+                          Text(
+                            'PLUS',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: c,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
             ],
@@ -865,6 +873,93 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         );
       },
+    );
+  }
+
+  /// Selector de variante de medalla Plus. Se guarda en `profiles` y la ven
+  /// el resto de ciclistas.
+  Widget _buildMedalPicker() {
+    return ValueListenableBuilder<int>(
+      valueListenable: PlusPrefsService.medalVariant,
+      builder: (context, sel, _) => Container(
+      decoration: glassDecoration(
+        radius: 20,
+        tint: Colors.amber,
+        opacity: 0.06,
+        borderOpacity: 0.18,
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tu medalla Plus',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Elige el brillo con el que te ven en el perfil y el chat',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.5),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 18,
+            runSpacing: 14,
+            children: [
+              for (int i = 0;
+                  i < PlusPrefsService.medalVariants.length;
+                  i++)
+                GestureDetector(
+                  onTap: () => PlusPrefsService.setMedalVariant(i),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: sel == i
+                                ? Colors.white
+                                : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                        child: PlusMedal(
+                          size: 34,
+                          variant: i,
+                          ringColor: const Color(0xFF16161F),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        PlusPrefsService.medalVariants[i].$1,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: sel == i
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.45),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
     );
   }
 

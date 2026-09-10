@@ -244,7 +244,10 @@ class _PaywallPageState extends State<PaywallPage> {
     ('🗺️', 'Rutas multiparada ilimitadas'),
     ('🎉', 'Eventos ilimitados (gratis: hasta 2)'),
     ('🔒', 'Crea y únete a eventos privados con contraseña'),
-    ('🏅', 'Insignia distintiva en tu perfil y en el chat'),
+    ('🔥', 'Mapa de calor personal: mira dónde has pedaleado más'),
+    ('🛰️', 'Estilos de mapa exclusivos: satélite, exterior y minimalista'),
+    ('🎨', 'Temas y colores de acento premium, con degradados'),
+    ('🏅', 'Medalla Plus con brillo y variantes de color'),
     ('📡', 'Mapas offline (próximamente)'),
   ];
 

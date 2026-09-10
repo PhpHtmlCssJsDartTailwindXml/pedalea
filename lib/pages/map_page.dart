@@ -41,6 +41,8 @@ import '../services/proximity_alert_service.dart';
 import '../services/notification_service.dart';
 import '../services/ride_stats_service.dart';
 import '../services/ride_stats_sync_service.dart';
+import '../services/ride_heat_service.dart';
+import '../services/plus_prefs_service.dart';
 import '../services/subscription_service.dart';
 import '../services/poi_photos_service.dart';
 import '../services/achievements_service.dart';
@@ -63,6 +65,7 @@ import '../core/glass.dart';
 import '../core/constants.dart';
 import '../widgets/weather_widget.dart';
 import '../widgets/rain_overlay.dart';
+import '../widgets/plus_medal.dart';
 import '../services/weather_service.dart';
 
 class MapPage extends StatefulWidget {
@@ -177,6 +180,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
   bool _alertsIconAdded = false;
   bool _alertsLayerAdded = false;
 
+  // ── Mi mapa de calor (Plus) ──────────────────────────────────────────────
+  bool _showHeatmap = false;
+  static const _heatSrcId = 'my-heat-src';
+  static const _heatLyrId = 'my-heat-lyr';
+
   // ── Estacionamientos de bici (OSM) ────────────────────────────────────────
   bool _showBikeParkings = true;
   bool _bikeParkingsLoading = false;
@@ -214,7 +222,225 @@ class _MapPageState extends State<MapPage> with RouteAware {
   bool _modoActivo = true;
   bool _autoDarkMode = true;
 
-  bool get _isDayMode => _autoDarkMode && _currentStyle == kMapStyleDay;
+  bool get _isDayMode =>
+      (_autoDarkMode && _currentStyle == kMapStyleDay) ||
+      _currentStyle == kMapStyleMinimal;
+
+  /// Estilo de mapa a usar: si el ciclista es Plus y eligió un estilo premium,
+  /// ese; si no, el modo día/noche automático (o siempre noche).
+  String _resolveMapStyle() {
+    final premium = PlusPrefsService.mapStyle.value;
+    if (premium.isNotEmpty && SubscriptionService.instance.isPlus.value) {
+      return premium;
+    }
+    return _autoDarkMode ? autoDarkMapStyle() : kMapStyleNight;
+  }
+
+  /// Recarga el estilo cuando cambia la preferencia (sincroniza entre equipos).
+  void _onMapStylePrefChanged() {
+    if (!mounted) return;
+    final s = _resolveMapStyle();
+    if (s != _currentStyle && mapboxMap != null) {
+      setState(() => _currentStyle = s);
+      _styleIsLoaded = false;
+      mapboxMap!.loadStyleURI(s);
+    }
+  }
+
+  void _applyMapStyle(String premiumUri) {
+    // '' = volver al automático día/noche. Guarda en el perfil (BD).
+    PlusPrefsService.setMapStyle(premiumUri);
+    setState(() => _currentStyle = _resolveMapStyle());
+    _styleIsLoaded = false;
+    mapboxMap?.loadStyleURI(_currentStyle);
+  }
+
+  // ── Mi mapa de calor personal (capa Plus sobre el mapa) ─────────────
+  Future<void> _toggleHeatmap() async {
+    if (!SubscriptionService.instance.isPlus.value) {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const PaywallPage(
+            reason: 'El mapa de calor personal es una función de Pedalea Plus.',
+          ),
+        ),
+      );
+      return;
+    }
+    final turningOn = !_showHeatmap;
+    setState(() => _showHeatmap = turningOn);
+    if (turningOn) {
+      await RideHeatService.init();
+      if (RideHeatService.cellCount == 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Aún no hay recorridos. Pedalea con el "Modo activo" encendido y '
+              'tus zonas irán apareciendo aquí.',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+    await _updateHeatmapLayer();
+  }
+
+  Future<void> _updateHeatmapLayer() async {
+    if (mapboxMap == null || !_styleIsLoaded) return;
+    final style = mapboxMap!.style;
+    try {
+      if (await style.styleLayerExists(_heatLyrId)) {
+        await style.removeStyleLayer(_heatLyrId);
+      }
+      if (await style.styleSourceExists(_heatSrcId)) {
+        await style.removeStyleSource(_heatSrcId);
+      }
+      if (!_showHeatmap) return;
+
+      await RideHeatService.init();
+      final cells = RideHeatService.cells();
+      if (cells.isEmpty) return;
+
+      final features = cells
+          .map((c) => {
+                'type': 'Feature',
+                'properties': {'w': c.weight},
+                'geometry': {
+                  'type': 'Point',
+                  'coordinates': [c.lng, c.lat],
+                },
+              })
+          .toList();
+      final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
+
+      await style.addSource(GeoJsonSource(id: _heatSrcId, data: fc));
+      await style.addLayer(HeatmapLayer(
+        id: _heatLyrId,
+        sourceId: _heatSrcId,
+        heatmapOpacity: 0.75,
+        heatmapWeightExpression: <Object>[
+          'interpolate', ['linear'], ['get', 'w'], 0, 0.0, 8, 1.0,
+        ],
+        heatmapIntensityExpression: <Object>[
+          'interpolate', ['linear'], ['zoom'], 0, 1.0, 18, 3.0,
+        ],
+        heatmapRadiusExpression: <Object>[
+          'interpolate', ['linear'], ['zoom'],
+          8, 6.0, 12, 16.0, 15, 28.0, 18, 46.0,
+        ],
+        heatmapColorExpression: <Object>[
+          'interpolate', ['linear'], ['heatmap-density'],
+          0.0, 'rgba(0,0,0,0)',
+          0.2, 'rgba(65,145,255,0.55)',
+          0.4, 'rgba(70,220,120,0.8)',
+          0.6, 'rgba(253,219,64,0.9)',
+          0.8, 'rgba(240,130,40,0.95)',
+          1.0, 'rgb(230,40,40)',
+        ],
+      ));
+    } catch (e) {
+      debugPrint('❌ Error mapa de calor: $e');
+    }
+  }
+
+  /// Selector de estilo de mapa en el menú ☰ → "Mapa". El automático es gratis;
+  /// satélite/exterior/minimalista son de Pedalea Plus.
+  Widget _mapStylePicker() {
+    final isPlus = SubscriptionService.instance.isPlus.value;
+    final current = PlusPrefsService.mapStyle.value;
+    const accent = Color(0xFF7CF0BC);
+    Widget chip(String label, String uri, {required bool locked}) {
+      final selected = current == uri && (uri.isEmpty || isPlus);
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (locked) {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const PaywallPage(
+                  reason:
+                      'Los estilos de mapa exclusivos son parte de Pedalea Plus.',
+                ),
+              ),
+            );
+            return;
+          }
+          _applyMapStyle(uri);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withOpacity(0.18)
+                : Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? accent : Colors.white.withOpacity(0.15),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected) ...[
+                const Icon(Icons.check_rounded, color: accent, size: 14),
+                const SizedBox(width: 4),
+              ] else if (locked) ...[
+                Icon(Icons.lock_outline_rounded,
+                    color: Colors.white.withOpacity(0.5), size: 12),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? accent : Colors.white70,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ESTILO DE MAPA',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.4),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              chip('Automático', '', locked: false),
+              for (final s in PlusPrefsService.premiumMapStyles)
+                chip(s.$1, s.$2, locked: !isPlus),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   // ── Helpers de estilo día/noche para overlays ─────────────────────────────
   Color get _overlayBg => _isDayMode
@@ -436,7 +662,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-    _currentStyle = _autoDarkMode ? autoDarkMapStyle() : kMapStyleNight;
+    _currentStyle = _resolveMapStyle();
+    PlusPrefsService.mapStyle.addListener(_onMapStylePrefChanged);
     _checkLocationPermission();
     _loadMyUsername();
     _loadFallDetectionPref();
@@ -494,7 +721,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     // Chequear modo oscuro cada 5 minutos
     _styleCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       if (!mounted) return;
-      final newStyle = _autoDarkMode ? autoDarkMapStyle() : kMapStyleNight;
+      final newStyle = _resolveMapStyle();
       if (newStyle != _currentStyle && mapboxMap != null) {
         setState(() => _currentStyle = newStyle);
         _styleIsLoaded = false;
@@ -599,6 +826,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       );
       _unsavedKm = 0;
     }
+    RideHeatService.flushNow();
+    PlusPrefsService.mapStyle.removeListener(_onMapStylePrefChanged);
     _positionStreamSubscription?.cancel();
     _layersTipTimer?.cancel();
     _helpTipHideTimer?.cancel();
@@ -993,6 +1222,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 _sessionMaxSpeedKmh = speedKmh;
               }
               _routePoints.add(position);
+              // Mapa de calor personal (Plus): registra la zona, no el trazado.
+              RideHeatService.addPoint(position.latitude, position.longitude);
               // Se persiste seguido (0,2 km) para no perder km si el SO mata
               // la app; el RPC de Supabase es incremental, no pesa.
               if (_unsavedKm >= 0.2) {
@@ -1004,6 +1235,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   maxSpeedKmh: _sessionMaxSpeedKmh,
                 ); // estadísticas por día + ranking (Supabase)
                 _unsavedKm = 0;
+                if (_showHeatmap) _updateHeatmapLayer(); // ~cada 200 m
               }
             }
           }
@@ -5510,13 +5742,40 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         onChanged: (val) {
                           setState(() {
                             _autoDarkMode = val;
-                            _currentStyle = val
-                                ? autoDarkMapStyle()
-                                : kMapStyleNight;
+                            _currentStyle = _resolveMapStyle();
                           });
                           _styleIsLoaded = false;
                           mapboxMap?.loadStyleURI(_currentStyle);
                         },
+                      ),
+                      _mapStylePicker(),
+                      SwitchListTile(
+                        value: _showHeatmap,
+                        activeThumbColor: const Color(0xFFFF6D00),
+                        secondary: Icon(
+                          SubscriptionService.instance.isPlus.value
+                              ? Icons.local_fire_department_rounded
+                              : Icons.lock_outline_rounded,
+                          color: const Color(0xFFFF6D00),
+                        ),
+                        title: const Text(
+                          "Mi mapa de calor",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          SubscriptionService.instance.isPlus.value
+                              ? "Dónde has pedaleado más (Plus)"
+                              : "Función de Pedalea Plus",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: (_) => _toggleHeatmap(),
                       ),
                       SwitchListTile(
                         value: _showBikeParkings,
@@ -5760,7 +6019,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
     return Scaffold(
       key: _scaffoldKey,
       extendBodyBehindAppBar: true,
-      onDrawerChanged: (opened) => setState(() => _drawerOpen = opened),
+      onDrawerChanged: (opened) {
+        setState(() => _drawerOpen = opened);
+        // Al cerrar el menú, refresca el mapa de calor con lo pedaleado.
+        if (!opened && _showHeatmap) _updateHeatmapLayer();
+      },
       body: Stack(
         children: [
           // GestureDetector solo para capturar posición del dedo (overlay visual)
@@ -6355,6 +6618,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       if (mapboxMap == null || !mounted) return;
       await _setupUserPuck();
       await _addCicloviasLayer();
+      // Mapa de calor bajo los pines (para no taparlos).
+      if (_showHeatmap) await _updateHeatmapLayer();
       // Re-agregar alertas/eventos con los datos que ya tenemos en memoria
       if (_currentAlerts.isNotEmpty) await _updateAlertsLayer(_currentAlerts);
       if (_currentEvents.isNotEmpty) {
@@ -8986,11 +9251,8 @@ class _DrawerPlusBannerState extends State<_DrawerPlusBanner> {
           ),
           child: Row(
             children: [
-              const Icon(
-                Icons.workspace_premium_rounded,
-                color: goldColor,
-                size: 20,
-              ),
+              // Medalla con la variante que eligió el ciclista.
+              const PlusMedal(size: 24, ringColor: Color(0xFF0E0E16)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -9220,21 +9482,11 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
                       ),
                     ),
                     if (isPlus)
-                      Positioned(
+                      const Positioned(
                         bottom: -2,
                         right: -2,
-                        child: Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF153F2E),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.workspace_premium_rounded,
-                            color: goldColor,
-                            size: 16,
-                          ),
-                        ),
+                        child: PlusMedal(
+                            size: 24, ringColor: Color(0xFF153F2E)),
                       ),
                   ],
                 ),
@@ -9488,21 +9740,10 @@ class _ProfileButtonState extends State<_ProfileButton> {
             ),
           ),
           if (isPlus)
-            Positioned(
-              bottom: -2,
-              right: -2,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0A1A0A),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.workspace_premium_rounded,
-                  color: Colors.amber,
-                  size: 15,
-                ),
-              ),
+            const Positioned(
+              bottom: -3,
+              right: -3,
+              child: PlusMedal(size: 16, ringColor: Color(0xFF0A1A0A)),
             ),
         ],
       ),

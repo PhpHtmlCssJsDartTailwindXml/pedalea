@@ -9,6 +9,8 @@ import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
 import 'services/ride_stats_service.dart';
 import 'services/stats_prefs_service.dart';
+import 'services/plus_prefs_service.dart';
+import 'services/ride_heat_service.dart';
 import 'services/subscription_service.dart';
 import 'core/route_observer.dart';
 
@@ -25,6 +27,8 @@ Future<void> main() async {
   await NotificationService.instance.init();
   await RideStatsService.init();
   await StatsPrefsService.init();
+  await RideHeatService.init();
+  unawaited(PlusPrefsService.init()); // personalización Plus desde profiles
   unawaited(SubscriptionService.instance.init());
 
   runApp(const PedaleaApp());

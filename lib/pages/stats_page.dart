@@ -9,6 +9,7 @@ import '../services/ride_stats_service.dart';
 import '../services/ride_stats_sync_service.dart';
 import '../services/co2_service.dart';
 import '../services/stats_prefs_service.dart';
+import '../services/plus_prefs_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/bike_lane_painter.dart';
 import 'paywall_page.dart';
@@ -54,7 +55,15 @@ class _StatsPageState extends State<StatsPage> {
   double? _serverTotal; // total histórico real (profiles.total_km)
   bool _syncing = false;
 
-  Color _accent = StatsPrefsService.accent;
+  bool get _isPlus => SubscriptionService.instance.isPlus.value;
+
+  /// Índice de acento efectivo (acotado y con fallback si dejó de ser Plus).
+  int get _accentIndex => StatsPrefsService.effectiveAccentIndex(
+      PlusPrefsService.accentIndex.value, _isPlus);
+  Color get _accent => StatsPrefsService.allAccentColors[_accentIndex];
+  List<Color> get _accentGrad =>
+      StatsPrefsService.accentGradientFor(_accentIndex);
+
   final List<String> _order = StatsPrefsService.tileOrder;
   final Set<String> _hidden = {...StatsPrefsService.hiddenTiles};
   bool _editMode = false;
@@ -63,8 +72,22 @@ class _StatsPageState extends State<StatsPage> {
   void initState() {
     super.initState();
     _chartRange = StatsPrefsService.chartRange;
+    PlusPrefsService.accentIndex.addListener(_onPrefsChanged);
+    SubscriptionService.instance.isPlus.addListener(_onPrefsChanged);
+    PlusPrefsService.refresh(); // por si cambió en otro dispositivo
     _load();
     _syncFromServer();
+  }
+
+  void _onPrefsChanged() {
+    if (mounted) setState(() {}); // repinta con el acento nuevo
+  }
+
+  @override
+  void dispose() {
+    PlusPrefsService.accentIndex.removeListener(_onPrefsChanged);
+    SubscriptionService.instance.isPlus.removeListener(_onPrefsChanged);
+    super.dispose();
   }
 
   void _load() {
@@ -226,10 +249,13 @@ class _StatsPageState extends State<StatsPage> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_accent.withOpacity(0.20), _accent.withOpacity(0.04)],
+          colors: [
+            _accentGrad.first.withOpacity(0.22),
+            _accentGrad.last.withOpacity(0.05),
+          ],
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _accent.withOpacity(0.3)),
+        border: Border.all(color: _accentGrad.first.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -261,7 +287,7 @@ class _StatsPageState extends State<StatsPage> {
             ],
           ),
           const SizedBox(height: 10),
-          _AnimatedKm(value: _today, accent: _accent),
+          _AnimatedKm(value: _today, accent: _accent, gradient: _accentGrad),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -505,6 +531,56 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
+  /// Cambia el color de acento; si es un acento Plus y el ciclista no lo es,
+  /// abre el paywall.
+  void _selectAccent(int index) {
+    if (StatsPrefsService.isPlusAccentIndex(index) && !_isPlus) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const PaywallPage(
+            reason:
+                'Los temas y colores de acento premium son parte de Pedalea Plus.',
+          ),
+        ),
+      );
+      return;
+    }
+    // Guarda en el perfil (BD); el notifier hace el setState vía _onPrefsChanged.
+    PlusPrefsService.setAccentIndex(index);
+  }
+
+  Widget _accentSwatch(int index) {
+    final grad = StatsPrefsService.accentGradientFor(index);
+    final isGradient = grad.first.value != grad.last.value;
+    final selected = _accentIndex == index;
+    return GestureDetector(
+      onTap: () => _selectAccent(index),
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: isGradient ? null : grad.first,
+          gradient: isGradient
+              ? LinearGradient(
+                  colors: grad,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? Colors.white : Colors.transparent,
+            width: 2.5,
+          ),
+        ),
+        child: selected
+            ? const Icon(Icons.check, color: Colors.black, size: 15)
+            : null,
+      ),
+    );
+  }
+
   // ── Panel de personalización (modo edición) ──────────────────────────
   Widget _buildEditPanel() {
     return Column(
@@ -519,41 +595,53 @@ class _StatsPageState extends State<StatsPage> {
             children: [
               _sectionLabel('COLOR DE ACENTO'),
               const SizedBox(height: 12),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
                   for (int i = 0;
-                      i < StatsPrefsService.accentPalette.length;
+                      i < StatsPrefsService.freeAccentCount;
                       i++)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _accent =
-                              StatsPrefsService.accentPalette[i]);
-                          StatsPrefsService.setAccentIndex(i);
-                        },
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: StatsPrefsService.accentPalette[i],
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _accent ==
-                                      StatsPrefsService.accentPalette[i]
-                                  ? Colors.white
-                                  : Colors.transparent,
-                              width: 2.5,
-                            ),
-                          ),
-                          child: _accent == StatsPrefsService.accentPalette[i]
-                              ? const Icon(Icons.check,
-                                  color: Colors.black, size: 15)
-                              : null,
-                        ),
-                      ),
-                    ),
+                    _accentSwatch(i),
                 ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Text(
+                    'PLUS',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.amber.withOpacity(0.9),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _isPlus ? 'colores y degradados' : 'toca para probar',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white.withOpacity(0.4),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Opacity(
+                opacity: _isPlus ? 1 : 0.55,
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (int i = StatsPrefsService.freeAccentCount;
+                        i < StatsPrefsService.allAccentColors.length;
+                        i++)
+                      _accentSwatch(i),
+                  ],
+                ),
               ),
             ],
           ),
@@ -716,7 +804,8 @@ class _StatsPageState extends State<StatsPage> {
 class _AnimatedKm extends StatelessWidget {
   final double value;
   final Color accent;
-  const _AnimatedKm({required this.value, required this.accent});
+  final List<Color>? gradient;
+  const _AnimatedKm({required this.value, required this.accent, this.gradient});
 
   @override
   Widget build(BuildContext context) {
@@ -728,16 +817,7 @@ class _AnimatedKm extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
-          Text(
-            v.toStringAsFixed(1),
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontSize: 52,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
+          _gradientNumber(v.toStringAsFixed(1)),
           const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -753,6 +833,29 @@ class _AnimatedKm extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _gradientNumber(String text) {
+    const style = TextStyle(
+      fontFamily: 'Poppins',
+      color: Colors.white,
+      fontSize: 52,
+      fontWeight: FontWeight.w800,
+      height: 1,
+    );
+    final g = gradient;
+    if (g == null || g.length < 2 || g.first.value == g.last.value) {
+      return Text(text, style: style);
+    }
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) => LinearGradient(
+        colors: g,
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(bounds),
+      child: Text(text, style: style),
     );
   }
 }
@@ -948,7 +1051,10 @@ class _ShareSheetState extends State<_ShareSheet> {
   final Set<String> _shownStats = {'streak', 'bestDay', 'activeDays', 'co2'};
 
   // Arranca desde el color que el ciclista eligió en la pantalla principal.
-  Color _accentColor = StatsPrefsService.accent;
+  Color _accentColor = StatsPrefsService.allAccentColors[
+      StatsPrefsService.effectiveAccentIndex(
+          PlusPrefsService.accentIndex.value,
+          SubscriptionService.instance.isPlus.value)];
 
   void _toggleStat(String key) {
     setState(() {

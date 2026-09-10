@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/plus_medal.dart';
+import '../services/plus_prefs_service.dart';
 
 class EventChatPage extends StatefulWidget {
   final String eventId;
@@ -28,6 +30,7 @@ class _EventChatPageState extends State<EventChatPage>
   final Map<String, String> _userNames = {};
   final Map<String, String?> _userAvatars = {};
   final Map<String, bool> _userIsPlus = {};
+  final Map<String, int> _userBadgeVariant = {}; // variante de medalla por user
   final Set<String> _blockedUserIds = {};
   RealtimeChannel? _channel;
 
@@ -161,7 +164,7 @@ class _EventChatPageState extends State<EventChatPage>
     try {
       final response = await _supabase
           .from('profiles')
-          .select('username, full_name, avatar_url, is_plus')
+          .select('username, full_name, avatar_url, is_plus, plus_badge_variant')
           .eq('id', userId)
           .maybeSingle();
       String name = 'Usuario';
@@ -175,6 +178,8 @@ class _EventChatPageState extends State<EventChatPage>
       _userNames[userId] = name;
       _userAvatars[userId] = response?['avatar_url'] as String?;
       _userIsPlus[userId] = response?['is_plus'] as bool? ?? false;
+      _userBadgeVariant[userId] =
+          (response?['plus_badge_variant'] as num?)?.toInt() ?? 0;
       return name;
     } catch (_) {
       return 'Usuario';
@@ -191,6 +196,7 @@ class _EventChatPageState extends State<EventChatPage>
         isCreator: isCreator,
         fallbackAvatarUrl: _userAvatars[userId],
         fallbackIsPlus: _userIsPlus[userId] ?? false,
+        fallbackBadgeVariant: _userBadgeVariant[userId] ?? 0,
         color: _getUserColor(userId),
         initial: _getUserInitial(userName),
         onBlock: () => _blockUser(userId, userName),
@@ -542,20 +548,29 @@ class _EventChatPageState extends State<EventChatPage>
                         ),
                         if (isUserPlus) ...[
                           const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'PLUS',
-                              style: TextStyle(
-                                fontFamily: 'Poppins', color: Colors.amber,
-                                fontSize: 8, fontWeight: FontWeight.w700,
+                          Builder(builder: (_) {
+                            final pc = PlusPrefsService.medalVariants[
+                                    PlusPrefsService.clampVariant(
+                                        _userBadgeVariant[userId] ?? 0)]
+                                .$2;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: pc.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                            ),
-                          ),
+                              child: Text(
+                                'PLUS',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: pc,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            );
+                          }),
                         ],
                         if (isCreator) ...[
                           const SizedBox(width: 4),
@@ -679,14 +694,11 @@ class _EventChatPageState extends State<EventChatPage>
               )
             else if (isUserPlus)
               Positioned(
-                bottom: -2, right: -2,
-                child: Container(
-                  width: 14, height: 14,
-                  decoration: BoxDecoration(
-                    color: Colors.amber, shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF0F0F0F), width: 1.5),
-                  ),
-                  child: const Icon(Icons.workspace_premium_rounded, color: Colors.black, size: 8),
+                bottom: -3, right: -3,
+                child: PlusMedal(
+                  size: 15,
+                  variant: _userBadgeVariant[userId] ?? 0,
+                  ringColor: const Color(0xFF0F0F0F),
                 ),
               ),
           ],
@@ -776,6 +788,7 @@ class _ParticipantInfoDialog extends StatefulWidget {
   final bool isCreator;
   final String? fallbackAvatarUrl;
   final bool fallbackIsPlus;
+  final int fallbackBadgeVariant;
   final Color color;
   final String initial;
   final VoidCallback onBlock;
@@ -788,6 +801,7 @@ class _ParticipantInfoDialog extends StatefulWidget {
     required this.isCreator,
     required this.fallbackAvatarUrl,
     required this.fallbackIsPlus,
+    required this.fallbackBadgeVariant,
     required this.color,
     required this.initial,
     required this.onBlock,
@@ -807,6 +821,7 @@ class _ParticipantInfoDialogState extends State<_ParticipantInfoDialog> {
   bool _loading = true;
   String? _avatarUrl;
   bool _isPlus = false;
+  int _badgeVariant = 0;
   String? _commune;
   double? _totalKm;
   DateTime? _joinedAt;
@@ -819,6 +834,7 @@ class _ParticipantInfoDialogState extends State<_ParticipantInfoDialog> {
     super.initState();
     _isSelf = widget.supabase.auth.currentUser?.id == widget.userId;
     _isPlus = widget.fallbackIsPlus;
+    _badgeVariant = widget.fallbackBadgeVariant;
     _load();
   }
 
@@ -827,7 +843,7 @@ class _ParticipantInfoDialogState extends State<_ParticipantInfoDialog> {
       final results = await Future.wait<dynamic>([
         widget.supabase
             .from('profiles')
-            .select('avatar_url, commune, total_km, created_at, is_plus')
+            .select('avatar_url, commune, total_km, created_at, is_plus, plus_badge_variant')
             .eq('id', widget.userId)
             .maybeSingle(),
         widget.supabase
@@ -851,6 +867,8 @@ class _ParticipantInfoDialogState extends State<_ParticipantInfoDialog> {
       setState(() {
         _avatarUrl = profile?['avatar_url'] as String? ?? widget.fallbackAvatarUrl;
         _isPlus = profile?['is_plus'] as bool? ?? widget.fallbackIsPlus;
+        _badgeVariant = (profile?['plus_badge_variant'] as num?)?.toInt() ??
+            widget.fallbackBadgeVariant;
         _commune = profile?['commune'] as String?;
         _totalKm = (profile?['total_km'] as num?)?.toDouble();
         final createdAt = profile?['created_at'] as String?;
@@ -969,14 +987,10 @@ class _ParticipantInfoDialogState extends State<_ParticipantInfoDialog> {
                   Positioned(
                     bottom: -2,
                     right: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF161616),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.workspace_premium_rounded,
-                          color: Colors.amber, size: 16),
+                    child: PlusMedal(
+                      size: 24,
+                      variant: _badgeVariant,
+                      ringColor: const Color(0xFF161616),
                     ),
                   ),
               ],
