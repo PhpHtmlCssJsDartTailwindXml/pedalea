@@ -280,18 +280,14 @@ class SocialService {
   /// trigger en la BD).
   static const freeDailyPostLimit = 2;
 
+  /// Usa la hora del servidor (RPC), no la del dispositivo: adelantar el reloj
+  /// del teléfono no cambia el resultado. El límite real igual lo impone un
+  /// trigger en la BD.
   Future<int> myPostsToday() async {
-    final me = _uid;
-    if (me == null) return 0;
+    if (_uid == null) return 0;
     try {
-      final now = DateTime.now();
-      final startLocal = DateTime(now.year, now.month, now.day);
-      final rows = await _sb
-          .from('posts')
-          .select('id')
-          .eq('user_id', me)
-          .gte('created_at', startLocal.toUtc().toIso8601String());
-      return rows.length;
+      final r = await _sb.rpc('my_moments_today');
+      return (r as num?)?.toInt() ?? 0;
     } catch (e) {
       debugPrint('SocialService.myPostsToday: $e');
       return 0;
