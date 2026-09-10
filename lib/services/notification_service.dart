@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import '../core/app_navigator.dart';
+import '../pages/event_chat_page.dart';
 
 /// Servicio centralizado de notificaciones locales (alertas push).
 ///
@@ -23,6 +25,8 @@ class NotificationService {
   static const String _emergencyChannelName = 'Emergencias';
   static const String _eventReminderChannelId = 'event_reminders';
   static const String _eventReminderChannelName = 'Recordatorios de eventos';
+  static const String _chatChannelId = 'group_chat_messages';
+  static const String _chatChannelName = 'Mensajes de grupos';
 
   /// Inicializa el plugin y solicita permiso de notificaciones (Android 13+).
   Future<void> init() async {
@@ -33,7 +37,10 @@ class NotificationService {
 
       const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
       const initSettings = InitializationSettings(android: androidInit);
-      await _plugin.initialize(initSettings);
+      await _plugin.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: _onNotificationTap,
+      );
 
       final androidImpl = _plugin
           .resolvePlatformSpecificImplementation<
@@ -150,6 +157,60 @@ class NotificationService {
     } catch (e) {
       debugPrint('showEmergencyAlert error: $e');
     }
+  }
+
+  /// Notificación de un mensaje nuevo en un grupo (evento) del que el usuario
+  /// forma parte. Usa un id estable por evento: los mensajes siguientes del
+  /// mismo grupo actualizan la misma notificación en vez de apilarse.
+  Future<void> showChatMessage({
+    required String eventId,
+    required String groupTitle,
+    required String sender,
+    required String body,
+  }) async {
+    await _ensureInit();
+    try {
+      await _plugin.show(
+        _chatNotifId(eventId),
+        groupTitle,
+        '$sender: $body',
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _chatChannelId,
+            _chatChannelName,
+            channelDescription:
+                'Avisa cuando alguien escribe en un grupo del que eres parte',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            styleInformation: BigTextStyleInformation('$sender: $body'),
+          ),
+        ),
+        payload: 'chat|$eventId|$groupTitle',
+      );
+    } catch (e) {
+      debugPrint('showChatMessage error: $e');
+    }
+  }
+
+  int _chatNotifId(String eventId) =>
+      200000 + (eventId.hashCode.abs() % 700000); // id estable por grupo
+
+  /// Abre el chat del grupo al tocar su notificación.
+  static void _onNotificationTap(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload == null || !payload.startsWith('chat|')) return;
+    final parts = payload.split('|');
+    if (parts.length < 3) return;
+    final eventId = parts[1];
+    final title = parts.sublist(2).join('|');
+    final nav = appNavigatorKey.currentState;
+    if (nav == null) return;
+    nav.push(
+      MaterialPageRoute(
+        builder: (_) => EventChatPage(eventId: eventId, eventTitle: title),
+      ),
+    );
   }
 
   Future<void> _ensureInit() async {

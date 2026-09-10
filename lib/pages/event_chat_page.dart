@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/plus_medal.dart';
 import '../services/plus_prefs_service.dart';
+import '../services/chat_notifications_service.dart';
 
 class EventChatPage extends StatefulWidget {
   final String eventId;
@@ -46,6 +47,8 @@ class _EventChatPageState extends State<EventChatPage>
   void initState() {
     super.initState();
     _supabase = Supabase.instance.client;
+    // No notificar los mensajes del chat que el usuario está viendo.
+    ChatNotificationsService.activeEventId = widget.eventId;
     _dotsController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -421,6 +424,9 @@ class _EventChatPageState extends State<EventChatPage>
 
   @override
   void dispose() {
+    if (ChatNotificationsService.activeEventId == widget.eventId) {
+      ChatNotificationsService.activeEventId = null;
+    }
     _typingDebounce?.cancel();
     _dotsController.dispose();
     _channel?.unsubscribe();

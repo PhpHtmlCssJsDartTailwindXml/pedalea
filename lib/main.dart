@@ -7,12 +7,14 @@ import 'services/app_update_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
+import 'services/chat_notifications_service.dart';
 import 'services/ride_stats_service.dart';
 import 'services/stats_prefs_service.dart';
 import 'services/plus_prefs_service.dart';
 import 'services/ride_heat_service.dart';
 import 'services/subscription_service.dart';
 import 'core/route_observer.dart';
+import 'core/app_navigator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +32,7 @@ Future<void> main() async {
   await RideHeatService.init();
   unawaited(PlusPrefsService.init()); // personalización Plus desde profiles
   unawaited(SubscriptionService.instance.init());
+  ChatNotificationsService.instance.start(); // avisa mensajes de grupos
 
   runApp(const PedaleaApp());
 }
@@ -43,6 +46,7 @@ class PedaleaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Pedalea',
       theme: ThemeData(primarySwatch: Colors.green),
+      navigatorKey: appNavigatorKey,
       navigatorObservers: [routeObserver],
       home: const _StartupGate(),
     );
