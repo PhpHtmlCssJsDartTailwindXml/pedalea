@@ -74,6 +74,9 @@ class _CreateAlertPageState extends State<CreateAlertPage> {
   @override
   void initState() {
     super.initState();
+    // Rebuild para la vista previa en vivo (no cambia la funcionalidad).
+    _titleController.addListener(_rebuild);
+    _descriptionController.addListener(_rebuild);
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
       _latitude = widget.initialLatitude;
       _longitude = widget.initialLongitude;
@@ -85,6 +88,10 @@ class _CreateAlertPageState extends State<CreateAlertPage> {
       _locationMethod = LocationMethod.current;
       _getCurrentLocation();
     }
+  }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -185,164 +192,168 @@ class _CreateAlertPageState extends State<CreateAlertPage> {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor =
-        _alertTypes[_selectedType]?.color ?? Colors.redAccent;
+    final type = _alertTypes[_selectedType]!;
+    final accentColor = type.color;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: kBgDark,
       extendBodyBehindAppBar: true,
       body: Container(
         decoration: kPageGradient,
-        child: Column(
+        child: Stack(
           children: [
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: glassDecoration(radius: 12),
-                        child: const Icon(Icons.close,
-                            color: Colors.white, size: 20),
-                      ),
+            // Resplandor del color del tipo, arriba
+            Positioned(
+              top: -140,
+              left: -60,
+              right: -60,
+              child: IgnorePointer(
+                child: Container(
+                  height: 320,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        accentColor.withOpacity(0.28),
+                        accentColor.withOpacity(0.0),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Crear Alerta',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-
-            Expanded(
-              child: Form(
-                key: _formKey,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-                  children: [
-                    // Tipo
-                    _sectionLabel('TIPO DE ALERTA'),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 92,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: _alertTypes.entries.map((entry) {
-                          final isSelected = _selectedType == entry.key;
-                          return GestureDetector(
-                            onTap: () =>
-                                setState(() => _selectedType = entry.key),
-                            child: Container(
-                              width: 88,
-                              margin: const EdgeInsets.only(right: 10),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? entry.value.color.withOpacity(0.18)
-                                    : Colors.white.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? entry.value.color.withOpacity(0.7)
-                                      : Colors.white.withOpacity(0.1),
-                                  width: isSelected ? 1.5 : 1,
+            Column(
+              children: [
+                SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: glassDecoration(radius: 14),
+                            child: const Icon(Icons.arrow_back_ios_new_rounded,
+                                color: Colors.white, size: 18),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Nueva alerta',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 20,
                                 ),
                               ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    entry.value.icon,
-                                    color: isSelected
-                                        ? entry.value.color
-                                        : Colors.white38,
-                                    size: 26,
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    entry.value.label,
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: isSelected
-                                          ? entry.value.color
-                                          : Colors.white38,
-                                      fontSize: 11,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.normal,
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                'Avisa a la comunidad de un problema en la vía',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white.withOpacity(0.45),
+                                  fontSize: 11.5,
+                                ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Detalles
-                    _sectionLabel('DETALLES'),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: glassDecoration(radius: 18),
-                      child: Column(
-                        children: [
-                          TextFormField(
-                            controller: _titleController,
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white,
-                              fontSize: 15,
-                            ),
-                            decoration: glassInput(
-                              'Título de la alerta',
-                              _alertTypes[_selectedType]?.icon ?? Icons.warning,
-                              accentColor: accentColor,
-                            ),
-                            validator: (v) => v == null || v.isEmpty
-                                ? 'Ingresa un título'
-                                : null,
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _descriptionController,
-                            maxLines: 3,
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white,
-                              fontSize: 15,
-                            ),
-                            decoration:
-                                glassInput('Descripción', Icons.description),
-                            validator: (v) => v == null || v.isEmpty
-                                ? 'Describe la situación'
-                                : null,
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 20),
+                  ),
+                ),
 
-                    // Ubicación
-                    _sectionLabel('UBICACIÓN'),
-                    const SizedBox(height: 10),
-                    Container(
-                      decoration: glassDecoration(radius: 18),
-                      child: Column(
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+                      children: [
+                        _previewCard(type),
+                        const SizedBox(height: 22),
+
+                        // Tipo
+                        _sectionLabel('TIPO DE ALERTA'),
+                        const SizedBox(height: 12),
+                        _typeSelector(),
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text(
+                            type.description,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: accentColor.withOpacity(0.85),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+
+                        // Detalles
+                        _sectionLabel('DETALLES'),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: glassDecoration(radius: 18),
+                          child: Column(
+                            children: [
+                              TextFormField(
+                                controller: _titleController,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                ),
+                                decoration: glassInput(
+                                  'Título de la alerta',
+                                  type.icon,
+                                  accentColor: accentColor,
+                                ),
+                                validator: (v) => v == null || v.isEmpty
+                                    ? 'Ingresa un título'
+                                    : null,
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _descriptionController,
+                                maxLines: 3,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                ),
+                                decoration: glassInput(
+                                    'Descripción', Icons.notes_rounded,
+                                    accentColor: accentColor),
+                                validator: (v) => v == null || v.isEmpty
+                                    ? 'Describe la situación'
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+
+                        // Ubicación
+                        _sectionLabel('UBICACIÓN'),
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: glassDecoration(radius: 18),
+                          child: Column(
                         children: [
                           // Selector de método
                           Padding(
@@ -445,37 +456,57 @@ class _CreateAlertPageState extends State<CreateAlertPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 28),
+                        const SizedBox(height: 28),
 
-                    SizedBox(
-                      height: 54,
-                      child: ElevatedButton(
-                        onPressed: _loading ? null : _createAlert,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          textStyle: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: accentColor.withOpacity(0.35),
+                                blurRadius: 22,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            height: 56,
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _loading ? null : _createAlert,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accentColor,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor:
+                                    accentColor.withOpacity(0.5),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              icon: _loading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2),
+                                    )
+                                  : Icon(type.icon, size: 20),
+                              label: Text(
+                                  _loading ? 'Publicando…' : 'Publicar alerta'),
+                            ),
                           ),
                         ),
-                        child: _loading
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2),
-                              )
-                            : const Text('Crear Alerta'),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),
@@ -489,13 +520,179 @@ class _CreateAlertPageState extends State<CreateAlertPage> {
           text,
           style: const TextStyle(
             fontFamily: 'Poppins',
-            color: Colors.white24,
+            color: Colors.white30,
             fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.2,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.4,
           ),
         ),
       );
+
+  /// Vista previa en vivo de la alerta.
+  Widget _previewCard(AlertTypeInfo type) {
+    final title = _titleController.text.trim();
+    final desc = _descriptionController.text.trim();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: type.color.withOpacity(0.35)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            type.color.withOpacity(0.20),
+            type.color.withOpacity(0.04),
+          ],
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: type.color.withOpacity(0.9),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                    color: type.color.withOpacity(0.5), blurRadius: 14),
+              ],
+            ),
+            child: Icon(type.icon, color: Colors.white, size: 26),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: type.color.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        type.label.toUpperCase(),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  title.isEmpty ? 'Título de tu alerta' : title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: title.isEmpty
+                        ? Colors.white.withOpacity(0.4)
+                        : Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  desc.isEmpty
+                      ? 'Aquí aparecerá tu descripción…'
+                      : desc,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(desc.isEmpty ? 0.3 : 0.6),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _typeSelector() {
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        itemCount: _alertTypes.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final entry = _alertTypes.entries.elementAt(i);
+          final t = entry.value;
+          final sel = _selectedType == entry.key;
+          return GestureDetector(
+            onTap: () => setState(() => _selectedType = entry.key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 82,
+              decoration: BoxDecoration(
+                color: sel
+                    ? t.color.withOpacity(0.18)
+                    : Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color:
+                      sel ? t.color : Colors.white.withOpacity(0.08),
+                  width: sel ? 1.6 : 1,
+                ),
+                boxShadow: sel
+                    ? [
+                        BoxShadow(
+                            color: t.color.withOpacity(0.35),
+                            blurRadius: 16)
+                      ]
+                    : null,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: sel
+                          ? t.color
+                          : Colors.white.withOpacity(0.06),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(t.icon,
+                        color: sel ? Colors.white : Colors.white38,
+                        size: 20),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    t.label,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: sel ? Colors.white : Colors.white38,
+                      fontSize: 11,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Widget _methodChip({
     required String label,
