@@ -33,6 +33,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   bool get _isMe => _me == widget.userId;
   bool get _mutual => _rel.outgoing == 'accepted' && _rel.incoming == 'accepted';
 
+  /// Puede reaccionar y comentar: en sus propios momentos, o con follow mutuo.
+  bool get _canInteract => _isMe || _mutual;
+
   @override
   void initState() {
     super.initState();
@@ -112,11 +115,11 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
           child: PostCard(
             post: post,
-            canInteract: _mutual && !_isMe,
+            canInteract: _canInteract,
             isMine: _isMe,
             onAuthorTap: () {},
             onOpenComments: () => showCommentsSheet(context,
-                post: post, canInteract: _mutual && !_isMe, onChanged: _load),
+                post: post, canInteract: _canInteract, onChanged: _load),
             onBlockedInteract: _blockedMsg,
             onDeleted: () {
               Navigator.pop(context);

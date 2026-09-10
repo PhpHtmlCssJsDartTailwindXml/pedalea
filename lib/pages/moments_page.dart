@@ -93,10 +93,11 @@ class _MomentsPageState extends State<MomentsPage> {
     });
   }
 
+  /// Reaccionar/comentar: en tus propios momentos, o con follow mutuo.
   bool _canInteract(Map<String, dynamic> post) {
     final authorId =
         (post['author'] as Map?)?['id'] as String? ?? post['user_id'] as String;
-    return _mutual.contains(authorId);
+    return authorId == _myId || _mutual.contains(authorId);
   }
 
   void _openAuthor(String authorId) {

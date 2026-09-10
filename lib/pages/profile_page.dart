@@ -451,10 +451,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               _buildKarmaCard(),
                               const SizedBox(height: 12),
                               _buildPlusCard(),
-                              if ((_profile?['is_plus'] as bool? ?? false)) ...[
-                                const SizedBox(height: 12),
-                                _buildMedalPicker(),
-                              ],
+                              const SizedBox(height: 12),
+                              _buildMedalPicker(),
                               const SizedBox(height: 12),
                               _buildCo2Card(),
                               const SizedBox(height: 24),
@@ -905,90 +903,143 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// Selector de variante de medalla Plus. Se guarda en `profiles` y la ven
-  /// el resto de ciclistas.
+  /// Selector de variante de medalla Plus. Siempre visible: si no eres Plus se
+  /// muestra bloqueado (ves las opciones pero no puedes aplicarlas).
   Widget _buildMedalPicker() {
-    return ValueListenableBuilder<int>(
-      valueListenable: PlusPrefsService.medalVariant,
-      builder: (context, sel, _) => Container(
-      decoration: glassDecoration(
-        radius: 20,
-        tint: Colors.amber,
-        opacity: 0.06,
-        borderOpacity: 0.18,
-      ),
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Tu medalla Plus',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Elige el brillo con el que te ven en el perfil y el chat',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 18,
-            runSpacing: 14,
-            children: [
-              for (int i = 0;
-                  i < PlusPrefsService.medalVariants.length;
-                  i++)
-                GestureDetector(
-                  onTap: () => PlusPrefsService.setMedalVariant(i),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: sel == i
-                                ? Colors.white
-                                : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: PlusMedal(
-                          size: 34,
-                          variant: i,
-                          ringColor: const Color(0xFF16161F),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        PlusPrefsService.medalVariants[i].$1,
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: sel == i
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.45),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+    return ValueListenableBuilder<bool>(
+      valueListenable: SubscriptionService.instance.isPlus,
+      builder: (context, isPlus, _) => ValueListenableBuilder<int>(
+        valueListenable: PlusPrefsService.medalVariant,
+        builder: (context, sel, _) {
+          void openPaywall() => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PaywallPage(
+                    reason:
+                        'Personaliza tu medalla y lúcela en el perfil y el chat con Pedalea Plus.',
                   ),
                 ),
-            ],
-          ),
-        ],
+              );
+          return GestureDetector(
+            onTap: isPlus ? null : openPaywall,
+            child: Container(
+              decoration: glassDecoration(
+                radius: 20,
+                tint: Colors.amber,
+                opacity: isPlus ? 0.06 : 0.04,
+                borderOpacity: isPlus ? 0.18 : 0.1,
+              ),
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Tu medalla Plus',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (!isPlus) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.lock_outline_rounded,
+                                  size: 10, color: Colors.amber),
+                              SizedBox(width: 3),
+                              Text('PLUS',
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.amber,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isPlus
+                        ? 'Elige el brillo con el que te ven en el perfil y el chat'
+                        : 'Vuelve a Pedalea Plus para lucir tu medalla',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Opacity(
+                    opacity: isPlus ? 1 : 0.45,
+                    child: Wrap(
+                      spacing: 18,
+                      runSpacing: 14,
+                      children: [
+                        for (int i = 0;
+                            i < PlusPrefsService.medalVariants.length;
+                            i++)
+                          GestureDetector(
+                            onTap: isPlus
+                                ? () => PlusPrefsService.setMedalVariant(i)
+                                : openPaywall,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: (isPlus && sel == i)
+                                          ? Colors.white
+                                          : Colors.transparent,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: PlusMedal(
+                                    size: 34,
+                                    variant: i,
+                                    ringColor: const Color(0xFF16161F),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  PlusPrefsService.medalVariants[i].$1,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: (isPlus && sel == i)
+                                        ? Colors.white
+                                        : Colors.white.withOpacity(0.45),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
-    ),
     );
   }
 
