@@ -87,56 +87,30 @@ class SubscriptionService {
     await refreshPlusStatus();
   }
 
-  /// Activa/desactiva Plus de forma simulada (mientras no hay productos
-  /// reales en Play Console). A diferencia de la versión anterior, esto
-  /// SÍ crea una fila real en `subscriptions` con fecha de inicio y de
-  /// vencimiento, para que "Gestionar suscripción" muestre datos reales.
-  Future<void> setSimulatedPlus(
-    bool value, {
-    String productId = SubscriptionProductIds.yearly,
-  }) async {
-    final uid = Supabase.instance.client.auth.currentUser?.id;
-    if (uid == null) return;
-    try {
-      if (value) {
-        final now = DateTime.now();
-        final expires = productId == SubscriptionProductIds.monthly
-            ? now.add(const Duration(days: 30))
-            : now.add(const Duration(days: 365));
-        await Supabase.instance.client.from('subscriptions').insert({
-          'user_id': uid,
-          'product_id': productId,
-          'purchase_token': 'simulated_${now.millisecondsSinceEpoch}',
-          'is_active': true,
-          'purchased_at': now.toIso8601String(),
-          'expires_at': expires.toIso8601String(),
-        });
-        await _syncProfileIsPlus(true);
-      } else {
-        await Supabase.instance.client
-            .from('subscriptions')
-            .update({'is_active': false})
-            .eq('user_id', uid)
-            .like('purchase_token', 'simulated_%');
-        await _syncProfileIsPlus(false);
-      }
-    } catch (e) {
-      debugPrint('SubscriptionService setSimulatedPlus error: $e');
-    }
-    await refreshPlusStatus();
-  }
-
-  Future<void> _syncProfileIsPlus(bool value) async {
-    final uid = Supabase.instance.client.auth.currentUser?.id;
-    if (uid == null) return;
+  /// Concede Plus de prueba. **Solo funciona para las cuentas del dueño de la
+  /// app** (el RPC `grant_owner_test_plus` valida el email en el servidor); a
+  /// cualquier otro usuario le devuelve un error y no pasa nada. Ya no existe
+  /// el "Plus simulado" abierto que cualquiera podía activar.
+  Future<bool> grantTestPlus({int days = 30}) async {
     try {
       await Supabase.instance.client
-          .from('profiles')
-          .update({'is_plus': value})
-          .eq('id', uid);
+          .rpc('grant_owner_test_plus', params: {'p_days': days});
+      await refreshPlusStatus();
+      return isPlus.value;
     } catch (e) {
-      debugPrint('SubscriptionService _syncProfileIsPlus error: $e');
+      debugPrint('SubscriptionService grantTestPlus error: $e');
+      return false;
     }
+  }
+
+  /// Quita el Plus de prueba (solo para cuentas del dueño).
+  Future<void> revokeTestPlus() async {
+    try {
+      await Supabase.instance.client.rpc('revoke_owner_test_plus');
+    } catch (e) {
+      debugPrint('SubscriptionService revokeTestPlus error: $e');
+    }
+    await refreshPlusStatus();
   }
 
   /// Trae los datos de la suscripción activa actual (real o simulada) para
@@ -163,7 +137,8 @@ class SubscriptionService {
         productId: row['product_id'] as String? ?? SubscriptionProductIds.yearly,
         purchasedAt: purchasedAt,
         expiresAt: expiresAt,
-        isSimulated: token.startsWith('simulated_'),
+        isSimulated: token.startsWith('simulated_') ||
+            token.startsWith('owner_test_'),
       );
     } catch (e) {
       debugPrint('SubscriptionService getMySubscriptionInfo error: $e');
@@ -198,39 +173,48 @@ class SubscriptionService {
     for (final purchase in purchases) {
       if (purchase.status == PurchaseStatus.pending) continue;
 
+      var verified = false;
       if (purchase.status == PurchaseStatus.error) {
         debugPrint('SubscriptionService: error de compra: ${purchase.error}');
       } else if (purchase.status == PurchaseStatus.purchased ||
           purchase.status == PurchaseStatus.restored) {
-        await _recordPurchase(purchase);
+        verified = await _recordPurchase(purchase);
       }
 
-      if (purchase.pendingCompletePurchase) {
+      // Solo se confirma (acknowledge) la compra si el servidor la verificó.
+      // Si no, se deja pendiente: se reintenta al reabrir la app y, si nunca
+      // se verifica, Google la reembolsa sola a los 3 días.
+      if (purchase.pendingCompletePurchase && verified) {
         await _iap.completePurchase(purchase);
       }
     }
     await refreshPlusStatus();
   }
 
-  /// Guarda la compra en Supabase. Nota: esto confía en el resultado de Play
-  /// Billing del lado del cliente; para producción robusta conviene validar
-  /// el purchaseToken contra la Google Play Developer API desde un backend
-  /// (ej. una Edge Function de Supabase) antes de marcarla como activa.
-  Future<void> _recordPurchase(PurchaseDetails purchase) async {
+  /// Verifica la compra en el servidor. El cliente **no** puede activar la
+  /// suscripción: manda el `purchaseToken` a la Edge Function
+  /// `verify-play-purchase`, que lo valida contra la Google Play Developer API
+  /// y recién ahí marca la fila como activa (con service_role). La RLS impide
+  /// que la app escriba `subscriptions.is_active` o `profiles.is_plus`.
+  /// Devuelve true si el servidor confirmó que la compra es válida y activa.
+  Future<bool> _recordPurchase(PurchaseDetails purchase) async {
     final uid = Supabase.instance.client.auth.currentUser?.id;
-    if (uid == null) return;
+    if (uid == null) return false;
+    final token = purchase.verificationData.serverVerificationData;
+    if (token.isEmpty) return false;
     try {
-      final now = DateTime.now();
-      await Supabase.instance.client.from('subscriptions').upsert({
-        'user_id': uid,
-        'product_id': purchase.productID,
-        'purchase_token': purchase.purchaseID ?? purchase.verificationData.serverVerificationData,
-        'is_active': true,
-        'purchased_at': now.toIso8601String(),
-      }, onConflict: 'purchase_token');
-      await _syncProfileIsPlus(true);
+      final res = await Supabase.instance.client.functions.invoke(
+        'verify-play-purchase',
+        body: {
+          'productId': purchase.productID,
+          'purchaseToken': token,
+        },
+      );
+      final data = res.data;
+      return data is Map && data['isPlus'] == true;
     } catch (e) {
-      debugPrint('SubscriptionService _recordPurchase error: $e');
+      debugPrint('SubscriptionService _recordPurchase (verify) error: $e');
+      return false;
     }
   }
 

@@ -69,7 +69,7 @@ class _ManageSubscriptionPageState extends State<ManageSubscriptionPage> {
           style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
         ),
         content: const Text(
-          'Perderás el acceso a las funciones Plus de inmediato (esta es una suscripción simulada).',
+          'Perderás el acceso a las funciones Plus de inmediato (esta es una suscripción de prueba).',
           style: TextStyle(fontFamily: 'Poppins', color: Colors.white60),
         ),
         actions: [
@@ -87,7 +87,7 @@ class _ManageSubscriptionPageState extends State<ManageSubscriptionPage> {
     if (confirmed != true) return;
 
     setState(() => _cancelling = true);
-    await SubscriptionService.instance.setSimulatedPlus(false);
+    await SubscriptionService.instance.revokeTestPlus();
     if (mounted) Navigator.pop(context);
   }
 

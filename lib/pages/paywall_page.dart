@@ -17,7 +17,7 @@ class PaywallPage extends StatefulWidget {
 }
 
 class _PaywallPageState extends State<PaywallPage> {
-  final _service = SubscriptionService.instance;
+  final _service = SubscriptionService.instance; // suscripción Plus
   bool _buying = false;
   String _selectedProductId = SubscriptionProductIds.yearly;
 
@@ -62,20 +62,24 @@ class _PaywallPageState extends State<PaywallPage> {
     }
   }
 
-  /// Fallback mientras no haya productos reales de Play Console: activa
-  /// Plus en modo simulado, para poder seguir probando/desarrollando.
+  /// Mientras no haya productos reales en Play Console, este botón solo
+  /// funciona para las cuentas del dueño de la app (Plus de prueba, validado
+  /// en el servidor). Para cualquier otro usuario no hace nada: ya no existe
+  /// el "Plus simulado" abierto.
   Future<void> _buyFallback() async {
     setState(() => _buying = true);
     try {
-      await _service.setSimulatedPlus(true, productId: _selectedProductId);
+      final ok = await _service.grantTestPlus();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Aún no hay productos configurados en Play Console: se activó Plus en modo simulado.',
-              style: TextStyle(fontFamily: 'Poppins', ),
+              ok
+                  ? 'Plus de prueba activado.'
+                  : 'Los planes todavía no están disponibles. Vuelve pronto.',
+              style: const TextStyle(fontFamily: 'Poppins'),
             ),
-            backgroundColor: Colors.orange,
+            backgroundColor: ok ? Colors.green : Colors.orange,
           ),
         );
       }
