@@ -176,8 +176,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   String?
   _cicloviasGeoJson; // caché para no re-llamar a Overpass tras cambio de estilo
-  final bool _cyclistsLayerAdded = false;
   bool _cyclistsIconAdded = false;
+  List<Map<String, dynamic>> _lastCyclists = [];
   bool _eventsIconAdded = false;
   bool _alertsIconAdded = false;
   bool _alertsLayerAdded = false;
@@ -487,6 +487,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
   // cueste algo de batería. El usuario lo puede apagar en el menú ☰.
   bool _bgTrackingEnabled = true;
 
+  // ── Compartir ubicación en vivo (OPT-IN, ver initState) ───────────────────
+  // Solo se muestra en el mapa a quienes tienen follow mutuo contigo (lo
+  // impone también la RLS de `user_locations`, no solo esta bandera).
+  bool _shareLiveLocation = false;
+
   // ── Seguridad: detección de caídas + alertas de proximidad ────────────────
   final FallDetectionService _fallService = FallDetectionService();
   final ProximityAlertService _proximityService = ProximityAlertService();
@@ -674,6 +679,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     // Restaurar preferencia de conteo en segundo plano (encendido por defecto).
     SharedPreferences.getInstance().then((p) {
       if (!mounted) return;
+      // Compartir ubicación en vivo es OPT-IN (apagado por defecto): que otros
+      // te vean pedaleando en tiempo real es sensible (riesgo de que alguien
+      // te espere en el camino), así que el usuario debe activarlo a mano.
+      setState(() => _shareLiveLocation = p.getBool('share_live_location') ?? false);
       final bgOn = p.getBool('bg_tracking') ?? true;
       setState(() => _bgTrackingEnabled = bgOn);
       if (bgOn) {
@@ -835,6 +844,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _helpTipHideTimer?.cancel();
     _diagCompassSub?.cancel();
     _cyclistsSubscription?.cancel();
+    _cyclistsDelayTimer?.cancel();
     _eventsSubscription?.cancel();
     _alertsSubscription?.cancel();
     _connectivitySub?.cancel();
@@ -1260,7 +1270,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             _checkProximityAlerts(position);
           }
 
-          if (_modoActivo) {
+          if (_modoActivo && _shareLiveLocation) {
             await _presenceService.upsertMyLocation(
               position: position,
               username: _myUsername,
@@ -1405,12 +1415,26 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
+  /// Cuánto se retrasa a propósito la posición de los demás ciclistas en el
+  /// mapa: sigue sirviendo para ubicarse y juntarse a pedalear, pero nadie
+  /// sabe tu punto EXACTO en este instante (defensa extra contra que alguien
+  /// te espere en el camino, sumada al filtro de follow mutuo).
+  static const _cyclistsDisplayDelay = Duration(seconds: 30);
+  Timer? _cyclistsDelayTimer;
+
   void _listenToActiveCyclists() {
     _cyclistsSubscription?.cancel();
     _cyclistsSubscription = _presenceService.streamActiveCyclists().listen((
       cyclists,
     ) async {
-      await _updateCyclistsLayer(cyclists);
+      // Cada actualización se aplica recién ~30 s después de recibirla
+      // (nunca antes que la anterior, así no se adelanta la posición real).
+      _cyclistsDelayTimer?.cancel();
+      _cyclistsDelayTimer = Timer(_cyclistsDisplayDelay, () {
+        if (!mounted) return;
+        _lastCyclists = cyclists;
+        _updateCyclistsLayer(cyclists);
+      });
     });
   }
 
@@ -2488,6 +2512,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             _bicimetroLyrId,
             _servicesLyrId,
             _crvLyrId,
+            _cyclistsLayerId,
           ],
           filter: null,
         ),
@@ -2532,6 +2557,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
       if (bestLayers.contains(_parkingLyrId)) {
         _showBikeParkingModal(best);
+        return;
+      }
+      if (bestLayers.contains(_cyclistsLayerId)) {
+        _showCyclistModal(best);
         return;
       }
       if (bestLayers.contains(_servicesLyrId)) {
@@ -5122,6 +5151,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
+  /// Activa/desactiva mostrar tu posición en vivo a tus seguidores mutuos.
+  /// Al apagarlo, además de dejar de subir ubicaciones, borra la fila para
+  /// que quien te esté viendo deje de verte de inmediato.
+  Future<void> _toggleShareLocation(bool val) async {
+    setState(() => _shareLiveLocation = val);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('share_live_location', val);
+    if (!val) _presenceService.clearMyLocation();
+  }
+
   /// Activa/desactiva el conteo de km en segundo plano. Requiere permiso de
   /// ubicación "Permitir todo el tiempo".
   Future<void> _toggleBgTracking(bool val) async {
@@ -5474,7 +5513,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           ),
                         ),
                         subtitle: Text(
-                          _modoActivo ? "Visible para otros" : "No visible",
+                          "Cuenta tus km mientras pedaleas",
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             color: Colors.grey[400],
@@ -5496,6 +5535,34 @@ class _MapPageState extends State<MapPage> with RouteAware {
                             _maybeOfferRouteShare();
                           }
                         },
+                      ),
+                      SwitchListTile(
+                        value: _shareLiveLocation,
+                        activeThumbColor: Colors.greenAccent,
+                        secondary: Icon(
+                          _shareLiveLocation
+                              ? Icons.share_location_rounded
+                              : Icons.location_off_outlined,
+                          color: Colors.greenAccent,
+                        ),
+                        title: const Text(
+                          "Compartir mi ubicación en vivo",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Apagado por defecto. Si lo activas, solo te ven "
+                          "en el mapa quienes te siguen mutuamente (nunca "
+                          "toda la app) y con ~30 s de retraso.",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onChanged: _toggleShareLocation,
                       ),
                       SwitchListTile(
                         value: _bgTrackingEnabled,
@@ -6695,6 +6762,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       if (_showBikeParkings && _bikeParkings.isNotEmpty) {
         await _updateBikeParkingsLayer();
       }
+      if (_lastCyclists.isNotEmpty) await _updateCyclistsLayer(_lastCyclists);
       if (_showBicimetro) await _updateBicimetroLayer();
       if (_showBikeServices && _bikeServices.isNotEmpty) {
         await _updateBikeServicesLayer();
@@ -7049,9 +7117,137 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
+  /// Dibuja en el mapa a los demás ciclistas "en línea" (actividad en los
+  /// últimos 5 min), con el mismo ícono de bici que usa el propio usuario,
+  /// orientado según su rumbo (heading).
+  ///
+  /// Solo llegan ciclistas con los que hay follow mutuo: [PresenceService]
+  /// solo escribe si el usuario activó "Compartir mi ubicación en vivo"
+  /// (opt-in, apagado por defecto) y la RLS de `user_locations` en Supabase
+  /// solo deja leer tu propia fila o la de alguien con follow mutuo — ni
+  /// aunque se manipule el cliente se puede ver la ubicación de un
+  /// desconocido.
   Future<void> _updateCyclistsLayer(
     List<Map<String, dynamic>> cyclists,
-  ) async {}
+  ) async {
+    if (mapboxMap == null || !_styleIsLoaded) return;
+    final style = mapboxMap!.style;
+    try {
+      if (await style.styleLayerExists(_cyclistsLayerId)) {
+        await style.removeStyleLayer(_cyclistsLayerId);
+      }
+      if (await style.styleSourceExists(_cyclistsSourceId)) {
+        await style.removeStyleSource(_cyclistsSourceId);
+      }
+      if (cyclists.isEmpty) return;
+      await _ensureCyclistsIcon();
+
+      final features = cyclists
+          .map((c) {
+            final lat = (c['lat'] as num?)?.toDouble();
+            final lng = (c['lng'] as num?)?.toDouble();
+            if (lat == null || lng == null) return null;
+            return {
+              'type': 'Feature',
+              'properties': {
+                'user_id': c['user_id'],
+                'username': (c['username'] as String?)?.trim().isNotEmpty ==
+                        true
+                    ? c['username']
+                    : 'Ciclista',
+                'speed_kmh': (c['speed_kmh'] as num?)?.toDouble() ?? 0,
+                'heading': (c['heading'] as num?)?.toDouble() ?? 0,
+              },
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [lng, lat],
+              },
+            };
+          })
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      if (features.isEmpty) return;
+
+      final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
+      await style.addSource(GeoJsonSource(id: _cyclistsSourceId, data: fc));
+      await style.addLayer(
+        SymbolLayer(
+          id: _cyclistsLayerId,
+          sourceId: _cyclistsSourceId,
+          iconImage: _cyclistsIconImageId,
+          iconSize: 0.4,
+          iconRotationAlignment: IconRotationAlignment.MAP,
+          iconRotateExpression: const <Object>['get', 'heading'],
+          // Ciclistas en movimiento: mejor mostrarlos siempre a que se
+          // oculten entre ellos por colisión de íconos.
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ Error actualizando ciclistas activos: $e');
+    }
+  }
+
+  void _showCyclistModal(Map<String, dynamic> props) {
+    final name = props['username']?.toString() ?? 'Ciclista';
+    final speed = (props['speed_kmh'] as num?)?.toDouble() ?? 0;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0E0E18),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 30,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: Color(0xFF7CF0BC),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.directions_bike_rounded,
+                  color: Colors.black, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600)),
+                  Text(
+                    speed > 1
+                        ? '${speed.toStringAsFixed(0)} km/h · pedaleando ahora'
+                        : 'Pedaleando ahora',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', color: Colors.grey, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   //  ESTACIONAMIENTOS DE BICI
