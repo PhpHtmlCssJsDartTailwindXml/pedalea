@@ -21,7 +21,13 @@ import 'package:geolocator/geolocator.dart' as geo;
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show
+        Supabase,
+        RealtimeChannel,
+        PostgresChangeEvent,
+        PostgresChangeFilter,
+        PostgresChangeFilterType;
 import 'dart:convert';
 import 'dart:async';
 import 'dart:typed_data';
@@ -42,6 +48,7 @@ import '../services/notification_service.dart';
 import '../services/ride_stats_service.dart';
 import '../services/ride_stats_sync_service.dart';
 import '../services/ride_heat_service.dart';
+import '../services/dm_service.dart';
 import '../services/plus_prefs_service.dart';
 import '../services/subscription_service.dart';
 import '../services/poi_photos_service.dart';
@@ -81,6 +88,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
   MapboxMap? mapboxMap;
   StreamSubscription<geo.Position>? _positionStreamSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _cyclistsSubscription;
+
+  // ── Botón de mensajes (junto al de perfil) con contador de no leídos ──────
+  int _dmUnread = 0;
+  RealtimeChannel? _dmBadgeChannel;
   StreamSubscription<List<Map<String, dynamic>>>? _eventsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _alertsSubscription;
 
@@ -671,6 +682,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
     _currentStyle = _resolveMapStyle();
     PlusPrefsService.mapStyle.addListener(_onMapStylePrefChanged);
+    _loadDmUnread();
+    _subscribeDmBadge();
     _checkLocationPermission();
     _loadMyUsername();
     _loadFallDetectionPref();
@@ -845,6 +858,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _diagCompassSub?.cancel();
     _cyclistsSubscription?.cancel();
     _cyclistsDelayTimer?.cancel();
+    _dmBadgeChannel?.unsubscribe();
     _eventsSubscription?.cancel();
     _alertsSubscription?.cancel();
     _connectivitySub?.cancel();
@@ -5151,6 +5165,32 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
+  /// Refresca el contador de mensajes directos no leídos (botón junto al de
+  /// perfil, arriba del mapa).
+  Future<void> _loadDmUnread() async {
+    final n = await DmService.instance.totalUnread();
+    if (mounted) setState(() => _dmUnread = n);
+  }
+
+  void _subscribeDmBadge() {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null || _dmBadgeChannel != null) return;
+    _dmBadgeChannel = Supabase.instance.client
+        .channel('dm-badge-$uid')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'dm_messages',
+          filter: PostgresChangeFilter(
+            column: 'recipient_id',
+            value: uid,
+            type: PostgresChangeFilterType.eq,
+          ),
+          callback: (_) => _loadDmUnread(),
+        )
+        .subscribe();
+  }
+
   /// Activa/desactiva mostrar tu posición en vivo a tus seguidores mutuos.
   /// Al apagarlo, además de dejar de subir ubicaciones, borra la fila para
   /// que quien te esté viendo deje de verte de inmediato.
@@ -6523,6 +6563,61 @@ class _MapPageState extends State<MapPage> with RouteAware {
                     ),
                     onPressed: _toggleFollowing,
                     tooltip: 'Seguir ubicación',
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        decoration: _dayNightBox(radius: 30),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.forum_rounded,
+                            color: _isDayMode
+                                ? const Color(0xFF00A86B)
+                                : Colors.greenAccent,
+                            size: 22,
+                          ),
+                          tooltip: 'Mensajes',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const MessagesPage(),
+                              ),
+                            ).then((_) => _loadDmUnread());
+                          },
+                        ),
+                      ),
+                      if (_dmUnread > 0)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: IgnorePointer(
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFF4D6D),
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                  minWidth: 17, minHeight: 17),
+                              child: Text(
+                                _dmUnread > 9 ? '9+' : '$_dmUnread',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 _ProfileButton(isDayMode: _isDayMode),
