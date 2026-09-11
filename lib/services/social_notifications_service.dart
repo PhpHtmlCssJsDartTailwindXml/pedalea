@@ -84,6 +84,16 @@ class SocialNotificationsService {
               type: PostgresChangeFilterType.eq),
           callback: _onComment,
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'post_comments',
+          filter: PostgresChangeFilter(
+              column: 'reply_to_user_id',
+              value: me,
+              type: PostgresChangeFilterType.eq),
+          callback: _onReply,
+        )
         .subscribe();
   }
 
@@ -140,6 +150,8 @@ class SocialNotificationsService {
 
   Future<void> _onComment(PostgresChangePayload p) async {
     final row = p.newRecord;
+    // Las respuestas las maneja _onReply (para no duplicar la notificación).
+    if (row['parent_id'] != null) return;
     final who = row['user_id'] as String?;
     final me = _sb.auth.currentUser?.id;
     if (who == null || who == me) return;
@@ -149,6 +161,21 @@ class SocialNotificationsService {
       id: 300101,
       title: 'Nuevo comentario en tu momento',
       body: body.isEmpty ? '$name comentó tu momento' : '$name: $body',
+      payload: 'post_activity|$me',
+    );
+  }
+
+  Future<void> _onReply(PostgresChangePayload p) async {
+    final row = p.newRecord;
+    final who = row['user_id'] as String?;
+    final me = _sb.auth.currentUser?.id;
+    if (who == null || who == me) return;
+    final name = await _name(who);
+    final body = (row['body'] as String?)?.trim() ?? '';
+    await NotificationService.instance.showSocial(
+      id: 300102,
+      title: '$name respondió tu comentario',
+      body: body.isEmpty ? 'Toca para ver' : body,
       payload: 'post_activity|$me',
     );
   }

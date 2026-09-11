@@ -354,15 +354,24 @@ class SocialService {
     try {
       final rows = await _sb
           .from('post_comments')
-          .select('id, user_id, body, created_at')
+          .select(
+              'id, user_id, body, created_at, parent_id, reply_to_user_id')
           .eq('post_id', postId)
           .order('created_at', ascending: true);
       final list = rows.map((r) => Map<String, dynamic>.from(r)).toList();
       if (list.isEmpty) return [];
-      final profs = await _profilesByIds(
-          list.map((r) => r['user_id'] as String).toSet().toList());
+      final ids = <String>{
+        for (final r in list) ...[
+          r['user_id'] as String,
+          if (r['reply_to_user_id'] != null) r['reply_to_user_id'] as String,
+        ]
+      }.toList();
+      final profs = await _profilesByIds(ids);
       for (final r in list) {
         r['author'] = profs[r['user_id']] ?? {'id': r['user_id']};
+        if (r['reply_to_user_id'] != null) {
+          r['reply_to'] = profs[r['reply_to_user_id']];
+        }
       }
       return list;
     } catch (e) {
@@ -375,15 +384,22 @@ class SocialService {
     required String postId,
     required String authorId,
     required String body,
+    String? parentId,
   }) async {
     final me = _uid;
     if (me == null) return null;
-    final row = await _sb.from('post_comments').insert({
+    final data = <String, dynamic>{
       'post_id': postId,
       'user_id': me,
       'post_author_id': authorId,
       'body': body.trim(),
-    }).select('id, user_id, body, created_at').single();
+    };
+    if (parentId != null) data['parent_id'] = parentId;
+    final row = await _sb
+        .from('post_comments')
+        .insert(data)
+        .select('id, user_id, body, created_at, parent_id, reply_to_user_id')
+        .single();
     return Map<String, dynamic>.from(row);
   }
 
