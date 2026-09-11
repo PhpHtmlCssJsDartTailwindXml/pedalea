@@ -61,6 +61,7 @@ import '../pages/rider_ranking_page.dart';
 import '../pages/route_planner_page.dart';
 import '../pages/stats_page.dart';
 import '../pages/moments_page.dart';
+import '../pages/messages_page.dart';
 import '../pages/settings_page.dart';
 import '../core/glass.dart';
 import '../core/constants.dart';
@@ -5566,6 +5567,38 @@ class _MapPageState extends State<MapPage> with RouteAware {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const MomentsPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: _drawerIconTile(
+                          Icons.forum_rounded,
+                          color: const Color(0xFF4FC3F7),
+                        ),
+                        title: const Text(
+                          "Mensajes",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Chat con ciclistas que sigues mutuamente",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: Colors.white38, size: 20),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MessagesPage(),
                             ),
                           );
                         },

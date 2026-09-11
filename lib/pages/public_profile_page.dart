@@ -8,6 +8,7 @@ import '../widgets/plus_medal.dart';
 import '../widgets/post_card.dart';
 import '../widgets/comments_sheet.dart';
 import 'profile_page.dart';
+import 'dm_thread_page.dart';
 
 /// Perfil público de otro ciclista: datos, seguir (con aprobación), contadores
 /// y cuadrícula de momentos. Se abre al tocar el autor de un momento.
@@ -126,6 +127,22 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
               _load();
             },
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openDm() {
+    final p = _profile;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DmThreadPage(
+          otherUserId: widget.userId,
+          otherName: _displayName(),
+          otherAvatar: p?['avatar_url'] as String?,
+          otherIsPlus: p?['is_plus'] == true,
+          otherBadgeVariant: (p?['plus_badge_variant'] as num?)?.toInt() ?? 0,
         ),
       ),
     );
@@ -285,26 +302,52 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           ],
         ),
         const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: _busy ? null : _onFollowButton,
-            style: OutlinedButton.styleFrom(
-              backgroundColor: btn.filled ? btn.color : Colors.transparent,
-              side: BorderSide(color: btn.filled ? btn.color : Colors.white24),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(
-              btn.label,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700,
-                color: btn.filled ? Colors.black : Colors.white,
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _busy ? null : _onFollowButton,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor:
+                      btn.filled ? btn.color : Colors.transparent,
+                  side: BorderSide(
+                      color: btn.filled ? btn.color : Colors.white24),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  btn.label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    color: btn.filled ? Colors.black : Colors.white,
+                  ),
+                ),
               ),
             ),
-          ),
+            if (!_isMe && _mutual) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openDm,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF69FF47)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded,
+                      size: 16, color: Color(0xFF69FF47)),
+                  label: const Text('Mensaje',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF69FF47))),
+                ),
+              ),
+            ],
+          ],
         ),
         if (!_isMe && _rel.incoming == 'pending') ...[
           const SizedBox(height: 8),

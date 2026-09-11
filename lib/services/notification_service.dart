@@ -6,6 +6,7 @@ import '../core/app_navigator.dart';
 import '../pages/event_chat_page.dart';
 import '../pages/follow_requests_page.dart';
 import '../pages/public_profile_page.dart';
+import '../pages/dm_thread_page.dart';
 
 /// Servicio centralizado de notificaciones locales (alertas push).
 ///
@@ -250,6 +251,13 @@ class NotificationService {
       ));
     } else if (payload == 'follow_req') {
       nav.push(MaterialPageRoute(builder: (_) => const FollowRequestsPage()));
+    } else if (payload.startsWith('dm|') && parts.length >= 3) {
+      nav.push(MaterialPageRoute(
+        builder: (_) => DmThreadPage(
+          otherUserId: parts[1],
+          otherName: parts.sublist(2).join('|'),
+        ),
+      ));
     } else if ((payload.startsWith('follow_accept|') ||
             payload.startsWith('post_activity|')) &&
         parts.length >= 2) {

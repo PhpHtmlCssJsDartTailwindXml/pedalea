@@ -813,7 +813,7 @@ class _AnimatedKm extends StatelessWidget {
       tween: Tween(begin: 0, end: value),
       duration: const Duration(milliseconds: 900),
       curve: Curves.easeOutCubic,
-      builder: (_, v, __) => Row(
+      builder: (_, v, _) => Row(
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
@@ -887,7 +887,7 @@ class _Bar extends StatelessWidget {
             tween: Tween(begin: 0, end: heightFactor),
             duration: const Duration(milliseconds: 700),
             curve: Curves.easeOutCubic,
-            builder: (_, v, __) => FractionallySizedBox(
+            builder: (_, v, _) => FractionallySizedBox(
               alignment: Alignment.bottomCenter,
               heightFactor: v <= 0.02 ? 0.02 : v,
               child: Container(

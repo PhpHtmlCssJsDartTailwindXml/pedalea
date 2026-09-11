@@ -28,6 +28,9 @@ class ChatNotificationsService {
   /// mensajes del chat que ya está viendo.
   static String? activeEventId;
 
+  /// id de la otra persona cuya conversación directa está abierta ahora.
+  static String? activeDmUserId;
+
   final Map<String, String> _eventTitles = {};
   final Map<String, String> _senderNames = {};
 
@@ -61,7 +64,38 @@ class ChatNotificationsService {
           table: 'event_messages',
           callback: _onInsert,
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'dm_messages',
+          filter: PostgresChangeFilter(
+            column: 'recipient_id',
+            value: uid,
+            type: PostgresChangeFilterType.eq,
+          ),
+          callback: _onDmInsert,
+        )
         .subscribe();
+  }
+
+  Future<void> _onDmInsert(PostgresChangePayload payload) async {
+    try {
+      final row = payload.newRecord;
+      final uid = _sb.auth.currentUser?.id;
+      final senderId = row['sender_id'] as String?;
+      if (uid == null || senderId == null || senderId == uid) return;
+      if (activeDmUserId == senderId) return; // ya está viendo ese chat
+      final name = await _senderName(senderId);
+      final text = (row['body'] as String?)?.trim() ?? '';
+      await NotificationService.instance.showSocial(
+        id: 310000 + (senderId.hashCode.abs() % 80000),
+        title: name,
+        body: text.isEmpty ? 'Te envió un mensaje' : text,
+        payload: 'dm|$senderId|$name',
+      );
+    } catch (e) {
+      debugPrint('ChatNotificationsService._onDmInsert: $e');
+    }
   }
 
   void _unsubscribe() {
