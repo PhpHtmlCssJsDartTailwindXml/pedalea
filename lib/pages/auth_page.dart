@@ -745,24 +745,368 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
     );
   }
 
-  static const _kCarouselImages = [
-    'logos/imagen1.png',
-    'logos/imagen2.png',
-    'logos/imagen3.png',
+  // ── Carrusel: foto real de ciclismo + tarjeta de la app flotando encima ──
+  // Fotos en assets/carousel/1.jpg … 4.jpg (ver LEEME.txt en esa carpeta).
+  // Si falta una, se usa un fondo de respaldo para no mostrar nada roto.
+  static const _kSlides = <({String image, String title, String subtitle})>[
+    (
+      image: 'assets/carousel/1.jpg',
+      title: 'Ciclovías de todo Chile en tu mapa',
+      subtitle: 'Rutas, estacionamientos y talleres cerca de ti',
+    ),
+    (
+      image: 'assets/carousel/2.jpg',
+      title: 'Sal a pedalear con tu comunidad',
+      subtitle: 'Únete a salidas grupales o crea la tuya',
+    ),
+    (
+      image: 'assets/carousel/3.jpg',
+      title: 'Pedalea seguro',
+      subtitle: 'Alertas en vivo y SOS a un toque',
+    ),
+    (
+      image: 'assets/carousel/4.jpg',
+      title: 'Mide tu progreso',
+      subtitle: 'Km, rachas, logros y rankings',
+    ),
   ];
 
-  static const _kCarouselCaptions = [
-    'Ciclovías a tu alcance.',
-    'Tu progreso, tu comunidad.',
-    'Próximos eventos cerca de ti.',
-  ];
+  Widget _slideFallback(int i) {
+    if (i == 0) {
+      return Image.asset(
+        'assets/branding/pedalea-ciclovia-foto.png',
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _slideGradient(i),
+      );
+    }
+    return _slideGradient(i);
+  }
+
+  Widget _slideGradient(int i) {
+    const palettes = [
+      [Color(0xFF1E5C41), Color(0xFF0B1A14)],
+      [Color(0xFF6B3A12), Color(0xFF150D06)],
+      [Color(0xFF14284A), Color(0xFF070B14)],
+      [Color(0xFF3B1E5C), Color(0xFF0E0716)],
+    ];
+    final p = palettes[i % palettes.length];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: p,
+        ),
+      ),
+      child: CustomPaint(
+        painter: LoopBikeLanePainter(
+          color: Colors.white.withOpacity(0.08),
+          progress: 1,
+          strokeWidth: 3,
+        ),
+      ),
+    );
+  }
+
+  // Tarjetas de ejemplo (diseño real de la app, datos ilustrativos).
+  Widget _mockCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E0E18).withOpacity(0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.45),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _mockIcon(IconData icon, Color color) => Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color, Color.lerp(color, Colors.black, 0.3)!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Icon(icon, color: Colors.white, size: 21),
+      );
+
+  Widget _mockTexts(String title, String sub) => Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700)),
+            Text(sub,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.55),
+                    fontSize: 11.5)),
+          ],
+        ),
+      );
+
+  Widget _mockPill(String text, Color color, {IconData? icon}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 13, color: Colors.black),
+              const SizedBox(width: 3),
+            ],
+            Text(text,
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.black,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700)),
+          ],
+        ),
+      );
+
+  Widget _slideCard(int i) {
+    switch (i) {
+      case 0:
+        return _mockCard(
+          child: Row(children: [
+            _mockIcon(Icons.route_rounded, const Color(0xFF2E9C5A)),
+            const SizedBox(width: 10),
+            _mockTexts('Ciclovía Pocuro', '3,2 km · Providencia'),
+            const SizedBox(width: 8),
+            _mockPill('Ir aquí', const Color(0xFF69FF47),
+                icon: Icons.navigation_rounded),
+          ]),
+        );
+      case 1:
+        return _mockCard(
+          child: Row(children: [
+            Container(
+              width: 46,
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.4)),
+              ),
+              child: const Column(children: [
+                Text('SÁB',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.orange,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700)),
+                Text('14',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1)),
+              ]),
+            ),
+            const SizedBox(width: 10),
+            _mockTexts('Rodada al San Cristóbal', '10:00 · 12 ciclistas'),
+            const SizedBox(width: 8),
+            _mockPill('Unirme', const Color(0xFF69FF47),
+                icon: Icons.add_rounded),
+          ]),
+        );
+      case 2:
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: _mockCard(
+                child: Row(children: [
+                  _mockIcon(Icons.warning_rounded, Colors.red),
+                  const SizedBox(width: 10),
+                  _mockTexts('Bache en ciclovía', 'hace 5 min · 👍 8'),
+                ]),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              width: 54,
+              height: 54,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFC62828),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.45), blurRadius: 16),
+                ],
+              ),
+              child: const Text('SOS',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ],
+        );
+      default:
+        const bars = [0.3, 0.55, 0.2, 0.8, 0.6, 1.0, 0.7];
+        return _mockCard(
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: '42',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800)),
+                      TextSpan(
+                          text: ' km esta semana',
+                          style: TextStyle(
+                              color: Colors.white60, fontSize: 11.5)),
+                    ]),
+                    style: TextStyle(fontFamily: 'Poppins'),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text('🔥 5 días seguidos',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.orangeAccent,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 44,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (int b = 0; b < bars.length; b++)
+                    Container(
+                      width: 7,
+                      height: 44 * bars[b],
+                      margin: const EdgeInsets.only(left: 4),
+                      decoration: BoxDecoration(
+                        color: b == bars.length - 1
+                            ? const Color(0xFF69FF47)
+                            : const Color(0xFF69FF47).withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ]),
+        );
+    }
+  }
+
+  Widget _buildSlide(int i) {
+    final slide = _kSlides[i];
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            slide.image,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _slideFallback(i),
+          ),
+          // Degradado para que el texto y la tarjeta se lean sobre la foto.
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0x33000000),
+                  Color(0x00000000),
+                  Color(0x99000000),
+                  Color(0xE6000000),
+                ],
+                stops: [0.0, 0.35, 0.68, 1.0],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Spacer(),
+                _slideCard(i),
+                const SizedBox(height: 20),
+                Text(
+                  slide.title,
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    color: Colors.white,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  slide.subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Sora',
+                    color: Colors.white.withOpacity(0.75),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildImageCarousel() {
+    final n = _kSlides.length;
     void goTo(int delta) {
       setState(() {
-        _carouselPage =
-            (_carouselPage + delta) % _kCarouselImages.length;
-        if (_carouselPage < 0) _carouselPage += _kCarouselImages.length;
+        _carouselPage = (_carouselPage + delta) % n;
+        if (_carouselPage < 0) _carouselPage += n;
       });
     }
 
@@ -777,40 +1121,19 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
               goTo(velocity < 0 ? 1 : -1);
             },
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 380),
+              duration: const Duration(milliseconds: 420),
               switchInCurve: Curves.easeOut,
               switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, animation) =>
-                  FadeTransition(opacity: animation, child: child),
-              child: Column(
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween(begin: 0.97, end: 1.0).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: KeyedSubtree(
                 key: ValueKey(_carouselPage),
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: AspectRatio(
-                        aspectRatio: 1220 / 2712,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(40),
-                          child: Image.asset(
-                            _kCarouselImages[_carouselPage],
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    _kCarouselCaptions[_carouselPage],
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Sora',
-                      color: _pageFg,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                child: _buildSlide(_carouselPage),
               ),
             ),
           ),
@@ -818,7 +1141,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_kCarouselImages.length, (i) {
+          children: List.generate(n, (i) {
             final active = i == _carouselPage;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 250),
@@ -826,7 +1149,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
               width: active ? 20 : 6,
               height: 6,
               decoration: BoxDecoration(
-                color: active ? _kGreen : Colors.white24,
+                color: active ? _kGreen : _pageFg.withOpacity(0.25),
                 borderRadius: BorderRadius.circular(3),
               ),
             );

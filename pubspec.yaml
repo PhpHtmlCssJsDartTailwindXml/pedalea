@@ -103,9 +103,7 @@ flutter:
     - assets/branding/google_logo.svg
     - logos/pedalea-login-bg-camino2.png
     - logos/pedalea-icon-login-176.png
-    - logos/imagen1.png
-    - logos/imagen2.png
-    - logos/imagen3.png
+    - assets/carousel/
     - assets/data/ciclorecreovia.json
     - assets/data/ciclovias_chile.json
     - assets/data/bike_services_chile.json
