@@ -1,7 +1,7 @@
 name: pedalea
 description: "Pedalea: ciclovías de la Región Metropolitana."
 publish_to: 'none'
-version: 1.0.0+19
+version: 1.0.0+20
 
 environment:
   sdk: ^3.11.3
@@ -45,6 +45,8 @@ dependencies:
 
   # Actualización obligatoria desde Play Store (in-app update)
   in_app_update: ^4.2.3
+  record: ^6.2.1
+  audioplayers: ^6.7.1
 
 dev_dependencies:
   flutter_test:

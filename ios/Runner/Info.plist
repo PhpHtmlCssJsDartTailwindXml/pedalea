@@ -68,5 +68,11 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>Pedalea usa el micrófono para grabar mensajes de voz en el chat.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Pedalea accede a tus fotos para enviarlas en mensajes y publicaciones.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>Pedalea usa la cámara para tomar fotos de alertas, momentos y mensajes.</string>
 	</dict>
 </plist>

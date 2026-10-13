@@ -87,10 +87,16 @@ class ChatNotificationsService {
       if (activeDmUserId == senderId) return; // ya está viendo ese chat
       final name = await _senderName(senderId);
       final text = (row['body'] as String?)?.trim() ?? '';
+      final kind = row['kind'] as String? ?? 'text';
+      final body = switch (kind) {
+        'image' => text.isEmpty ? '📷 Foto' : '📷 $text',
+        'audio' => '🎤 Mensaje de voz',
+        _ => text.isEmpty ? 'Te envió un mensaje' : text,
+      };
       await NotificationService.instance.showSocial(
         id: 310000 + (senderId.hashCode.abs() % 80000),
         title: name,
-        body: text.isEmpty ? 'Te envió un mensaje' : text,
+        body: body,
         payload: 'dm|$senderId|$name',
       );
     } catch (e) {

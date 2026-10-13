@@ -5237,22 +5237,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
         'increment_total_km',
         params: {'uid': uid, 'km_delta': km},
       );
-    } catch (_) {
-      // Si el RPC no existe, actualizamos con fetch+update
-      try {
-        final profile = await Supabase.instance.client
-            .from('profiles')
-            .select('total_km')
-            .eq('id', uid)
-            .maybeSingle();
-        final current = (profile?['total_km'] as num?)?.toDouble() ?? 0.0;
-        await Supabase.instance.client
-            .from('profiles')
-            .update({'total_km': current + km})
-            .eq('id', uid);
-      } catch (e) {
-        debugPrint('Error guardando km: $e');
-      }
+    } catch (e) {
+      // total_km solo se modifica vía el RPC (la BD bloquea el update directo).
+      debugPrint('Error guardando km: $e');
     }
     _maybeAutofillCommune(uid); // sin await: no bloquea el conteo
     _checkAchievementsAndNotify();
