@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/glass.dart';
 import '../services/social_service.dart';
-import '../services/co2_service.dart';
+import '../widgets/rider_activity.dart';
 import '../widgets/plus_medal.dart';
 import '../widgets/post_card.dart';
 import '../widgets/comments_sheet.dart';
@@ -29,6 +29,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   List<Map<String, dynamic>> _posts = [];
   bool _loading = true;
   bool _busy = false;
+  RiderActivity? _activity;
 
   String get _me => Supabase.instance.client.auth.currentUser?.id ?? '';
   bool get _isMe => _me == widget.userId;
@@ -44,6 +45,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   }
 
   Future<void> _load() async {
+    RiderActivity.load(widget.userId).then((a) {
+      if (mounted) setState(() => _activity = a);
+    });
     final results = await Future.wait([
       _social.profile(widget.userId),
       _social.relationWith(widget.userId),
@@ -159,66 +163,556 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     ));
   }
 
+
+  static const _accent = Color(0xFF69FF47);
+  static const _heroMid = Color(0xFF1E5C41);
+
   @override
   Widget build(BuildContext context) {
     final name = _displayName();
     return Scaffold(
       backgroundColor: kBgDark,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(name,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontWeight: FontWeight.w700)),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Colors.greenAccent))
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                children: [
-                  _header(name),
-                  const SizedBox(height: 18),
-                  if (_posts.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 40),
-                      child: Center(
-                        child: Text('Todavía no publica momentos',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.white.withOpacity(0.4))),
-                      ),
-                    )
-                  else
-                    GridView.count(
-                      crossAxisCount: 3,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 3,
-                      crossAxisSpacing: 3,
-                      children: [
-                        for (final p in _posts)
-                          GestureDetector(
-                            onTap: () => _openPost(p),
-                            child: CachedNetworkImage(
-                              imageUrl: p['image_url'] as String,
-                              fit: BoxFit.cover,
-                              placeholder: (_, _) =>
-                                  Container(color: Colors.white10),
-                              errorWidget: (_, _, _) =>
-                                  Container(color: Colors.white10),
+      body: Container(
+        decoration: kPageGradient,
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _topBar(name),
+              Expanded(
+                child: _loading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: _accent, strokeWidth: 2))
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        color: _accent,
+                        backgroundColor: const Color(0xFF12121C),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                          children: [
+                            _hero(name),
+                            const SizedBox(height: 12),
+                            _actions(),
+                            if (!_isMe && _rel.incoming == 'pending') ...[
+                              const SizedBox(height: 12),
+                              _requestCard(name),
+                            ],
+                            const SizedBox(height: 22),
+                            activitySectionLabel('ACTIVIDAD', _accent),
+                            const SizedBox(height: 10),
+                            RiderActivityCard(data: _activity, accent: _accent),
+                            const SizedBox(height: 12),
+                            RiderBadgesRow(data: _activity),
+                            const SizedBox(height: 26),
+                            activitySectionLabel(
+                              'MOMENTOS',
+                              _accent,
+                              trailing: '${_posts.length}',
                             ),
-                          ),
-                      ],
+                            const SizedBox(height: 10),
+                            _momentsGrid(name),
+                          ],
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  BoxDecoration _pillBox() => BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.14)),
+      );
+
+  Widget _topBar(String name) {
+    final username = (_profile?['username'] as String?)?.trim() ?? '';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Row(
+        children: [
+          Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => Navigator.pop(context),
+              child: Ink(
+                width: 48,
+                height: 48,
+                decoration: _pillBox(),
+                child: const Icon(Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white, size: 18),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: _pillBox(),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_rounded, color: _accent, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      username.isNotEmpty ? '@$username' : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
+                  ),
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white70, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hero(String name) {
+    final avatar = (_profile?['avatar_url'] as String?) ?? '';
+    final username = (_profile?['username'] as String?)?.trim() ?? '';
+    final commune = (_profile?['commune'] as String?)?.trim() ?? '';
+    final isPlus = _profile?['is_plus'] == true;
+    final variant = (_profile?['plus_badge_variant'] as num?)?.toInt() ?? 0;
+    final since = _activity?.memberSince;
+    final ringColor = isPlus ? Colors.amber : _accent;
+
+    Widget stat(String value, String label) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                Text(value,
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        height: 1.1)),
+                const SizedBox(height: 2),
+                Text(label,
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 11)),
+              ],
+            ),
+          ),
+        );
+    Widget divider() => Container(
+        width: 1, height: 28, color: Colors.white.withOpacity(0.12));
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2F8F63), _heroMid, Color(0xFF153F2E)],
+          stops: [0.0, 0.55, 1.0],
+        ),
+        border: Border.all(color: const Color(0xFF7CF0BC).withOpacity(0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2F8F63).withOpacity(0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -40,
+              top: -40,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: Colors.white.withOpacity(0.07), width: 16),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 84,
+                            height: 84,
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: ringColor,
+                              boxShadow: [
+                                BoxShadow(
+                                    color: ringColor.withOpacity(0.4),
+                                    blurRadius: 16),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              backgroundColor: const Color(0xFF153F2E),
+                              backgroundImage: avatar.isNotEmpty
+                                  ? CachedNetworkImageProvider(avatar)
+                                  : null,
+                              child: avatar.isEmpty
+                                  ? Text(name.substring(0, 1).toUpperCase(),
+                                      style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: Color(0xFF7CF0BC),
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.bold))
+                                  : null,
+                            ),
+                          ),
+                          if (isPlus)
+                            Positioned(
+                              top: -4,
+                              left: -4,
+                              child: PlusMedal(
+                                  size: 26,
+                                  variant: variant,
+                                  ringColor: _heroMid),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                            ),
+                            if (username.isNotEmpty)
+                              Text(
+                                '@$username',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                if (isPlus)
+                                  _heroChip(Icons.workspace_premium_rounded,
+                                      'Plus'),
+                                if (commune.isNotEmpty)
+                                  _heroChip(
+                                      Icons.location_on_rounded, commune),
+                                if (since != null)
+                                  _heroChip(Icons.calendar_month_rounded,
+                                      'Desde ${memberSinceLabel(since)}'),
+                                if (!_isMe && _mutual)
+                                  _heroChip(Icons.sync_alt_rounded,
+                                      'Se siguen'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        stat('${_posts.length}', 'Momentos'),
+                        divider(),
+                        stat('${_counts.followers}', 'Seguidores'),
+                        divider(),
+                        stat('${_counts.following}', 'Siguiendo'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pillButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onTap,
+    required bool filled,
+    Color color = _accent,
+  }) {
+    return SizedBox(
+      height: 46,
+      child: Material(
+        color: filled ? color : Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(23),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(23),
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(23),
+              border: Border.all(
+                color: filled ? color : Colors.white.withOpacity(0.14),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_busy && onTap == null)
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: filled ? Colors.black : Colors.white),
+                  )
+                else
+                  Icon(icon,
+                      size: 18, color: filled ? Colors.black : Colors.white),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: filled ? Colors.black : Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actions() {
+    final btn = _followBtn;
+    final icon = _isMe
+        ? Icons.edit_rounded
+        : switch (_rel.outgoing) {
+            'accepted' => Icons.check_rounded,
+            'pending' => Icons.hourglass_top_rounded,
+            _ => Icons.person_add_alt_1_rounded,
+          };
+    return Row(
+      children: [
+        Expanded(
+          child: _pillButton(
+            label: btn.label,
+            icon: icon,
+            filled: btn.filled,
+            onTap: _busy ? null : _onFollowButton,
+          ),
+        ),
+        if (!_isMe && _mutual) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: _pillButton(
+              label: 'Mensaje',
+              icon: Icons.forum_rounded,
+              filled: false,
+              onTap: _openDm,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _requestCard(String name) {
+    Future<void> act(Future<void> Function() f, {bool counts = false}) async {
+      setState(() => _busy = true);
+      await f();
+      _rel = await _social.relationWith(widget.userId);
+      if (counts) _counts = await _social.counts(widget.userId);
+      if (mounted) setState(() => _busy = false);
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.group_add_rounded,
+                  color: Colors.amber, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$name quiere seguirte',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _pillButton(
+                  label: 'Aceptar',
+                  icon: Icons.check_rounded,
+                  filled: true,
+                  color: Colors.amber,
+                  onTap: _busy
+                      ? null
+                      : () => act(() => _social.acceptRequest(widget.userId),
+                          counts: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _pillButton(
+                  label: 'Rechazar',
+                  icon: Icons.close_rounded,
+                  filled: false,
+                  onTap: _busy
+                      ? null
+                      : () => act(() => _social.removeFollower(widget.userId)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _momentsGrid(String name) {
+    if (_posts.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.07)),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.photo_camera_back_rounded,
+                color: Colors.white.withOpacity(0.3), size: 32),
+            const SizedBox(height: 8),
+            Text(
+              _isMe
+                  ? 'Aún no publicas momentos'
+                  : '$name aún no publica momentos',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white.withOpacity(0.45),
+                  fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 4,
+      crossAxisSpacing: 4,
+      children: [
+        for (final p in _posts)
+          GestureDetector(
+            onTap: () => _openPost(p),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: p['image_url'] as String,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => Container(color: Colors.white10),
+                errorWidget: (_, _, _) => Container(color: Colors.white10),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -228,207 +722,5 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     if (f != null && f.isNotEmpty) return f;
     if (u != null && u.isNotEmpty) return u;
     return 'Ciclista';
-  }
-
-  Widget _header(String name) {
-    final avatar = (_profile?['avatar_url'] as String?) ?? '';
-    final username = (_profile?['username'] as String?)?.trim() ?? '';
-    final commune = (_profile?['commune'] as String?)?.trim() ?? '';
-    final km = (_profile?['total_km'] as num?)?.toDouble() ?? 0;
-    final isPlus = _profile?['is_plus'] == true;
-    final btn = _followBtn;
-
-    return Column(
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              radius: 44,
-              backgroundColor: Colors.white12,
-              backgroundImage:
-                  avatar.isNotEmpty ? CachedNetworkImageProvider(avatar) : null,
-              child: avatar.isEmpty
-                  ? Text(name.substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 30))
-                  : null,
-            ),
-            if (isPlus)
-              Positioned(
-                bottom: -2,
-                right: -2,
-                child: PlusMedal(
-                  size: 26,
-                  variant:
-                      (_profile?['plus_badge_variant'] as num?)?.toInt() ?? 0,
-                  ringColor: kBgDark,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(name,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontSize: 19,
-                fontWeight: FontWeight.w700)),
-        if (username.isNotEmpty)
-          Text('@$username',
-              style: const TextStyle(
-                  fontFamily: 'Poppins', color: Colors.white38, fontSize: 13)),
-        const SizedBox(height: 6),
-        Text(
-          [
-            if (commune.isNotEmpty) commune,
-            '${km.toStringAsFixed(0)} km',
-            '${Co2Service.format(Co2Service.savedKg(km))} CO₂',
-          ].join('  ·  '),
-          style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.55),
-              fontSize: 12),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _stat('${_posts.length}', 'momentos'),
-            _stat('${_counts.followers}', 'seguidores'),
-            _stat('${_counts.following}', 'siguiendo'),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _busy ? null : _onFollowButton,
-                style: OutlinedButton.styleFrom(
-                  backgroundColor:
-                      btn.filled ? btn.color : Colors.transparent,
-                  side: BorderSide(
-                      color: btn.filled ? btn.color : Colors.white24),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text(
-                  btn.label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    color: btn.filled ? Colors.black : Colors.white,
-                  ),
-                ),
-              ),
-            ),
-            if (!_isMe && _mutual) ...[
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _openDm,
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF69FF47)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.chat_bubble_outline_rounded,
-                      size: 16, color: Color(0xFF69FF47)),
-                  label: const Text('Mensaje',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF69FF47))),
-                ),
-              ),
-            ],
-          ],
-        ),
-        if (!_isMe && _rel.incoming == 'pending') ...[
-          const SizedBox(height: 8),
-          Text('Te envió una solicitud de seguimiento',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.amber.withOpacity(0.9),
-                  fontSize: 12)),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          setState(() => _busy = true);
-                          await _social.acceptRequest(widget.userId);
-                          _rel = await _social.relationWith(widget.userId);
-                          _counts = await _social.counts(widget.userId);
-                          if (mounted) setState(() => _busy = false);
-                        },
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.amber,
-                    side: const BorderSide(color: Colors.amber),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Aceptar',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.black,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          setState(() => _busy = true);
-                          await _social.removeFollower(widget.userId);
-                          _rel = await _social.relationWith(widget.userId);
-                          if (mounted) setState(() => _busy = false);
-                        },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.white24),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Rechazar',
-                      style: TextStyle(
-                          fontFamily: 'Poppins', color: Colors.white70)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _stat(String value, String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          Text(value,
-              style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700)),
-          Text(label,
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 11)),
-        ],
-      ),
-    );
   }
 }

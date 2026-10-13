@@ -17,6 +17,7 @@ import 'manage_subscription_page.dart';
 import 'plus_unlocked_page.dart';
 import '../widgets/achievement_unlock_toast.dart';
 import '../widgets/plus_medal.dart';
+import '../widgets/rider_activity.dart';
 import '../services/plus_prefs_service.dart';
 import '../services/social_service.dart';
 import 'public_profile_page.dart';
@@ -55,6 +56,8 @@ class _ProfilePageState extends State<ProfilePage> {
   StreamSubscription<bool>? _connectivitySub;
 
   int _followers = 0, _following = 0, _momentCount = 0, _pendingReqs = 0;
+  List<Map<String, dynamic>> _myPosts = [];
+  RiderActivity? _activity;
 
   @override
   void initState() {
@@ -112,6 +115,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadSocial() async {
     final uid = _user?.id;
     if (uid == null) return;
+    RiderActivity.load(uid).then((a) {
+      if (mounted) setState(() => _activity = a);
+    });
     try {
       final results = await Future.wait([
         SocialService.instance.counts(uid),
@@ -123,7 +129,8 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _followers = c.followers;
         _following = c.following;
-        _momentCount = (results[1] as List).length;
+        _myPosts = (results[1] as List).cast<Map<String, dynamic>>();
+        _momentCount = _myPosts.length;
         _pendingReqs = results[2] as int;
       });
     } catch (_) {}
@@ -446,8 +453,18 @@ class _ProfilePageState extends State<ProfilePage> {
                                 _buildEditForm()
                               else ...[
                                 _buildQuickActions(),
-                                const SizedBox(height: 14),
+                                const SizedBox(height: 24),
+                                activitySectionLabel('ACTIVIDAD', _accent),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: RiderActivityCard(
+                                      data: _activity, accent: _accent),
+                                ),
+                                const SizedBox(height: 12),
                                 _buildStatsRow(),
+                                const SizedBox(height: 24),
+                                _buildMomentsPreview(),
                                 const SizedBox(height: 14),
                                 _buildPlusCard(),
                                 if (_achievements.isNotEmpty) ...[
@@ -800,6 +817,103 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Vista previa de mis últimos momentos (hasta 6).
+  Widget _buildMomentsPreview() {
+    final uid = _user?.id;
+    void openAll() {
+      if (uid == null) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PublicProfilePage(userId: uid)),
+      ).then((_) => _loadSocial());
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        activitySectionLabel(
+          'MIS MOMENTOS',
+          _accent,
+          trailing: _momentCount > 0 ? '$_momentCount' : null,
+        ),
+        const SizedBox(height: 10),
+        if (_myPosts.isEmpty)
+          Material(
+            color: Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MomentsPage()),
+              ).then((_) => _loadSocial()),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.07)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.add_a_photo_rounded,
+                        color: _accent.withOpacity(0.7), size: 28),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Comparte tu primer momento pedaleando',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else ...[
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+            children: [
+              for (final p in _myPosts.take(6))
+                GestureDetector(
+                  onTap: openAll,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: p['image_url'] as String,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) => Container(color: Colors.white10),
+                      errorWidget: (_, _, _) =>
+                          Container(color: Colors.white10),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (_myPosts.length > 6)
+            TextButton(
+              onPressed: openAll,
+              child: Text(
+                'Ver los $_momentCount momentos',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: _accent,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ],
     );
   }
 
