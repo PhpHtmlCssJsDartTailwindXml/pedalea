@@ -50,6 +50,7 @@ import '../services/ride_stats_sync_service.dart';
 import '../services/ride_heat_service.dart';
 import '../services/dm_service.dart';
 import '../services/plus_prefs_service.dart';
+import 'manage_subscription_page.dart';
 import '../services/subscription_service.dart';
 import '../services/poi_photos_service.dart';
 import '../services/achievements_service.dart';
@@ -9484,32 +9485,186 @@ class _DrawerPlusBannerState extends State<_DrawerPlusBanner> {
     final isPlus = _isPlus ?? false;
 
     if (isPlus) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: goldColor.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: goldColor.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              // Medalla con la variante que eligió el ciclista.
-              const PlusMedal(size: 24, ringColor: Color(0xFF0E0E16)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Gracias por ser Pedalea Plus 💛',
+      Widget perk(IconData icon, String label) => Expanded(
+            child: Column(
+              children: [
+                Icon(icon, color: goldColor.withOpacity(0.9), size: 16),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'Poppins',
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
+              ],
+            ),
+          );
+
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ManageSubscriptionPage(),
+                ),
+              );
+            },
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF2A2312), Color(0xFF16140F)],
+                ),
+                border: Border.all(color: goldColor.withOpacity(0.35)),
+                boxShadow: [
+                  BoxShadow(
+                    color: goldColor.withOpacity(0.12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  children: [
+                    // Destello diagonal decorativo.
+                    Positioned(
+                      right: -30,
+                      top: -40,
+                      child: Transform.rotate(
+                        angle: 0.5,
+                        child: Container(
+                          width: 46,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                goldColor.withOpacity(0.0),
+                                goldColor.withOpacity(0.12),
+                                goldColor.withOpacity(0.0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 12, 10),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: goldColor.withOpacity(0.35),
+                                      blurRadius: 12,
+                                    ),
+                                  ],
+                                ),
+                                // Medalla con la variante que eligió el ciclista.
+                                child: const PlusMedal(
+                                    size: 30, ringColor: Color(0xFF2A2312)),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ShaderMask(
+                                      shaderCallback: (r) =>
+                                          const LinearGradient(
+                                        colors: [
+                                          Color(0xFFFFE08A),
+                                          goldColor,
+                                          Color(0xFFD4A62A),
+                                        ],
+                                      ).createShader(r),
+                                      child: const Text(
+                                        'Pedalea Plus',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: Colors.white,
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w700,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF69FF47),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          'Miembro activo',
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            color:
+                                                Colors.white.withOpacity(0.6),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: goldColor.withOpacity(0.7),
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.22),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                perk(Icons.workspace_premium_rounded,
+                                    'Medalla'),
+                                perk(Icons.palette_rounded, 'Temas'),
+                                perk(Icons.local_fire_department_rounded,
+                                    'Calor'),
+                                perk(Icons.all_inclusive_rounded,
+                                    'Eventos'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       );

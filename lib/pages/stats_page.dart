@@ -152,20 +152,35 @@ class _StatsPageState extends State<StatsPage> {
             children: [
               _buildHeader(),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                  children: [
-                    _buildTodayHero(),
-                    const SizedBox(height: 16),
-                    _buildChartCard(),
-                    const SizedBox(height: 16),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: _editMode
-                          ? _buildEditPanel()
-                          : _buildStatGrid(),
-                    ),
-                  ],
+                child: RefreshIndicator(
+                  color: _accent,
+                  backgroundColor: const Color(0xFF12121C),
+                  onRefresh: _syncFromServer,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                    children: [
+                      if (!_editMode) ...[
+                        _buildQuickActions(),
+                        const SizedBox(height: 14),
+                      ],
+                      _buildTodayHero(),
+                      const SizedBox(height: 14),
+                      _buildChartCard(),
+                      const SizedBox(height: 24),
+                      _sectionHeader(
+                        _editMode ? 'PERSONALIZAR' : 'RESUMEN',
+                        hint: _editMode ? 'Ajusta colores y tarjetas' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: _editMode
+                            ? _buildEditPanel()
+                            : _buildStatGrid(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -175,64 +190,279 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
+  // ── Piezas de estilo (mismo lenguaje que los controles del mapa) ───────
+  BoxDecoration _pillBox({double radius = 24, Color? tint}) => BoxDecoration(
+        color: (tint ?? Colors.white).withOpacity(tint != null ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: tint != null
+              ? tint.withOpacity(0.4)
+              : Colors.white.withOpacity(0.14),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      );
+
+  Widget _circleButton({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onTap,
+    Color? tint,
+    double size = 21,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Ink(
+            width: 48,
+            height: 48,
+            decoration: _pillBox(tint: tint),
+            child: Icon(icon, color: color, size: size),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String text, {String? hint}) => Row(
+        children: [
+          Container(
+            width: 3,
+            height: 13,
+            decoration: BoxDecoration(
+              color: _accent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const Spacer(),
+          if (hint != null)
+            Text(
+              hint,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.3),
+                fontSize: 11,
+              ),
+            ),
+        ],
+      );
+
   // ── Cabecera ──────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
+          _circleButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 18,
+            tooltip: 'Volver',
+            onTap: () => Navigator.pop(context),
           ),
-          const Expanded(
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.only(left: 16, right: 6),
+              decoration: _pillBox(),
+              child: Row(
+                children: [
+                  Icon(Icons.insights_rounded, color: _accent, size: 20),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Mis estadísticas',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  // Sincronizar con el servidor
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: _syncing
+                        ? Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: _accent),
+                          )
+                        : IconButton(
+                            padding: EdgeInsets.zero,
+                            tooltip: 'Actualizar',
+                            icon: const Icon(Icons.sync_rounded,
+                                color: Colors.white54, size: 19),
+                            onPressed: _syncFromServer,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _circleButton(
+            icon: _editMode ? Icons.check_rounded : Icons.tune_rounded,
+            color: _editMode ? _accent : Colors.white70,
+            tint: _editMode ? _accent : null,
+            tooltip: _editMode ? 'Listo' : 'Personalizar',
+            onTap: () => setState(() => _editMode = !_editMode),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Accesos rápidos: compartir y ranking.
+  Widget _buildQuickActions() {
+    Widget action({
+      required IconData icon,
+      required String label,
+      required Color color,
+      required VoidCallback onTap,
+      bool highlighted = false,
+      Widget? badge,
+    }) {
+      return Expanded(
+        child: Material(
+          color: highlighted
+              ? color.withOpacity(0.14)
+              : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: onTap,
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: highlighted
+                      ? color.withOpacity(0.45)
+                      : Colors.white.withOpacity(0.1),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: color, size: 18),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: highlighted ? color : Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (badge != null) ...[const SizedBox(width: 6), badge],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        action(
+          icon: Icons.ios_share_rounded,
+          label: 'Compartir',
+          color: _accent,
+          highlighted: true,
+          onTap: _openShareSheet,
+          badge: _isPlus
+              ? null
+              : Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'PLUS',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.amber,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(width: 10),
+        action(
+          icon: Icons.emoji_events_rounded,
+          label: 'Ranking',
+          color: Colors.amberAccent,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const RiderRankingPage()),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _heroChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: _accent, size: 14),
+          const SizedBox(width: 5),
+          Flexible(
             child: Text(
-              'Mis estadísticas',
+              text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
-          IconButton(
-            icon: Icon(
-              _editMode ? Icons.check_rounded : Icons.tune_rounded,
-              color: _editMode ? _accent : Colors.white54,
-            ),
-            tooltip: _editMode ? 'Listo' : 'Personalizar',
-            onPressed: () => setState(() => _editMode = !_editMode),
-          ),
-          IconButton(
-            icon: Icon(Icons.ios_share_rounded, color: _accent),
-            tooltip: 'Compartir resumen',
-            onPressed: _openShareSheet,
-          ),
-          if (!_editMode) ...[
-            IconButton(
-              icon: const Icon(Icons.emoji_events_rounded,
-                  color: Colors.white54),
-              tooltip: 'Ranking de ciclistas',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const RiderRankingPage()),
-              ),
-            ),
-            IconButton(
-              icon: _syncing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white54),
-                    )
-                  : const Icon(Icons.refresh_rounded, color: Colors.white54),
-              onPressed: _syncing ? null : _syncFromServer,
-            ),
-          ],
         ],
       ),
     );
@@ -244,82 +474,104 @@ class _StatsPageState extends State<StatsPage> {
     final tree = Co2Service.treeEquivalent(co2);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            _accentGrad.first.withOpacity(0.22),
+            _accentGrad.first.withOpacity(0.24),
             _accentGrad.last.withOpacity(0.05),
           ],
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(color: _accentGrad.first.withOpacity(0.3)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            // Círculo decorativo (como una rueda).
+            Positioned(
+              right: -36,
+              top: -36,
+              child: Container(
+                width: 130,
+                height: 130,
                 decoration: BoxDecoration(
-                  color: _accent,
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: _accent.withOpacity(0.6), blurRadius: 6),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'HOY',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white54,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _AnimatedKm(value: _today, accent: _accent, gradient: _accentGrad),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(Icons.eco_rounded, color: _accent, size: 18),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  '${Co2Service.format(co2)} de CO₂ ahorrado hoy',
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white70,
-                    fontSize: 14,
+                  border: Border.all(
+                    color: _accent.withOpacity(0.1),
+                    width: 14,
                   ),
                 ),
               ),
-            ],
-          ),
-          if (tree.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            ),
             Padding(
-              padding: const EdgeInsets.only(left: 24),
-              child: Text(
-                tree,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white38,
-                  fontSize: 12,
-                ),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: _accent,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                                color: _accent.withOpacity(0.6),
+                                blurRadius: 6),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'HOY',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white60,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _AnimatedKm(
+                      value: _today, accent: _accent, gradient: _accentGrad),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _heroChip(Icons.eco_rounded,
+                          '${Co2Service.format(co2)} CO₂ ahorrado'),
+                      _heroChip(Icons.date_range_rounded,
+                          'Semana: ${_weekKm.toStringAsFixed(1)} km'),
+                      if (_streak > 0)
+                        _heroChip(Icons.local_fire_department_rounded,
+                            'Racha: $_streak ${_streak == 1 ? 'día' : 'días'}'),
+                    ],
+                  ),
+                  if (tree.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      tree,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.45),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -335,65 +587,91 @@ class _StatsPageState extends State<StatsPage> {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: glassDecoration(radius: 22, opacity: 0.06),
+      decoration: glassDecoration(radius: 24, opacity: 0.05, borderOpacity: 0.1),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                narrow ? 'Últimos 30 días' : 'Últimos 7 días',
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Actividad',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${rangeKm.toStringAsFixed(1)} km',
+                            style: TextStyle(
+                              color: _accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          TextSpan(
+                            text: narrow
+                                ? ' en 30 días'
+                                : ' en 7 días',
+                          ),
+                        ],
+                      ),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                '${rangeKm.toStringAsFixed(1)} km',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: _accent,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              _rangeSegmented(),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _rangePill('7 días', 7),
-              const SizedBox(width: 8),
-              _rangePill('30 días', 30),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 16,
+          const SizedBox(height: 14),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
             child: (_selectedBar >= 0 && _selectedBar < days.length)
-                ? Text(
-                    '${_fmtDia(days[_selectedBar].date)}  ·  '
-                    '${days[_selectedBar].km.toStringAsFixed(1)} km',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: _accent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                ? Container(
+                    key: ValueKey(_selectedBar),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _accent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_fmtDia(days[_selectedBar].date)}  ·  '
+                      '${days[_selectedBar].km.toStringAsFixed(1)} km',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: _accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   )
-                : const Text(
-                    'Toca una barra para ver el detalle',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white30,
-                      fontSize: 12,
+                : Padding(
+                    key: const ValueKey('hint'),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      'Toca una barra para ver el detalle',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.3),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           SizedBox(
             height: 120,
             child: Row(
@@ -448,36 +726,50 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  Widget _rangePill(String label, int range) {
-    final sel = _chartRange == range;
-    return GestureDetector(
-      onTap: () {
-        if (_chartRange == range) return;
-        setState(() {
-          _chartRange = range;
-          _selectedBar = -1;
-          _chartDays = RideStatsService.lastNDays(range);
-        });
-        StatsPrefsService.setChartRange(range);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: sel ? _accent.withOpacity(0.15) : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: sel ? _accent.withOpacity(0.5) : Colors.white12,
+  /// Selector de rango en una sola cápsula: 7D | 30D.
+  Widget _rangeSegmented() {
+    Widget seg(String label, int range) {
+      final sel = _chartRange == range;
+      return GestureDetector(
+        onTap: () {
+          if (_chartRange == range) return;
+          setState(() {
+            _chartRange = range;
+            _selectedBar = -1;
+            _chartDays = RideStatsService.lastNDays(range);
+          });
+          StatsPrefsService.setChartRange(range);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: sel ? _accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: sel ? Colors.black : Colors.white60,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: sel ? _accent : Colors.white54,
-            fontSize: 12,
-            fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
-          ),
-        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(19),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [seg('7D', 7), seg('30D', 30)],
       ),
     );
   }
@@ -646,7 +938,7 @@ class _StatsPageState extends State<StatsPage> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         _sectionLabel('TARJETAS'),
         const SizedBox(height: 4),
         Text(
@@ -750,15 +1042,28 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  Widget _sectionLabel(String text) => Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          color: Colors.white.withOpacity(0.4),
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1,
-        ),
+  Widget _sectionLabel(String text) => Row(
+        children: [
+          Container(
+            width: 3,
+            height: 12,
+            decoration: BoxDecoration(
+              color: _accent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ],
       );
 
   // ── Hoja para compartir ──────────────────────────────────────────────
@@ -1105,197 +1410,366 @@ class _ShareSheetState extends State<_ShareSheet> {
     }
   }
 
-  Widget _sectionLabel(String text) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white.withOpacity(0.4),
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1,
+  Widget _sectionLabel(String text, {String? hint}) => Row(
+        children: [
+          Container(
+            width: 3,
+            height: 12,
+            decoration: BoxDecoration(
+              color: _accentColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          if (hint != null) ...[
+            const Spacer(),
+            Text(
+              hint,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.3),
+                fontSize: 10.5,
+              ),
+            ),
+          ],
+        ],
+      );
+
+  Widget _card({required Widget child}) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: child,
+      );
+
+  /// Fila de un dato de la tarjeta: tocar la muestra u oculta.
+  Widget _statRow({
+    required String emoji,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    Widget? trailing,
+  }) {
+    return Material(
+      color: selected
+          ? _accentColor.withOpacity(0.1)
+          : Colors.white.withOpacity(0.03),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.only(left: 12, right: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? _accentColor.withOpacity(0.35)
+                  : Colors.white.withOpacity(0.08),
+            ),
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? _accentColor : Colors.transparent,
+                  border: Border.all(
+                    color: selected ? _accentColor : Colors.white38,
+                    width: 1.5,
+                  ),
+                ),
+                child: selected
+                    ? const Icon(Icons.check_rounded,
+                        size: 13, color: Colors.black)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Text(emoji, style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: selected ? Colors.white : Colors.white54,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xF50A0A12),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.92,
       ),
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        MediaQuery.of(context).padding.bottom + 16,
+      decoration: BoxDecoration(
+        color: const Color(0xF50A0A12),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: Colors.white.withOpacity(0.08)),
+        ),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Personaliza tu tarjeta',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Cabecera ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 12, 8),
+            child: Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // La tarjeta que se exporta como imagen.
-            RepaintBoundary(
-              key: _cardKey,
-              child: _ShareCard(
-                today: widget.today,
-                total: widget.total,
-                weekKm: widget.weekKm,
-                streak: widget.streak,
-                bestDay: widget.bestDay,
-                activeDays: widget.activeDays,
-                accentColor: _accentColor,
-                shownStats: _shownStats,
-                statOrder: _order,
-              ),
-            ),
-            const SizedBox(height: 22),
-            _sectionLabel('COLOR'),
-            const SizedBox(height: 10),
-            Row(
-              children: StatsPrefsService.accentPalette.map((c) {
-                final isSelected = c == _accentColor;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _accentColor = c),
-                    child: Container(
-                      width: 32,
-                      height: 32,
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: c,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected
-                              ? Colors.white
-                              : Colors.transparent,
-                          width: 2.5,
+                        color: _accentColor.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(13),
+                        border:
+                            Border.all(color: _accentColor.withOpacity(0.3)),
+                      ),
+                      child: Icon(Icons.ios_share_rounded,
+                          color: _accentColor, size: 19),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Compartir resumen',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            'Personaliza la imagen antes de compartir',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white.withOpacity(0.45),
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Cerrar',
+                      onPressed: () => Navigator.pop(context),
+                      icon: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.06),
+                        ),
+                        child: const Icon(Icons.close_rounded,
+                            color: Colors.white60, size: 18),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Contenido desplazable ─────────────────────────────────
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _sectionLabel('VISTA PREVIA'),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(22),
+                      border:
+                          Border.all(color: Colors.white.withOpacity(0.06)),
+                    ),
+                    child: Center(
+                      // La tarjeta que se exporta como imagen.
+                      child: RepaintBoundary(
+                        key: _cardKey,
+                        child: _ShareCard(
+                          today: widget.today,
+                          total: widget.total,
+                          weekKm: widget.weekKm,
+                          streak: widget.streak,
+                          bestDay: widget.bestDay,
+                          activeDays: widget.activeDays,
+                          accentColor: _accentColor,
+                          shownStats: _shownStats,
+                          statOrder: _order,
                         ),
                       ),
-                      child: isSelected
-                          ? const Icon(Icons.check,
-                              color: Colors.black, size: 16)
-                          : null,
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
-            _sectionLabel('QUÉ MOSTRAR  ·  arrastra para ordenar'),
-            const SizedBox(height: 10),
-            ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              buildDefaultDragHandles: false,
-              itemCount: _order.length,
-              onReorder: (oldIndex, newIndex) {
-                setState(() {
-                  if (newIndex > oldIndex) newIndex--;
-                  final item = _order.removeAt(oldIndex);
-                  _order.insert(newIndex, item);
-                });
-              },
-              itemBuilder: (context, i) {
-                final key = _order[i];
-                final (emoji, label) = _statMeta[key]!;
-                final selected = _shownStats.contains(key);
-                return Container(
-                  key: ValueKey(key),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? _accentColor.withOpacity(0.12)
-                        : Colors.white.withOpacity(0.04),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: selected
-                          ? _accentColor.withOpacity(0.4)
-                          : Colors.white12,
+                  const SizedBox(height: 18),
+
+                  _card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionLabel('COLOR'),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          children: StatsPrefsService.accentPalette.map((c) {
+                            final isSelected = c == _accentColor;
+                            return GestureDetector(
+                              onTap: () => setState(() => _accentColor = c),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                width: 34,
+                                height: 34,
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: isSelected
+                                      ? const Icon(Icons.check,
+                                          color: Colors.black, size: 15)
+                                      : null,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
                   ),
-                  child: ListTile(
-                    dense: true,
-                    onTap: () => _toggleStat(key),
-                    leading: Icon(
-                      selected ? Icons.check_circle : Icons.circle_outlined,
-                      color: selected ? _accentColor : Colors.white38,
-                      size: 20,
-                    ),
-                    title: Text(
-                      '$emoji $label',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: selected ? Colors.white : Colors.white54,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w400,
-                      ),
-                    ),
-                    trailing: ReorderableDragStartListener(
-                      index: i,
-                      child: const Icon(Icons.drag_handle_rounded,
-                          color: Colors.white38),
+                  const SizedBox(height: 12),
+
+                  _card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _sectionLabel('QUÉ MOSTRAR',
+                            hint: 'Arrastra ≡ para ordenar'),
+                        const SizedBox(height: 12),
+                        ReorderableListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          buildDefaultDragHandles: false,
+                          itemCount: _order.length,
+                          onReorder: (oldIndex, newIndex) {
+                            setState(() {
+                              if (newIndex > oldIndex) newIndex--;
+                              final item = _order.removeAt(oldIndex);
+                              _order.insert(newIndex, item);
+                            });
+                          },
+                          itemBuilder: (context, i) {
+                            final key = _order[i];
+                            final (emoji, label) = _statMeta[key]!;
+                            return Padding(
+                              key: ValueKey(key),
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _statRow(
+                                emoji: emoji,
+                                label: label,
+                                selected: _shownStats.contains(key),
+                                onTap: () => _toggleStat(key),
+                                trailing: ReorderableDragStartListener(
+                                  index: i,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(8),
+                                    child: Icon(Icons.drag_handle_rounded,
+                                        color: Colors.white38, size: 20),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 8),
+                          child: Divider(
+                              height: 1,
+                              color: Colors.white.withOpacity(0.07)),
+                        ),
+                        _statRow(
+                          emoji: '🌱',
+                          label: 'CO₂ ahorrado',
+                          selected: _shownStats.contains('co2'),
+                          onTap: () => _toggleStat('co2'),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilterChip(
-                selected: _shownStats.contains('co2'),
-                onSelected: (_) => _toggleStat('co2'),
-                showCheckmark: false,
-                label: const Text('🌱 CO₂ ahorrado'),
-                labelStyle: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 12,
-                  color: _shownStats.contains('co2')
-                      ? Colors.black
-                      : Colors.white70,
-                  fontWeight: _shownStats.contains('co2')
-                      ? FontWeight.w700
-                      : FontWeight.w400,
-                ),
-                backgroundColor: Colors.white.withOpacity(0.06),
-                selectedColor: _accentColor,
-                side: BorderSide(
-                  color: _shownStats.contains('co2')
-                      ? Colors.transparent
-                      : Colors.white24,
-                ),
+                ],
               ),
             ),
-            const SizedBox(height: 18),
-            SizedBox(
+          ),
+
+          // ── Botón fijo ───────────────────────────────────────────
+          Container(
+            padding: EdgeInsets.fromLTRB(
+                16, 10, 16, MediaQuery.of(context).padding.bottom + 14),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.white.withOpacity(0.06)),
+              ),
+            ),
+            child: SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 52,
               child: ElevatedButton.icon(
                 onPressed: _sharing ? null : _share,
                 icon: _sharing
@@ -1308,13 +1782,14 @@ class _ShareSheetState extends State<_ShareSheet> {
                         ),
                       )
                     : const Icon(Icons.ios_share_rounded, size: 18),
-                label: Text(_sharing ? 'Generando...' : 'Compartir mi resumen'),
+                label:
+                    Text(_sharing ? 'Generando...' : 'Compartir mi resumen'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _accentColor,
                   foregroundColor: Colors.black,
                   disabledBackgroundColor: Colors.white12,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(26),
                   ),
                   textStyle: const TextStyle(
                     fontFamily: 'Poppins',
@@ -1325,8 +1800,8 @@ class _ShareSheetState extends State<_ShareSheet> {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1599,11 +2074,18 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withOpacity(0.08),
+            Colors.white.withOpacity(0.03),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.09)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
