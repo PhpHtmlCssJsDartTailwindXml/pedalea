@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/glass.dart';
+import '../services/cache_service.dart';
 import '../services/karma_service.dart';
+import '../widgets/leaderboard.dart';
 
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
@@ -11,6 +14,8 @@ class RankingPage extends StatefulWidget {
 
 class _RankingPageState extends State<RankingPage>
     with SingleTickerProviderStateMixin {
+  static const _accent = Colors.greenAccent;
+
   late TabController _tabController;
   final KarmaService _karmaService = KarmaService();
 
@@ -18,6 +23,10 @@ class _RankingPageState extends State<RankingPage>
   List<Map<String, dynamic>> _comunasRanking = [];
   bool _loadingCyclists = true;
   bool _loadingComunas = true;
+
+  final String? _myId = Supabase.instance.client.auth.currentUser?.id;
+  final String _myCommune =
+      (CacheService.loadProfile()?['commune'] as String? ?? '').trim();
 
   @override
   void initState() {
@@ -52,111 +61,38 @@ class _RankingPageState extends State<RankingPage>
       extendBodyBehindAppBar: true,
       body: Container(
         decoration: kPageGradient,
-        child: Column(
-          children: [
-            // ── AppBar ─────────────────────────────────────────────
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: glassDecoration(radius: 12),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Ranking Local',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _loadingCyclists = true;
-                          _loadingComunas = true;
-                        });
-                        _loadData();
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: glassDecoration(radius: 12),
-                        child: const Icon(
-                          Icons.refresh,
-                          color: Colors.greenAccent,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              LeaderboardHeader(
+                title: 'Ranking local',
+                icon: Icons.leaderboard_rounded,
+                accent: _accent,
+                onRefresh: () {
+                  setState(() {
+                    _loadingCyclists = true;
+                    _loadingComunas = true;
+                  });
+                  _loadData();
+                },
               ),
-            ),
-
-            // ── Tabs ───────────────────────────────────────────────
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Container(
-                decoration: glassDecoration(radius: 14),
-                child: TabBar(
-                  controller: _tabController,
-                  indicator: BoxDecoration(
-                    color: Colors.greenAccent.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: Colors.greenAccent.withOpacity(0.35)),
-                  ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  labelColor: Colors.greenAccent,
-                  unselectedLabelColor: Colors.white38,
-                  labelStyle: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w400,
-                    fontSize: 13,
-                  ),
-                  tabs: const [
-                    Tab(text: 'Por Comunas'),
-                    Tab(text: 'Top Ciclistas'),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Contenido ──────────────────────────────────────────
-            Expanded(
-              child: TabBarView(
+              LeaderboardTabs(
                 controller: _tabController,
-                children: [
-                  _buildComunasTab(),
-                  _buildCyclistsTab(),
-                ],
+                labels: const ['Por comunas', 'Top karma'],
+                accent: _accent,
               ),
-            ),
-          ],
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildComunasTab(),
+                    _buildCyclistsTab(),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -164,126 +100,230 @@ class _RankingPageState extends State<RankingPage>
 
   // ── Tab: Comunas ───────────────────────────────────────────────────────────
 
+  double _km(Map<String, dynamic> c) =>
+      (c['total_km'] as num?)?.toDouble() ?? 0.0;
+
+  String _comunaSecondary(Map<String, dynamic> c) {
+    final cyclists = c['cyclists_count'] as int? ?? 0;
+    final alerts = c['alerts_count'] as int? ?? 0;
+    return cyclists > 0
+        ? '$cyclists ${cyclists == 1 ? 'ciclista' : 'ciclistas'}'
+        : '$alerts alertas';
+  }
+
   Widget _buildComunasTab() {
-    if (_loadingComunas) {
-      return const Center(
-        child: CircularProgressIndicator(
-            color: Colors.greenAccent, strokeWidth: 2),
-      );
-    }
+    if (_loadingComunas) return _loader();
 
     if (_comunasRanking.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.location_city_outlined,
+        icon: Icons.location_city_rounded,
         title: 'Sin datos de comunas',
         subtitle:
-            'Activa el GPS y pedalea para que tu comuna aparezca aquí.\nAsegúrate de reportar alertas con nombre de ubicación.',
+            'Activa el GPS y pedalea para que tu comuna aparezca aquí. Asegúrate de reportar alertas con nombre de ubicación.',
       );
+    }
+
+    final list = _comunasRanking;
+    final leader = _km(list.first) <= 0 ? 1.0 : _km(list.first);
+    final myIndex = _myCommune.isEmpty
+        ? -1
+        : list.indexWhere((c) =>
+            (c['commune'] as String? ?? '').toLowerCase() ==
+            _myCommune.toLowerCase());
+    final hasPodium = list.length >= 3;
+    final rest = hasPodium ? list.sublist(3) : list;
+    final offset = hasPodium ? 3 : 0;
+
+    String? chase() {
+      if (myIndex < 0) return null;
+      if (myIndex == 0) return '¡Tu comuna lidera la región! 🏆';
+      final ahead = list[myIndex - 1];
+      final gap = (_km(ahead) - _km(list[myIndex])).clamp(0.1, double.infinity);
+      return 'A ${gap.toStringAsFixed(1)} km de ${ahead['commune']}';
     }
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: Colors.greenAccent,
+      color: _accent,
       backgroundColor: kBgCard,
       child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          // Podio top 3
-          if (_comunasRanking.length >= 3) ...[
-            _buildPodio(_comunasRanking),
-            const SizedBox(height: 16),
-          ],
-          // Tabla resto
-          Container(
-            decoration: glassDecoration(radius: 18),
-            child: Column(
-              children: [
-                _tableHeader(
-                    ['#', 'Comuna', 'Km totales', 'Ciclistas']),
-                const Divider(height: 1, color: Colors.white10),
-                ...List.generate(_comunasRanking.length, (i) {
-                  final c = _comunasRanking[i];
-                  final km =
-                      (c['total_km'] as double? ?? 0.0).toStringAsFixed(1);
-                  final cyclists = c['cyclists_count'] as int? ?? 0;
-                  final alerts = c['alerts_count'] as int? ?? 0;
-                  final secondary =
-                      cyclists > 0 ? '$cyclists cic.' : '$alerts alertas';
-                  return _tableRow(
-                    position: i + 1,
-                    name: c['commune'] as String? ?? '—',
-                    value: '$km km',
-                    secondary: secondary,
-                    isTop3: i < 3,
-                  );
-                }),
+          MyRankCard(
+            rank: myIndex >= 0 ? myIndex + 1 : null,
+            total: list.length,
+            value: myIndex >= 0 ? _km(list[myIndex]).toStringAsFixed(1) : '',
+            unit: myIndex >= 0 ? 'km · ${list[myIndex]['commune']}' : 'km',
+            accent: _accent,
+            emptyText: _myCommune.isEmpty
+                ? 'Agrega tu comuna en el perfil para ver su posición.'
+                : '$_myCommune aún no suma km. ¡Pedalea para subirla!',
+            chaseText: chase(),
+          ),
+          if (hasPodium) ...[
+            const SizedBox(height: 22),
+            Podium(
+              top: [
+                for (int i = 0; i < 3; i++)
+                  PodiumEntry(
+                    name: list[i]['commune'] as String? ?? '—',
+                    value: _km(list[i]).toStringAsFixed(1),
+                    unit: 'km',
+                    avatar: RankAvatar(
+                      name: list[i]['commune'] as String? ?? '—',
+                      icon: Icons.location_city_rounded,
+                    ),
+                    isMe: i == myIndex,
+                  ),
               ],
             ),
+          ],
+          if (rest.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            LeaderSectionLabel(
+              'CLASIFICACIÓN',
+              accent: _accent,
+              trailing: '${list.length} comunas',
+            ),
+            const SizedBox(height: 10),
+            for (int i = 0; i < rest.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: LeaderRow(
+                  rank: offset + i + 1,
+                  avatar: RankAvatar(
+                    name: rest[i]['commune'] as String? ?? '—',
+                    icon: Icons.location_city_rounded,
+                  ),
+                  name: rest[i]['commune'] as String? ?? '—',
+                  subtitle: _comunaSecondary(rest[i]),
+                  value: _km(rest[i]).toStringAsFixed(1),
+                  unit: 'km',
+                  progress: _km(rest[i]) / leader,
+                  isMe: offset + i == myIndex,
+                  accent: _accent,
+                ),
+              ),
+          ],
+          const SizedBox(height: 14),
+          _buildHint(
+            'Los km se acumulan mientras pedaleas con GPS activo. Asegúrate de tener el modo activo encendido.',
           ),
-          const SizedBox(height: 24),
-          _buildKmHint(),
-          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  // ── Tab: Top Ciclistas ─────────────────────────────────────────────────────
+  // ── Tab: Top karma ─────────────────────────────────────────────────────────
+
+  int _karma(Map<String, dynamic> c) => c['karma'] as int? ?? 0;
+
+  String _name(Map<String, dynamic> c) =>
+      (c['username'] as String? ?? '').isNotEmpty
+          ? '@${c['username']}'
+          : (c['user_name'] as String? ?? 'Usuario');
 
   Widget _buildCyclistsTab() {
-    if (_loadingCyclists) {
-      return const Center(
-        child: CircularProgressIndicator(
-            color: Colors.greenAccent, strokeWidth: 2),
-      );
-    }
+    if (_loadingCyclists) return _loader();
 
     if (_topCyclists.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.emoji_events_outlined,
+        icon: Icons.emoji_events_rounded,
         title: 'Sin datos todavía',
         subtitle:
-            'Reporta alertas y recibe votos de la comunidad\npara aparecer en el ranking.',
+            'Reporta alertas y recibe votos de la comunidad para aparecer en el ranking.',
       );
+    }
+
+    final list = _topCyclists;
+    final leader = _karma(list.first) <= 0 ? 1 : _karma(list.first);
+    final myIndex = _myId == null
+        ? -1
+        : list.indexWhere((c) => c['user_id'] == _myId);
+    final hasPodium = list.length >= 3;
+    final rest = hasPodium ? list.sublist(3) : list;
+    final offset = hasPodium ? 3 : 0;
+
+    String? chase() {
+      if (myIndex < 0) return null;
+      if (myIndex == 0) {
+        if (list.length < 2) return '¡Eres el ciclista con más karma! 🏆';
+        final gap = _karma(list[0]) - _karma(list[1]);
+        return '¡Lideras! $gap pts sobre ${_name(list[1])}';
+      }
+      final ahead = list[myIndex - 1];
+      final gap = (_karma(ahead) - _karma(list[myIndex])) + 1;
+      return 'Te faltan $gap pts para pasar a ${_name(ahead)}';
     }
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: Colors.greenAccent,
+      color: _accent,
       backgroundColor: kBgCard,
       child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          if (_topCyclists.length >= 3) ...[
-            _buildCyclistPodio(_topCyclists),
-            const SizedBox(height: 16),
-          ],
-          Container(
-            decoration: glassDecoration(radius: 18),
-            child: Column(
-              children: [
-                _tableHeader(['#', 'Ciclista', 'Karma', 'Nivel']),
-                const Divider(height: 1, color: Colors.white10),
-                ...List.generate(_topCyclists.length, (i) {
-                  final c = _topCyclists[i];
-                  final karma = c['karma'] as int? ?? 0;
-                  final level = KarmaService.getLevel(karma);
-                  final name = (c['username'] as String? ?? '').isNotEmpty
-                      ? '@${c['username']}'
-                      : (c['user_name'] as String? ?? 'Usuario');
-                  return _tableRow(
-                    position: i + 1,
-                    name: name,
-                    value: '$karma pts',
-                    secondary: '${level.emoji} ${level.title}',
-                    isTop3: i < 3,
-                    karmaColor: Color(level.colorValue),
-                  );
-                }),
+          MyRankCard(
+            rank: myIndex >= 0 ? myIndex + 1 : null,
+            total: list.length,
+            value: myIndex >= 0 ? '${_karma(list[myIndex])}' : '',
+            unit: 'pts de karma',
+            accent: _accent,
+            emptyText:
+                'Reporta alertas útiles y recibe votos para entrar al top.',
+            chaseText: chase(),
+          ),
+          if (hasPodium) ...[
+            const SizedBox(height: 22),
+            Podium(
+              top: [
+                for (int i = 0; i < 3; i++)
+                  PodiumEntry(
+                    name: _name(list[i]),
+                    value: '${_karma(list[i])}',
+                    unit:
+                        '${KarmaService.getLevel(_karma(list[i])).emoji} pts',
+                    avatar: RankAvatar(name: _name(list[i])),
+                    isMe: i == myIndex,
+                  ),
               ],
             ),
+          ],
+          if (rest.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            LeaderSectionLabel(
+              'CLASIFICACIÓN',
+              accent: _accent,
+              trailing: '${list.length} ciclistas',
+            ),
+            const SizedBox(height: 10),
+            for (int i = 0; i < rest.length; i++)
+              Builder(builder: (_) {
+                final c = rest[i];
+                final level = KarmaService.getLevel(_karma(c));
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: LeaderRow(
+                    rank: offset + i + 1,
+                    avatar: RankAvatar(name: _name(c)),
+                    name: _name(c),
+                    subtitle: '${level.emoji} ${level.title}',
+                    value: '${_karma(c)}',
+                    unit: 'pts',
+                    progress: _karma(c) / leader,
+                    isMe: offset + i == myIndex,
+                    accent: _accent,
+                    valueColor: Color(level.colorValue),
+                  ),
+                );
+              }),
+          ],
+          const SizedBox(height: 14),
+          _buildHint(
+            'El karma sube cuando la comunidad vota positivo tus reportes de alertas.',
           ),
-          const SizedBox(height: 24),
         ],
       ),
     );
@@ -291,250 +331,9 @@ class _RankingPageState extends State<RankingPage>
 
   // ── Widgets reutilizables ─────────────────────────────────────────────────
 
-  Widget _buildPodio(List<Map<String, dynamic>> list) {
-    return SizedBox(
-      height: 150,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // 2do
-          Expanded(child: _podioCard(list[1], 2, 100)),
-          const SizedBox(width: 8),
-          // 1ro
-          Expanded(child: _podioCard(list[0], 1, 130)),
-          const SizedBox(width: 8),
-          // 3ro
-          Expanded(child: _podioCard(list[2], 3, 80)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCyclistPodio(List<Map<String, dynamic>> list) {
-    return SizedBox(
-      height: 150,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(child: _cyclistPodioCard(list[1], 2, 100)),
-          const SizedBox(width: 8),
-          Expanded(child: _cyclistPodioCard(list[0], 1, 130)),
-          const SizedBox(width: 8),
-          Expanded(child: _cyclistPodioCard(list[2], 3, 80)),
-        ],
-      ),
-    );
-  }
-
-  Widget _podioCard(Map<String, dynamic> c, int pos, double height) {
-    final colors = {
-      1: Colors.amber,
-      2: Colors.blueGrey,
-      3: const Color(0xFFCD7F32),
-    };
-    final color = colors[pos]!;
-    final km = (c['total_km'] as double? ?? 0.0).toStringAsFixed(1);
-    return Container(
-      height: height,
-      decoration: glassDecoration(
-        radius: 16,
-        tint: color,
-        opacity: 0.08,
-        borderOpacity: 0.2,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(['🥇', '🥈', '🥉'][pos - 1],
-              style: const TextStyle(fontSize: 22)),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              c['commune'] as String? ?? '—',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '$km km',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _cyclistPodioCard(
-      Map<String, dynamic> c, int pos, double height) {
-    final colors = {
-      1: Colors.amber,
-      2: Colors.blueGrey,
-      3: const Color(0xFFCD7F32),
-    };
-    final color = colors[pos]!;
-    final karma = c['karma'] as int? ?? 0;
-    final level = KarmaService.getLevel(karma);
-    final name = (c['username'] as String? ?? '').isNotEmpty
-        ? '@${c['username']}'
-        : (c['user_name'] as String? ?? 'Usuario');
-    return Container(
-      height: height,
-      decoration: glassDecoration(
-        radius: 16,
-        tint: color,
-        opacity: 0.08,
-        borderOpacity: 0.2,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(['🥇', '🥈', '🥉'][pos - 1],
-              style: const TextStyle(fontSize: 22)),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              name,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '${level.emoji} $karma pts',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _tableHeader(List<String> cols) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          SizedBox(
-              width: 28,
-              child: Text(cols[0], style: _headerStyle())),
-          Expanded(
-              flex: 3,
-              child: Text(cols[1], style: _headerStyle())),
-          Expanded(
-              flex: 2,
-              child: Text(cols[2],
-                  style: _headerStyle(), textAlign: TextAlign.center)),
-          Expanded(
-              flex: 2,
-              child: Text(cols[3],
-                  style: _headerStyle(), textAlign: TextAlign.end)),
-        ],
-      ),
-    );
-  }
-
-  Widget _tableRow({
-    required int position,
-    required String name,
-    required String value,
-    required String secondary,
-    required bool isTop3,
-    Color? karmaColor,
-  }) {
-    final posColors = [Colors.amber, Colors.blueGrey, const Color(0xFFCD7F32)];
-    final posColor = isTop3 ? posColors[position - 1] : Colors.white38;
-    return Container(
-      decoration: BoxDecoration(
-        color: isTop3
-            ? posColor.withOpacity(0.04)
-            : Colors.transparent,
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withOpacity(0.05)),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 28,
-            child: Text(
-              isTop3 ? ['🥇', '🥈', '🥉'][position - 1] : '$position',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: posColor,
-                fontSize: isTop3 ? 16 : 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              name,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: isTop3 ? Colors.white : Colors.white70,
-                fontSize: 13,
-                fontWeight:
-                    isTop3 ? FontWeight.w600 : FontWeight.w400,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: karmaColor ?? Colors.greenAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              secondary,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white38,
-                fontSize: 11,
-              ),
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _loader() => const Center(
+        child: CircularProgressIndicator(color: _accent, strokeWidth: 2),
+      );
 
   Widget _buildEmptyState({
     required IconData icon,
@@ -547,23 +346,32 @@ class _RankingPageState extends State<RankingPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white24, size: 56),
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _accent.withOpacity(0.08),
+                border: Border.all(color: _accent.withOpacity(0.25)),
+              ),
+              child: Icon(icon, color: _accent.withOpacity(0.8), size: 36),
+            ),
             const SizedBox(height: 16),
             Text(
               title,
               style: const TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white54,
+                color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               subtitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white24,
+                color: Colors.white.withOpacity(0.45),
                 fontSize: 13,
               ),
               textAlign: TextAlign.center,
@@ -574,40 +382,25 @@ class _RankingPageState extends State<RankingPage>
     );
   }
 
-  Widget _buildKmHint() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: glassDecoration(
-        radius: 14,
-        tint: Colors.blueAccent,
-        opacity: 0.06,
-        borderOpacity: 0.12,
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline,
-              color: Colors.lightBlueAccent, size: 18),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Los km se acumulan mientras pedaleas con GPS activo. Asegúrate de tener el modo activo encendido.',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white38,
-                fontSize: 12,
-              ),
+  Widget _buildHint(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.info_outline_rounded,
+            color: Colors.white.withOpacity(0.35), size: 15),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.38),
+              fontSize: 11.5,
+              height: 1.4,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-
-  TextStyle _headerStyle() => const TextStyle(
-        fontFamily: 'Poppins',
-        color: Colors.white24,
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.5,
-      );
 }
