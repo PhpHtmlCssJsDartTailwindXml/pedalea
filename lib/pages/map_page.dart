@@ -10292,7 +10292,6 @@ class _PanicButton extends StatefulWidget {
 class _PanicButtonState extends State<_PanicButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulseCtrl;
-  late final Animation<double> _pulse;
   String? _emergencyContactName;
   String? _emergencyContactPhone;
 
@@ -10301,12 +10300,8 @@ class _PanicButtonState extends State<_PanicButton>
     super.initState();
     _pulseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(
-      begin: 1.0,
-      end: 1.08,
-    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
     _loadEmergencyContact();
   }
 
@@ -10406,29 +10401,90 @@ class _PanicButtonState extends State<_PanicButton>
     );
   }
 
+  /// Onda que se expande y se desvanece (fase 0→1).
+  Widget _ripple(double phase) {
+    final t = Curves.easeOut.transform(phase);
+    return Transform.scale(
+      scale: 1 + 0.45 * t,
+      child: Container(
+        width: 58,
+        height: 58,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.redAccent.withOpacity(0.3 * (1 - t)),
+            width: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _pulse,
-      builder: (_, child) => Transform.scale(scale: _pulse.value, child: child),
-      child: GestureDetector(
-        onTap: () => _showEmergencyMenu(context),
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.red.shade700,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withOpacity(0.55),
-                blurRadius: 18,
-                spreadRadius: 2,
-              ),
-            ],
+    return SizedBox(
+      width: 58,
+      height: 58,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _pulseCtrl,
+            builder: (_, _) => Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                _ripple(_pulseCtrl.value),
+              ],
+            ),
           ),
-          child: const Icon(Icons.sos_rounded, color: Colors.white, size: 30),
-        ),
+          Tooltip(
+            message: 'Emergencia',
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  _showEmergencyMenu(context);
+                },
+                child: Ink(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFC62828),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.18),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'SOS',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -10451,134 +10507,181 @@ class _EmergencySheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final hasContact =
+        emergencyContactPhone != null && emergencyContactPhone!.isNotEmpty;
 
     return Padding(
       // Sube el sheet si hay teclado o notch inferior
       padding: EdgeInsets.only(bottom: bottomInset),
       child: SingleChildScrollView(
         child: Container(
-          margin: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomPadding),
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+          margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomPadding),
           decoration: BoxDecoration(
             color: const Color(0xFF0F0F1A),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.red.withOpacity(0.25)),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
             boxShadow: [
               BoxShadow(
-                color: Colors.red.withOpacity(0.2),
+                color: Colors.black.withOpacity(0.4),
                 blurRadius: 24,
                 offset: const Offset(0, -4),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.sos_rounded,
-                      color: Colors.red,
-                      size: 22,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Cabecera roja ──────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.sos_rounded,
+                              color: Colors.redAccent,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '¿Necesitas ayuda?',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: Colors.white,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  'Emergencias Chile · toca para llamar',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: Colors.white.withOpacity(0.45),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Servicios ──────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 16, 14, 0),
+                  child: Row(
+                    children: [
+                      _EmergencyServiceCard(
+                        icon: Icons.local_police_rounded,
+                        color: const Color(0xFF4A90D9),
+                        label: 'Carabineros',
+                        number: '133',
+                        onTap: () {
+                          Navigator.pop(context);
+                          onCall('133');
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      _EmergencyServiceCard(
+                        icon: Icons.local_hospital_rounded,
+                        color: const Color(0xFFE53935),
+                        label: 'SAMU',
+                        number: '131',
+                        onTap: () {
+                          Navigator.pop(context);
+                          onCall('131');
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      _EmergencyServiceCard(
+                        icon: Icons.local_fire_department_rounded,
+                        color: const Color(0xFFFF6D00),
+                        label: 'Bomberos',
+                        number: '132',
+                        onTap: () {
+                          Navigator.pop(context);
+                          onCall('132');
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Contacto personal ──────────────────────────────────
+                if (hasContact)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                    child: _EmergencyTile(
+                      icon: Icons.sms_rounded,
+                      color: Colors.greenAccent,
+                      label: emergencyContactName?.isNotEmpty == true
+                          ? 'Avisar a ${emergencyContactName!}'
+                          : 'Avisar a mi contacto',
+                      number: emergencyContactPhone!,
+                      description: 'SMS con tu ubicación',
+                      onTap: () {
+                        Navigator.pop(context);
+                        onMessageContact();
+                      },
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Emergencias Chile',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                          ),
+
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                  child: SizedBox(
+                    height: 46,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        side: BorderSide(
+                          color: Colors.white.withOpacity(0.14),
                         ),
-                        Text(
-                          'Selecciona el servicio de emergencia',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white38,
-                            fontSize: 12,
-                          ),
+                        backgroundColor: Colors.white.withOpacity(0.04),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(23),
                         ),
-                      ],
+                      ),
+                      child: const Text(
+                        'Cancelar',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _EmergencyTile(
-                icon: Icons.local_police_rounded,
-                color: const Color(0xFF4A90D9),
-                label: 'Carabineros',
-                number: '133',
-                description: 'Policía de Chile',
-                onTap: () {
-                  Navigator.pop(context);
-                  onCall('133');
-                },
-              ),
-              _EmergencyTile(
-                icon: Icons.local_hospital_rounded,
-                color: const Color(0xFFE53935),
-                label: 'SAMU',
-                number: '131',
-                description: 'Urgencias médicas',
-                onTap: () {
-                  Navigator.pop(context);
-                  onCall('131');
-                },
-              ),
-              _EmergencyTile(
-                icon: Icons.local_fire_department_rounded,
-                color: const Color(0xFFFF6D00),
-                label: 'Bomberos',
-                number: '132',
-                description: 'Cuerpo de Bomberos',
-                onTap: () {
-                  Navigator.pop(context);
-                  onCall('132');
-                },
-              ),
-              if (emergencyContactPhone != null &&
-                  emergencyContactPhone!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                _EmergencyTile(
-                  icon: Icons.sms_outlined,
-                  color: Colors.greenAccent,
-                  label: emergencyContactName?.isNotEmpty == true
-                      ? emergencyContactName!
-                      : 'Mi contacto',
-                  number: emergencyContactPhone!,
-                  description: 'Avisar por SMS que necesitas ayuda',
-                  onTap: () {
-                    Navigator.pop(context);
-                    onMessageContact();
-                  },
                 ),
               ],
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(foregroundColor: Colors.white38),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(fontFamily: 'Poppins'),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -10586,6 +10689,81 @@ class _EmergencySheet extends StatelessWidget {
   }
 }
 
+/// Tarjeta vertical de un servicio de emergencia (número grande).
+class _EmergencyServiceCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String number;
+  final VoidCallback onTap;
+
+  const _EmergencyServiceCard({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.number,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(6, 14, 6, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  number,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white54,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila ancha (se usa para avisar al contacto de emergencia).
 class _EmergencyTile extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -10605,83 +10783,69 @@ class _EmergencyTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: color.withOpacity(0.2)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: color, size: 22),
+    return Material(
+      color: Colors.white.withOpacity(0.04),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                      Text(
-                        description,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white38,
-                          fontSize: 12,
-                        ),
+                    ),
+                    Text(
+                      '$description · $number',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.45),
+                        fontSize: 11.5,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.phone_rounded, color: color, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        number,
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: color,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
+              ),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.06),
+                  shape: BoxShape.circle,
                 ),
-              ],
-            ),
+                child: const Icon(Icons.send_rounded,
+                    color: Colors.white54, size: 15),
+              ),
+            ],
           ),
         ),
       ),
