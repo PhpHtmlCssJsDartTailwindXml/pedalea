@@ -1,9 +1,11 @@
-Fotos del carrusel del login (verticales, idealmente 1080x1920 o mas, JPG).
-Deja una zona despejada abajo (ahi va el texto) y al centro (tarjeta flotante).
+Imagenes del carrusel del login.
 
-  1.jpg  Ciclovia del Mapocho / Parque Forestal al atardecer  -> "Ciclovias de todo Chile en tu mapa"
-  2.jpg  Grupo pedaleando (CicloRecreoVia, domingo)            -> "Sal a pedalear con tu comunidad"
-  3.jpg  Ciclista de noche en la ciudad, con luces             -> "Pedalea seguro"
-  4.jpg  Subida al Cerro San Cristobal                         -> "Mide tu progreso"
+  1.jpg  Foto: ciclovia del Parque Mapocho        -> "Ciclovias de todo Chile en tu mapa" (+ tarjeta de ruta)
+  2.jpg  Foto: CicloRecreoVia                      -> "Sal a pedalear con tu comunidad"   (+ tarjeta de evento)
+  3.jpg  Captura: Ranking local (comunas)          -> "Haz que tu comuna lidere"          (enmarcada)
+  4.jpg  Captura: Ranking de ciclistas             -> "Compite con otros ciclistas"       (enmarcada)
 
-Si falta una foto, la app muestra un fondo de respaldo.
+Fotos: verticales, idealmente 1080x1920 o mas, JPG, con zona despejada abajo y al centro.
+Capturas: sin barra de estado y sin nombres reales de otros usuarios
+(en 4.jpg los usuarios se reemplazaron por nombres ficticios).
+Si falta una imagen, la app muestra un fondo de respaldo.

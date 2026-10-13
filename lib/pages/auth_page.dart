@@ -748,26 +748,33 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
   // ── Carrusel: foto real de ciclismo + tarjeta de la app flotando encima ──
   // Fotos en assets/carousel/1.jpg … 4.jpg (ver LEEME.txt en esa carpeta).
   // Si falta una, se usa un fondo de respaldo para no mostrar nada roto.
-  static const _kSlides = <({String image, String title, String subtitle})>[
+  // card: tarjeta flotante sobre la foto ('' = la imagen es una captura de
+  // la app y se muestra enmarcada, sin tarjeta encima).
+  static const _kSlides =
+      <({String image, String title, String subtitle, String card})>[
     (
       image: 'assets/carousel/1.jpg',
       title: 'Ciclovías de todo Chile en tu mapa',
       subtitle: 'Rutas, estacionamientos y talleres cerca de ti',
+      card: 'route',
     ),
     (
       image: 'assets/carousel/2.jpg',
       title: 'Sal a pedalear con tu comunidad',
       subtitle: 'Únete a salidas grupales o crea la tuya',
+      card: 'event',
     ),
     (
       image: 'assets/carousel/3.jpg',
-      title: 'Pedalea seguro',
-      subtitle: 'Alertas en vivo y SOS a un toque',
+      title: 'Haz que tu comuna lidere',
+      subtitle: 'Cada km que pedaleas suma para tu comuna',
+      card: '',
     ),
     (
       image: 'assets/carousel/4.jpg',
-      title: 'Mide tu progreso',
-      subtitle: 'Km, rachas, logros y rankings',
+      title: 'Compite con otros ciclistas',
+      subtitle: 'Km del día, de la semana y velocidad máxima',
+      card: '',
     ),
   ];
 
@@ -786,8 +793,6 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
     const palettes = [
       [Color(0xFF1E5C41), Color(0xFF0B1A14)],
       [Color(0xFF6B3A12), Color(0xFF150D06)],
-      [Color(0xFF14284A), Color(0xFF070B14)],
-      [Color(0xFF3B1E5C), Color(0xFF0E0716)],
     ];
     final p = palettes[i % palettes.length];
     return DecoratedBox(
@@ -889,9 +894,9 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
         ),
       );
 
-  Widget _slideCard(int i) {
-    switch (i) {
-      case 0:
+  Widget _slideCard(String card) {
+    switch (card) {
+      case 'route':
         return _mockCard(
           child: Row(children: [
             _mockIcon(Icons.route_rounded, const Color(0xFF2E9C5A)),
@@ -902,7 +907,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                 icon: Icons.navigation_rounded),
           ]),
         );
-      case 1:
+      case 'event':
         return _mockCard(
           child: Row(children: [
             Container(
@@ -936,110 +941,92 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                 icon: Icons.add_rounded),
           ]),
         );
-      case 2:
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: _mockCard(
-                child: Row(children: [
-                  _mockIcon(Icons.warning_rounded, Colors.red),
-                  const SizedBox(width: 10),
-                  _mockTexts('Bache en ciclovía', 'hace 5 min · 👍 8'),
-                ]),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              width: 54,
-              height: 54,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFC62828),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.45), blurRadius: 16),
-                ],
-              ),
-              child: const Text('SOS',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700)),
-            ),
-          ],
-        );
       default:
-        const bars = [0.3, 0.55, 0.2, 0.8, 0.6, 1.0, 0.7];
-        return _mockCard(
-          child: Row(children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text.rich(
-                    TextSpan(children: [
-                      TextSpan(
-                          text: '42',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800)),
-                      TextSpan(
-                          text: ' km esta semana',
-                          style: TextStyle(
-                              color: Colors.white60, fontSize: 11.5)),
-                    ]),
-                    style: TextStyle(fontFamily: 'Poppins'),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text('🔥 5 días seguidos',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.orangeAccent,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 44,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (int b = 0; b < bars.length; b++)
-                    Container(
-                      width: 7,
-                      height: 44 * bars[b],
-                      margin: const EdgeInsets.only(left: 4),
-                      decoration: BoxDecoration(
-                        color: b == bars.length - 1
-                            ? const Color(0xFF69FF47)
-                            : const Color(0xFF69FF47).withOpacity(0.45),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ]),
-        );
+        return const SizedBox.shrink();
     }
+  }
+
+  Widget _slideTexts(
+      ({String image, String title, String subtitle, String card}) slide) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          slide.title,
+          style: const TextStyle(
+            fontFamily: 'Sora',
+            color: Colors.white,
+            fontSize: 21,
+            fontWeight: FontWeight.w800,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          slide.subtitle,
+          style: TextStyle(
+            fontFamily: 'Sora',
+            color: Colors.white.withOpacity(0.75),
+            fontSize: 13,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildSlide(int i) {
     final slide = _kSlides[i];
+    final isScreenshot = slide.card.isEmpty;
+
+    if (isScreenshot) {
+      // Captura de la app en un "teléfono" sobre un fondo liso, un poco más
+      // oscuro que la página para distinguir la lámina.
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF07090C),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF05050A),
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(color: Colors.white.withOpacity(0.14)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 26,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(21),
+                    child: Image.asset(
+                      slide.image,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) =>
+                          const SizedBox(width: 200, height: 320),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            _slideTexts(slide),
+          ],
+        ),
+      );
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(32),
       child: Stack(
@@ -1050,6 +1037,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => _slideFallback(i),
           ),
+          // Atenúa la foto (40%) para que las personas no sean protagonistas.
+          const ColoredBox(color: Color(0x66000000)),
           // Degradado para que el texto y la tarjeta se lean sobre la foto.
           const DecoratedBox(
             decoration: BoxDecoration(
@@ -1072,27 +1061,9 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Spacer(),
-                _slideCard(i),
+                _slideCard(slide.card),
                 const SizedBox(height: 20),
-                Text(
-                  slide.title,
-                  style: const TextStyle(
-                    fontFamily: 'Sora',
-                    color: Colors.white,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  slide.subtitle,
-                  style: TextStyle(
-                    fontFamily: 'Sora',
-                    color: Colors.white.withOpacity(0.75),
-                    fontSize: 13,
-                  ),
-                ),
+                _slideTexts(slide),
               ],
             ),
           ),
