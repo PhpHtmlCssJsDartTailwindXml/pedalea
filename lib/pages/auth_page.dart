@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:pedalea/pages/map_page.dart';
 import 'package:pedalea/pages/onboarding_page.dart';
@@ -12,6 +13,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/co2_service.dart';
 import '../widgets/loop_bike_lane_painter.dart';
 import 'terms_page.dart';
 
@@ -43,6 +45,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
   final _confirmSignupPasswordCtrl = TextEditingController();
 
   bool _isLogin = true;
+  Map<String, dynamic>? _community; // totales de la comunidad
   bool _loading = false;
   bool _obscure = true;
   bool _keepSession = true;
@@ -101,6 +104,7 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1000),
     );
     _runWelcomeSequence();
+    _loadCommunity();
 
     supabase.auth.onAuthStateChange.listen((data) {
       final session = data.session;
@@ -611,7 +615,9 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 12),
+                        _buildCommunityStrip(),
+                        const SizedBox(height: 16),
                         Expanded(child: _buildImageCarousel()),
                         const SizedBox(height: 36),
                         AnimatedSwitcher(
@@ -629,6 +635,110 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _kCommunityKey = 'community_stats_v1';
+
+  /// Totales de la comunidad: primero lo último guardado (instantáneo y sin
+  /// red), luego el valor fresco desde Supabase.
+  Future<void> _loadCommunity() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_kCommunityKey);
+      if (cached != null && mounted && _community == null) {
+        setState(() =>
+            _community = Map<String, dynamic>.from(jsonDecode(cached) as Map));
+      }
+      final res = await supabase.rpc('community_stats');
+      final map = Map<String, dynamic>.from(
+          res is String ? jsonDecode(res) as Map : res as Map);
+      await prefs.setString(_kCommunityKey, jsonEncode(map));
+      if (mounted) setState(() => _community = map);
+    } catch (e) {
+      debugPrint('community_stats: $e');
+    }
+  }
+
+  static String _fmtInt(num n) {
+    final v = n.round();
+    if (v >= 10000) return '${(v / 1000).toStringAsFixed(1)}k';
+    final s = v.toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+
+  /// Franja "en vivo" con cifras reales de la comunidad (cuenta hacia arriba).
+  Widget _buildCommunityStrip() {
+    final c = _community;
+    if (c == null) return const SizedBox(height: 34);
+    final cyclists = (c['cyclists'] as num?)?.toDouble() ?? 0;
+    final km = (c['total_km'] as num?)?.toDouble() ?? 0;
+    final co2 = Co2Service.savedKg(km);
+
+    Widget item(double value, String Function(double) fmt, String label) {
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: value),
+        duration: const Duration(milliseconds: 1400),
+        curve: Curves.easeOutCubic,
+        builder: (_, v, _) => Text.rich(
+          TextSpan(children: [
+            TextSpan(
+              text: fmt(v),
+              style: TextStyle(
+                color: _pageFg,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            TextSpan(
+              text: ' $label',
+              style: TextStyle(color: _pageFg.withOpacity(0.55)),
+            ),
+          ]),
+          style: const TextStyle(fontFamily: 'Sora', fontSize: 12.5),
+        ),
+      );
+    }
+
+    Widget dot() => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          child: Text('·',
+              style: TextStyle(
+                  color: _pageFg.withOpacity(0.35),
+                  fontWeight: FontWeight.w900)),
+        );
+
+    return AnimatedOpacity(
+      opacity: 1,
+      duration: const Duration(milliseconds: 400),
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: _kGreen.withOpacity(_isDarkMode ? 0.12 : 0.08),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: _kGreen.withOpacity(0.3)),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _LiveDot(color: _kGreen),
+              const SizedBox(width: 8),
+              item(cyclists, _fmtInt, 'ciclistas'),
+              dot(),
+              item(km, _fmtInt, 'km'),
+              dot(),
+              item(co2, (v) => Co2Service.format(v), 'CO₂'),
+            ],
           ),
         ),
       ),
@@ -1860,6 +1970,64 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Punto verde que late suavemente (indicador "en vivo").
+class _LiveDot extends StatefulWidget {
+  final Color color;
+  const _LiveDot({required this.color});
+
+  @override
+  State<_LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<_LiveDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 14,
+      height: 14,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, _) => Stack(
+          alignment: Alignment.center,
+          children: [
+            Transform.scale(
+              scale: 1 + _c.value * 1.2,
+              child: Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color.withOpacity(0.45 * (1 - _c.value)),
+                ),
+              ),
+            ),
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
