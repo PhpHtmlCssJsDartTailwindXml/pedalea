@@ -5326,47 +5326,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
-  Future<void> _confirmLogout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF12121C),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          '¿Cerrar sesión?',
-          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
-        ),
-        content: const Text(
-          'Tendrás que iniciar sesión de nuevo para volver a usar Pedalea.',
-          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Cerrar sesión',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.redAccent,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await _logout();
-    }
-  }
-
   Future<void> _logout() async {
     await Supabase.instance.client.auth.signOut();
     if (mounted) {
@@ -5972,30 +5931,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                     child: Row(
                       children: [
                         Expanded(
-                          child: _drawerFooterButton(
-                            color: Colors.redAccent,
-                            onTap: _confirmLogout,
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.logout_rounded,
-                                  color: Colors.redAccent,
-                                  size: 19,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  "Cerrar sesión",
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: Colors.redAccent,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          child: _LogoutInlineButton(onConfirm: _logout),
                         ),
                         const SizedBox(width: 10),
                         Tooltip(
@@ -11627,4 +11563,175 @@ class _MenuIconPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MenuIconPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+/// "Cerrar sesión" que se transforma en "¿Salir? No / Sí" en el mismo lugar,
+/// sin abrir un diálogo. Vuelve solo a su estado normal a los 4 segundos.
+class _LogoutInlineButton extends StatefulWidget {
+  final Future<void> Function() onConfirm;
+  const _LogoutInlineButton({required this.onConfirm});
+
+  @override
+  State<_LogoutInlineButton> createState() => _LogoutInlineButtonState();
+}
+
+class _LogoutInlineButtonState extends State<_LogoutInlineButton> {
+  bool _asking = false;
+  bool _leaving = false;
+  Timer? _revert;
+
+  @override
+  void dispose() {
+    _revert?.cancel();
+    super.dispose();
+  }
+
+  void _ask() {
+    HapticFeedback.selectionClick();
+    setState(() => _asking = true);
+    _revert?.cancel();
+    _revert = Timer(const Duration(seconds: 4), () {
+      if (mounted && !_leaving) setState(() => _asking = false);
+    });
+  }
+
+  void _cancel() {
+    _revert?.cancel();
+    setState(() => _asking = false);
+  }
+
+  Future<void> _confirm() async {
+    _revert?.cancel();
+    HapticFeedback.mediumImpact();
+    setState(() => _leaving = true);
+    await widget.onConfirm();
+    if (mounted) setState(() => _leaving = false);
+  }
+
+  Widget _choice({
+    required String label,
+    required VoidCallback? onTap,
+    required bool primary,
+  }) {
+    return Expanded(
+      child: Material(
+        color: primary
+            ? Colors.redAccent
+            : Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: onTap,
+          child: SizedBox(
+            height: 34,
+            child: Center(
+              child: primary && _leaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: primary ? Colors.white : Colors.white70,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      height: 46,
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withOpacity(_asking ? 0.14 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.redAccent.withOpacity(_asking ? 0.5 : 0.22),
+        ),
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.92, end: 1.0).animate(anim),
+            child: child,
+          ),
+        ),
+        child: _asking
+            ? Padding(
+                key: const ValueKey('ask'),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Row(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(left: 6, right: 8),
+                      child: Text(
+                        '¿Salir?',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    _choice(
+                      label: 'No',
+                      primary: false,
+                      onTap: _leaving ? null : _cancel,
+                    ),
+                    const SizedBox(width: 6),
+                    _choice(
+                      label: 'Sí',
+                      primary: true,
+                      onTap: _leaving ? null : _confirm,
+                    ),
+                  ],
+                ),
+              )
+            : Material(
+                key: const ValueKey('idle'),
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: _ask,
+                  child: const Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.logout_rounded,
+                            color: Colors.redAccent, size: 19),
+                        SizedBox(width: 8),
+                        Text(
+                          'Cerrar sesión',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.redAccent,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
 }
