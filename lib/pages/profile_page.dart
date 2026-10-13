@@ -440,26 +440,23 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              _buildAvatar(),
-                              const SizedBox(height: 16),
-                              _buildNameAndBadge(),
-                              const SizedBox(height: 8),
-                              _buildEmail(),
-                              const SizedBox(height: 16),
-                              _buildSocialCard(),
-                              const SizedBox(height: 12),
-                              _buildKarmaCard(),
-                              const SizedBox(height: 12),
-                              _buildPlusCard(),
-                              const SizedBox(height: 12),
-                              _buildMedalPicker(),
-                              const SizedBox(height: 12),
-                              _buildCo2Card(),
-                              const SizedBox(height: 24),
+                              _buildHero(),
+                              const SizedBox(height: 14),
                               if (_editing)
                                 _buildEditForm()
-                              else
+                              else ...[
+                                _buildQuickActions(),
+                                const SizedBox(height: 14),
+                                _buildStatsRow(),
+                                const SizedBox(height: 14),
+                                _buildPlusCard(),
+                                if (_achievements.isNotEmpty) ...[
+                                  const SizedBox(height: 28),
+                                  _buildAchievements(),
+                                ],
+                                const SizedBox(height: 28),
                                 _buildProfileInfo(),
+                              ],
                             ],
                           ),
                         );
@@ -501,29 +498,241 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  static const _accent = Color(0xFF7CF0BC);
+  static const _heroMid = Color(0xFF1E5C41);
+
+  /// Tarjeta principal: foto, nombre, Plus, correo y contadores sociales.
+  Widget _buildHero() {
+    final fullName = (_profile?['full_name'] as String? ?? '').trim();
+    final username = (_profile?['username'] as String? ?? '').trim();
+    final isPlus = _profile?['is_plus'] as bool? ?? false;
+    final displayName = fullName.isNotEmpty
+        ? fullName
+        : (username.isNotEmpty ? username : 'Ciclista Pedalea');
+    final uid = _user?.id;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2F8F63), _heroMid, Color(0xFF153F2E)],
+          stops: [0.0, 0.55, 1.0],
+        ),
+        border: Border.all(color: _accent.withOpacity(0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2F8F63).withOpacity(0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            // Círculos decorativos (como una rueda).
+            Positioned(
+              right: -40,
+              top: -40,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.07),
+                    width: 16,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: -30,
+              bottom: -40,
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.04),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _buildAvatar(),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (isPlus) _plusChip(),
+                                if (username.isNotEmpty)
+                                  Text(
+                                    '@$username',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                if (_isGoogleUser) ...[
+                                  const _GoogleIcon(size: 12),
+                                  const SizedBox(width: 5),
+                                ] else ...[
+                                  Icon(Icons.email_outlined,
+                                      color: Colors.white.withOpacity(0.5),
+                                      size: 13),
+                                  const SizedBox(width: 5),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    _user?.email ?? '—',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.white.withOpacity(0.55),
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        _socialStat('$_momentCount', 'Momentos', () {
+                          if (uid != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PublicProfilePage(userId: uid),
+                              ),
+                            ).then((_) => _loadSocial());
+                          }
+                        }),
+                        _statDivider(),
+                        _socialStat('$_followers', 'Seguidores', null),
+                        _statDivider(),
+                        _socialStat('$_following', 'Siguiendo', null),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _plusChip() {
+    return ValueListenableBuilder<int>(
+      valueListenable: PlusPrefsService.medalVariant,
+      builder: (context, variant, _) {
+        final c = PlusPrefsService.medalVariants[
+                variant.clamp(0, PlusPrefsService.medalVariants.length - 1)]
+            .$2;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [c.withOpacity(0.35), c.withOpacity(0.15)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: c.withOpacity(0.55)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.workspace_premium_rounded, color: c, size: 12),
+              const SizedBox(width: 3),
+              Text(
+                'PLUS',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: c,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _statDivider() => Container(
+        width: 1,
+        height: 28,
+        color: Colors.white.withOpacity(0.12),
+      );
+
   Widget _buildAvatar() {
     final avatarUrl = _profile?['avatar_url'] as String?;
     final isPlus = _profile?['is_plus'] as bool? ?? false;
-    final ringColor = isPlus ? Colors.amber : Colors.greenAccent;
+    final ringColor = isPlus ? Colors.amber : _accent;
     return GestureDetector(
       onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
       child: Stack(
-        alignment: Alignment.bottomRight,
+        clipBehavior: Clip.none,
         children: [
           Container(
-            width: 100,
-            height: 100,
+            width: 84,
+            height: 84,
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: ringColor.withOpacity(0.6),
-                width: 2,
-              ),
+              color: ringColor,
               boxShadow: [
                 BoxShadow(
-                  color: ringColor.withOpacity(0.2),
-                  blurRadius: 20,
-                  spreadRadius: 2,
+                  color: ringColor.withOpacity(0.4),
+                  blurRadius: 16,
                 ),
               ],
             ),
@@ -550,23 +759,27 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
           // Badge de cámara para indicar que se puede cambiar la foto
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: Colors.greenAccent,
-              shape: BoxShape.circle,
-              border: Border.all(color: kBgDark, width: 2),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: _accent,
+                shape: BoxShape.circle,
+                border: Border.all(color: _heroMid, width: 2.5),
+              ),
+              child: const Icon(Icons.photo_camera_rounded,
+                  color: Colors.black, size: 14),
             ),
-            child: const Icon(Icons.photo_camera_rounded,
-                color: Colors.black, size: 16),
           ),
           // Medalla Plus con brillo (variante elegida por el ciclista)
           if (isPlus)
             const Positioned(
-              bottom: -2,
-              left: -2,
-              child: PlusMedal(size: 26),
+              top: -4,
+              left: -4,
+              child: PlusMedal(size: 26, ringColor: _heroMid),
             ),
         ],
       ),
@@ -575,14 +788,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _avatarFallback() {
     return Container(
-      color: Colors.greenAccent.withOpacity(0.1),
+      color: const Color(0xFF153F2E),
       child: Center(
         child: Text(
           _initials(),
           style: const TextStyle(
             fontFamily: 'Poppins',
-            color: Colors.greenAccent,
-            fontSize: 32,
+            color: _accent,
+            fontSize: 28,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -590,122 +803,178 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildNameAndBadge() {
-    final displayName = (_profile?['full_name'] as String? ?? '').trim();
-    final username = (_profile?['username'] as String? ?? '').trim();
-    final isPlus = _profile?['is_plus'] as bool? ?? false;
-    return Column(
+  /// Accesos rápidos de la parte social.
+  Widget _buildQuickActions() {
+    final uid = _user?.id;
+    return Row(
       children: [
-        if (displayName.isNotEmpty)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  displayName,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (isPlus) ...[
-                const SizedBox(width: 8),
-                ValueListenableBuilder<int>(
-                  valueListenable: PlusPrefsService.medalVariant,
-                  builder: (context, variant, _) {
-                    final c = PlusPrefsService.medalVariants[
-                            variant.clamp(0, PlusPrefsService.medalVariants.length - 1)]
-                        .$2;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: c.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: c.withOpacity(0.45)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.workspace_premium_rounded,
-                              color: c, size: 12),
-                          const SizedBox(width: 3),
-                          Text(
-                            'PLUS',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: c,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ],
-          ),
-        if (username.isNotEmpty)
-          Text(
-            '@$username',
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white38,
-              fontSize: 15,
-            ),
-          ),
-        if (_isGoogleUser) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.blue.withOpacity(0.25)),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _GoogleIcon(size: 14),
-                SizedBox(width: 7),
-                Text(
-                  'Inició sesión con Google',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.lightBlue,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        _quickAction(
+          icon: Icons.grid_view_rounded,
+          label: 'Mis momentos',
+          color: const Color(0xFF69FF47),
+          highlighted: true,
+          onTap: uid == null
+              ? null
+              : () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PublicProfilePage(userId: uid),
+                    ),
+                  ).then((_) => _loadSocial()),
+        ),
+        const SizedBox(width: 10),
+        _quickAction(
+          icon: Icons.auto_awesome_rounded,
+          label: 'Ver feed',
+          color: const Color(0xFF69FF47),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MomentsPage()),
+          ).then((_) => _loadSocial()),
+        ),
+        const SizedBox(width: 10),
+        _quickAction(
+          icon: _pendingReqs > 0
+              ? Icons.group_add_rounded
+              : Icons.group_add_outlined,
+          label: 'Solicitudes',
+          color: _pendingReqs > 0 ? Colors.amber : Colors.white70,
+          badge: _pendingReqs,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const FollowRequestsPage()),
+          ).then((_) => _loadSocial()),
+        ),
       ],
     );
   }
 
-  Widget _buildEmail() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.email_outlined, color: Colors.white24, size: 15),
-        const SizedBox(width: 6),
-        Text(
-          _user?.email ?? '—',
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white38,
-            fontSize: 13,
+  Widget _quickAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback? onTap,
+    bool highlighted = false,
+    int badge = 0,
+  }) {
+    return Expanded(
+      child: Material(
+        color: highlighted
+            ? color.withOpacity(0.14)
+            : Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: highlighted
+                    ? color.withOpacity(0.35)
+                    : Colors.white.withOpacity(0.08),
+              ),
+            ),
+            child: Column(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(icon, color: color, size: 24),
+                    if (badge > 0)
+                      Positioned(
+                        right: -10,
+                        top: -6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.amber,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$badge',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.black,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: highlighted ? Colors.white : Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Nivel de karma e impacto ecológico, lado a lado.
+  Widget _buildStatsRow() {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _buildKarmaCard()),
+          const SizedBox(width: 10),
+          Expanded(child: _buildCo2Card()),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniCard({required Color tint, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: glassDecoration(
+        radius: 20,
+        tint: tint,
+        opacity: 0.07,
+        borderOpacity: 0.12,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _miniCardHeader(String title, Color color, {Widget? trailing}) {
+    return Row(
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.55),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ),
+        ?trailing,
       ],
     );
   }
@@ -721,456 +990,76 @@ class _ProfilePageState extends State<ProfilePage> {
     final nextLevel =
         isMax ? null : KarmaService.levels[levelIndex + 1];
 
-    return Container(
-      decoration: glassDecoration(
-        radius: 20,
-        tint: levelColor,
-        opacity: 0.07,
-        borderOpacity: 0.18,
-      ),
-      padding: const EdgeInsets.all(18),
+    return _miniCard(
+      tint: levelColor,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              // Emoji nivel
-              Text(level.emoji,
-                  style: const TextStyle(fontSize: 34)),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          level.title,
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: levelColor,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: levelColor.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: levelColor.withOpacity(0.3)),
-                          ),
-                          child: Text(
-                            '$_karma karma',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: levelColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        backgroundColor: Colors.white10,
-                        valueColor:
-                            AlwaysStoppedAnimation(levelColor),
-                        minHeight: 5,
-                      ),
-                    ),
-                    if (!isMax && nextLevel != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Próximo: ${nextLevel.emoji} ${nextLevel.title} (${nextLevel.minKarma} pts)',
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white38,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Nivel máximo alcanzado',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white38,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+          _miniCardHeader(
+            'NIVEL',
+            levelColor,
+            trailing: Tooltip(
+              triggerMode: TooltipTriggerMode.tap,
+              showDuration: const Duration(seconds: 4),
+              message:
+                  'El karma sube con votos positivos en tus reportes y baja con votos negativos.',
+              child: const Icon(Icons.info_outline,
+                  color: Colors.white38, size: 15),
+            ),
           ),
-          const SizedBox(height: 12),
-          const Divider(color: Colors.white10, height: 1),
           const SizedBox(height: 10),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.info_outline,
-                  color: Colors.white24, size: 14),
-              const SizedBox(width: 6),
-              const Expanded(
+              Text(level.emoji, style: const TextStyle(fontSize: 26)),
+              const SizedBox(width: 8),
+              Expanded(
                 child: Text(
-                  'El karma sube con votos positivos en tus reportes y baja con votos negativos.',
+                  level.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'Poppins',
-                    color: Colors.white24,
-                    fontSize: 11,
+                    color: levelColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$_karma karma',
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Colors.white10,
+              valueColor: AlwaysStoppedAnimation(levelColor),
+              minHeight: 5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            !isMax && nextLevel != null
+                ? 'Próximo: ${nextLevel.emoji} ${nextLevel.title} (${nextLevel.minKarma} pts)'
+                : 'Nivel máximo alcanzado',
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white38,
+              fontSize: 10.5,
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPlusCard() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: SubscriptionService.instance.isPlus,
-      builder: (context, isPlus, _) {
-        return GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => isPlus
-                  ? const ManageSubscriptionPage()
-                  : const PaywallPage(),
-            ),
-          ),
-          child: Container(
-            decoration: glassDecoration(
-              radius: 20,
-              tint: isPlus ? Colors.amber : Colors.greenAccent,
-              opacity: isPlus ? 0.08 : 0.05,
-              borderOpacity: isPlus ? 0.25 : 0.16,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: Row(
-              children: [
-                Icon(
-                  isPlus ? Icons.workspace_premium_rounded : Icons.workspace_premium_outlined,
-                  color: isPlus ? Colors.amber : Colors.greenAccent,
-                  size: 28,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isPlus ? 'Pedalea Plus activo' : 'Hazte Pedalea Plus',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: isPlus ? Colors.amber : Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        isPlus
-                            ? 'Toca para gestionar tu suscripción'
-                            : 'Estadísticas avanzadas, eventos ilimitados y más',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white.withOpacity(0.5),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right, color: Colors.white38, size: 20),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Selector de variante de medalla Plus. Siempre visible: si no eres Plus se
-  /// muestra bloqueado (ves las opciones pero no puedes aplicarlas).
-  Widget _buildMedalPicker() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: SubscriptionService.instance.isPlus,
-      builder: (context, isPlus, _) => ValueListenableBuilder<int>(
-        valueListenable: PlusPrefsService.medalVariant,
-        builder: (context, sel, _) {
-          void openPaywall() => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const PaywallPage(
-                    reason:
-                        'Personaliza tu medalla y lúcela en el perfil y el chat con Pedalea Plus.',
-                  ),
-                ),
-              );
-          return GestureDetector(
-            onTap: isPlus ? null : openPaywall,
-            child: Container(
-              decoration: glassDecoration(
-                radius: 20,
-                tint: Colors.amber,
-                opacity: isPlus ? 0.06 : 0.04,
-                borderOpacity: isPlus ? 0.18 : 0.1,
-              ),
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Tu medalla Plus',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (!isPlus) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.lock_outline_rounded,
-                                  size: 10, color: Colors.amber),
-                              SizedBox(width: 3),
-                              Text('PLUS',
-                                  style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: Colors.amber,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w800)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    isPlus
-                        ? 'Elige el brillo con el que te ven en el perfil y el chat'
-                        : 'Vuelve a Pedalea Plus para lucir tu medalla',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Opacity(
-                    opacity: isPlus ? 1 : 0.45,
-                    child: Wrap(
-                      spacing: 18,
-                      runSpacing: 14,
-                      children: [
-                        for (int i = 0;
-                            i < PlusPrefsService.medalVariants.length;
-                            i++)
-                          GestureDetector(
-                            onTap: isPlus
-                                ? () => PlusPrefsService.setMedalVariant(i)
-                                : openPaywall,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: (isPlus && sel == i)
-                                          ? Colors.white
-                                          : Colors.transparent,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: PlusMedal(
-                                    size: 34,
-                                    variant: i,
-                                    ringColor: const Color(0xFF16161F),
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  PlusPrefsService.medalVariants[i].$1,
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: (isPlus && sel == i)
-                                        ? Colors.white
-                                        : Colors.white.withOpacity(0.45),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// Momentos + seguidores/siguiendo + acceso al perfil de momentos.
-  Widget _buildSocialCard() {
-    final uid = _user?.id;
-    return Container(
-      decoration: glassDecoration(
-        radius: 20,
-        tint: const Color(0xFF69FF47),
-        opacity: 0.05,
-        borderOpacity: 0.14,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _socialStat('$_momentCount', 'Momentos', () {
-                if (uid != null) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PublicProfilePage(userId: uid),
-                    ),
-                  ).then((_) => _loadSocial());
-                }
-              }),
-              _socialStat('$_followers', 'Seguidores', null),
-              _socialStat('$_following', 'Siguiendo', null),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Botón: abre tu perfil de momentos (la vista pública, con tu grid).
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: uid == null
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PublicProfilePage(userId: uid),
-                        ),
-                      ).then((_) => _loadSocial()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF69FF47),
-                foregroundColor: Colors.black,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.grid_view_rounded, size: 18),
-              label: const Text('Mi perfil de momentos',
-                  style: TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MomentsPage()),
-                  ).then((_) => _loadSocial()),
-                  icon: const Icon(Icons.auto_awesome_rounded,
-                      size: 18, color: Color(0xFF69FF47)),
-                  label: const Text('Ver feed',
-                      style: TextStyle(
-                          fontFamily: 'Poppins', color: Colors.white70)),
-                ),
-              ),
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const FollowRequestsPage()),
-                  ).then((_) => _loadSocial()),
-                  icon: Icon(
-                    _pendingReqs > 0
-                        ? Icons.group_add_rounded
-                        : Icons.group_add_outlined,
-                    size: 18,
-                    color: _pendingReqs > 0
-                        ? Colors.amber
-                        : Colors.white54,
-                  ),
-                  label: Text(
-                    _pendingReqs > 0
-                        ? 'Solicitudes ($_pendingReqs)'
-                        : 'Solicitudes',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: _pendingReqs > 0 ? Colors.amber : Colors.white70,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _socialStat(String value, String label, VoidCallback? onTap) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
-            children: [
-              Text(value,
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700)),
-              Text(label,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 11)),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1181,54 +1070,321 @@ class _ProfilePageState extends State<ProfilePage> {
     final co2Str  = Co2Service.format(co2Kg);
     final treeStr = Co2Service.treeEquivalent(co2Kg);
 
-    return Container(
-      decoration: glassDecoration(
-        radius: 20,
-        tint: Colors.lightGreenAccent,
-        opacity: 0.05,
-        borderOpacity: 0.14,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      child: Row(
+    return _miniCard(
+      tint: Colors.lightGreenAccent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('🌱', style: TextStyle(fontSize: 32)),
-          const SizedBox(width: 14),
-          Expanded(
+          _miniCardHeader('IMPACTO', Colors.lightGreenAccent,
+              trailing: const Text('🌱', style: TextStyle(fontSize: 15))),
+          const SizedBox(height: 10),
+          Text(
+            '${totalKm.toStringAsFixed(1)} km',
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.lightGreenAccent,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+            ),
+          ),
+          Text(
+            'pedaleados',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.45),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.lightGreenAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: Colors.lightGreenAccent.withOpacity(0.25)),
+            ),
+            child: Text(
+              '$co2Str CO₂ ahorrado',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.lightGreenAccent,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (treeStr.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              treeStr,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white38,
+                fontSize: 10.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Pedalea Plus: estado de la suscripción + selector de medalla, en una
+  /// sola tarjeta.
+  Widget _buildPlusCard() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: SubscriptionService.instance.isPlus,
+      builder: (context, isPlus, _) {
+        final color = isPlus ? Colors.amber : Colors.greenAccent;
+        return Container(
+          decoration: glassDecoration(
+            radius: 20,
+            tint: Colors.amber,
+            opacity: isPlus ? 0.07 : 0.04,
+            borderOpacity: isPlus ? 0.2 : 0.12,
+          ),
+          child: Column(
+            children: [
+              InkWell(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => isPlus
+                        ? const ManageSubscriptionPage()
+                        : const PaywallPage(),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(color: color.withOpacity(0.25)),
+                        ),
+                        child: Icon(
+                          isPlus
+                              ? Icons.workspace_premium_rounded
+                              : Icons.workspace_premium_outlined,
+                          color: color,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isPlus
+                                  ? 'Pedalea Plus activo'
+                                  : 'Hazte Pedalea Plus',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: isPlus ? Colors.amber : Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              isPlus
+                                  ? 'Toca para gestionar tu suscripción'
+                                  : 'Estadísticas avanzadas, eventos ilimitados y más',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded,
+                          color: Colors.white38, size: 22),
+                    ],
+                  ),
+                ),
+              ),
+              Divider(
+                height: 1,
+                color: Colors.white.withOpacity(0.07),
+                indent: 16,
+                endIndent: 16,
+              ),
+              _buildMedalPicker(isPlus),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Selector de variante de medalla Plus. Siempre visible: si no eres Plus se
+  /// muestra bloqueado (ves las opciones pero no puedes aplicarlas).
+  Widget _buildMedalPicker(bool isPlus) {
+    return ValueListenableBuilder<int>(
+      valueListenable: PlusPrefsService.medalVariant,
+      builder: (context, sel, _) {
+        void openPaywall() => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const PaywallPage(
+                  reason:
+                      'Personaliza tu medalla y lúcela en el perfil y el chat con Pedalea Plus.',
+                ),
+              ),
+            );
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: isPlus ? null : openPaywall,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Impacto ecológico',
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 4),
                 Row(
                   children: [
-                    Text(
-                      '${totalKm.toStringAsFixed(1)} km',
-                      style: const TextStyle(fontFamily: 'Poppins', color: Colors.lightGreenAccent, fontSize: 18, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.lightGreenAccent.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.lightGreenAccent.withOpacity(0.25)),
-                      ),
-                      child: Text(
-                        '$co2Str CO₂',
-                        style: const TextStyle(fontFamily: 'Poppins', color: Colors.lightGreenAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                    const Text(
+                      'Tu medalla',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (!isPlus) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_outline_rounded,
+                                size: 10, color: Colors.amber),
+                            SizedBox(width: 3),
+                            Text('PLUS',
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: Colors.amber,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                if (treeStr.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(treeStr, style: const TextStyle(fontFamily: 'Poppins', color: Colors.white38, fontSize: 11)),
-                ],
+                const SizedBox(height: 2),
+                Text(
+                  isPlus
+                      ? 'Elige el brillo con el que te ven en el perfil y el chat'
+                      : 'Vuelve a Pedalea Plus para lucir tu medalla',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Opacity(
+                  opacity: isPlus ? 1 : 0.45,
+                  child: Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    children: [
+                      for (int i = 0;
+                          i < PlusPrefsService.medalVariants.length;
+                          i++)
+                        GestureDetector(
+                          onTap: isPlus
+                              ? () => PlusPrefsService.setMedalVariant(i)
+                              : openPaywall,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: (isPlus && sel == i)
+                                        ? Colors.white
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: PlusMedal(
+                                  size: 32,
+                                  variant: i,
+                                  ringColor: const Color(0xFF16161F),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                PlusPrefsService.medalVariants[i].$1,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: (isPlus && sel == i)
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.45),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _socialStat(String value, String label, VoidCallback? onTap) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            children: [
+              Text(value,
+                  style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1)),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 11)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1266,7 +1422,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ]),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         _sectionLabel('CONTACTO DE EMERGENCIA'),
         const SizedBox(height: 10),
         Container(
@@ -1318,7 +1474,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         _sectionLabel('CUENTA'),
         const SizedBox(height: 10),
         Container(
@@ -1343,10 +1499,6 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ]),
         ),
-        if (_achievements.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          _buildAchievements(),
-        ],
         const SizedBox(height: 32),
         OutlinedButton.icon(
           onPressed: () async {
@@ -1712,25 +1864,47 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _sectionLabel(String text) => Padding(
         padding: const EdgeInsets.only(left: 4),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white24,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.2,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 3,
+              height: 12,
+              decoration: BoxDecoration(
+                color: _accent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              text,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.55),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
         ),
       );
 
   Widget _infoRow(IconData icon, String label, String value,
       {Color? valueColor}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
-          Icon(icon, color: Colors.greenAccent.withOpacity(0.7), size: 17),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: _accent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: _accent, size: 16),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1763,8 +1937,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _divider() => Divider(
         height: 1,
         color: Colors.white.withOpacity(0.06),
-        indent: 46,
-        endIndent: 16,
+        indent: 58,
+        endIndent: 14,
       );
 }
 
