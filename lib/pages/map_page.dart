@@ -3526,10 +3526,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
+  /// Fila de chips bajo la barra superior: estado (ciclista / pasajero) a la
+  /// izquierda y clima a la derecha.
   Widget _buildTopBar() {
-    final statusColor = _isPassenger
-        ? Colors.lightBlueAccent
-        : Colors.greenAccent;
+    final accent =
+        _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
+    final statusColor = _isPassenger ? Colors.lightBlueAccent : accent;
     final vInfo = _vehicleInfo(_passengerVehicle);
     final statusIcon = _isPassenger
         ? (_passengerVehicle == 'micro'
@@ -3538,79 +3540,220 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ? Icons.subway_rounded
               : Icons.directions_car_rounded)
         : Icons.directions_bike;
-    final statusText = _isPassenger
-        ? 'PASAJERO · ${vInfo.label.toUpperCase()}'
-        : 'CICLISTA ACTIVO';
-    return Container(
-      decoration: _dayNightBox(radius: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: statusColor,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: statusColor.withOpacity(0.6),
-                  blurRadius: 6,
-                  spreadRadius: 1,
+    final statusText =
+        _isPassenger ? 'Pasajero · ${vInfo.label}' : 'Ciclista activo';
+
+    return Row(
+      children: [
+        Flexible(
+          child: Container(
+            height: 38,
+            padding: const EdgeInsets.only(left: 12, right: 5),
+            decoration: _dayNightBox(radius: 19),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: statusColor.withOpacity(0.6),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Icon(
+                  statusIcon,
+                  color: _isPassenger ? Colors.lightBlue : accent,
+                  size: 17,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    statusText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: _overlayText,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 7),
+                if (_isPassenger)
+                  GestureDetector(
+                    onTap: () => _exitPassengerMode(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.greenAccent.withOpacity(0.4),
+                        ),
+                      ),
+                      child: const Text(
+                        '🚴 Pedalear',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.greenAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 5),
               ],
             ),
           ),
+        ),
+        if (!_isPassenger) ...[
           const SizedBox(width: 8),
-          Icon(
-            statusIcon,
-            color: _isPassenger
-                ? Colors.lightBlue
-                : (_isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent),
-            size: 20,
+          Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.center,
+            decoration: _dayNightBox(radius: 19),
+            child: WeatherPill(isDayMode: _isDayMode),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              statusText,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: _overlayText,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                letterSpacing: 0.5,
+        ],
+      ],
+    );
+  }
+
+  /// Píldora ancha de búsqueda de destino (abre el buscador).
+  Widget _buildSearchPill() {
+    final accent =
+        _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _openPlaceSearch,
+        borderRadius: BorderRadius.circular(24),
+        child: Ink(
+          height: 48,
+          decoration: _dayNightBox(radius: 24),
+          child: Row(
+            children: [
+              const SizedBox(width: 14),
+              Icon(Icons.search_rounded, color: accent, size: 21),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '¿A dónde vas?',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: _overlaySubtext,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Botón redondo de mensajes con contador de no leídos.
+  Widget _buildMessagesButton() {
+    final accent =
+        _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: _dayNightBox(radius: 24),
+          child: IconButton(
+            icon: Icon(Icons.forum_rounded, color: accent, size: 21),
+            tooltip: 'Mensajes',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MessagesPage()),
+              ).then((_) => _loadDmUnread());
+            },
+          ),
+        ),
+        if (_dmUnread > 0)
+          Positioned(
+            top: -2,
+            right: -2,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF4D6D),
+                  shape: BoxShape.circle,
+                ),
+                constraints:
+                    const BoxConstraints(minWidth: 17, minHeight: 17),
+                child: Text(
+                  _dmUnread > 9 ? '9+' : '$_dmUnread',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ),
           ),
-          if (_isPassenger)
-            GestureDetector(
-              onTap: () => _exitPassengerMode(),
-              child: Container(
-                margin: const EdgeInsets.only(right: 4),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.greenAccent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.greenAccent.withOpacity(0.4),
-                  ),
-                ),
-                child: const Text(
-                  '🚴 Pedalear',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.greenAccent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            )
-          else
-            WeatherPill(isDayMode: _isDayMode),
+      ],
+    );
+  }
+
+  /// Grupo vertical de controles del mapa: orientar al norte y seguir
+  /// ubicación, en una sola cápsula.
+  Widget _buildMapControls() {
+    final accent =
+        _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
+    final idle = _isDayMode ? const Color(0xFF333355) : Colors.white;
+    return Container(
+      width: 48,
+      decoration: _dayNightBox(radius: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(Icons.explore, color: accent, size: 22),
+            onPressed: _resetNorth,
+            tooltip: 'Orientar al norte',
+          ),
+          Container(
+            width: 24,
+            height: 1,
+            color: _overlayText.withOpacity(0.12),
+          ),
+          IconButton(
+            icon: Icon(
+              _isFollowingUser ? Icons.navigation : Icons.navigation_outlined,
+              color: _isFollowingUser ? accent : idle,
+              size: 22,
+            ),
+            onPressed: _toggleFollowing,
+            tooltip: 'Seguir ubicación',
+          ),
         ],
       ),
     );
@@ -6059,6 +6202,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   @override
   Widget build(BuildContext context) {
     MapboxOptions.setAccessToken(kMapboxToken);
+    final topInset = MediaQuery.of(context).padding.top;
     return Scaffold(
       key: _scaffoldKey,
       extendBodyBehindAppBar: true,
@@ -6139,7 +6283,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
           if (_showLayersTip)
             Positioned(
-              top: 195,
+              top: topInset + 118,
               left: 20,
               right: 20,
               child: AnimatedOpacity(
@@ -6223,12 +6367,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             ),
 
-          Positioned(top: 120, left: 20, right: 20, child: _buildTopBar()),
+          Positioned(
+            top: topInset + 68,
+            left: 16,
+            right: 16,
+            child: _buildTopBar(),
+          ),
           Positioned(left: 20, bottom: 64, child: _buildSpeedometer()),
 
           if (_isSelectingLocation && _selectedLocation != null)
             Positioned(
-              bottom: 120,
+              bottom: 250,
               right: 20,
               child: FloatingActionButton(
                 backgroundColor: Colors.greenAccent,
@@ -6237,39 +6386,35 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             ),
 
+          // ── Barra superior: menú · búsqueda · mensajes · perfil ──────────
           Positioned(
-            top: 50,
+            top: topInset + 10,
             left: 16,
-            child: _MenuToggleButton(
-              open: _drawerOpen,
-              onPressed: () {
-                if (_drawerOpen) {
-                  _scaffoldKey.currentState?.closeDrawer();
-                } else {
-                  _scaffoldKey.currentState?.openDrawer();
-                }
-              },
-            ),
-          ),
-          // ── Botón de búsqueda de destino ────────────────────────
-          Positioned(
-            top: 50,
-            left: 74,
-            child: Container(
-              decoration: _dayNightBox(radius: 30),
-              child: IconButton(
-                icon: Icon(
-                  Icons.search,
-                  color: _isDayMode
-                      ? const Color(0xFF00A86B)
-                      : Colors.greenAccent,
-                  size: 22,
+            right: 16,
+            child: Row(
+              children: [
+                _MenuToggleButton(
+                  open: _drawerOpen,
+                  onPressed: () {
+                    if (_drawerOpen) {
+                      _scaffoldKey.currentState?.closeDrawer();
+                    } else {
+                      _scaffoldKey.currentState?.openDrawer();
+                    }
+                  },
                 ),
-                onPressed: _openPlaceSearch,
-                tooltip: 'Buscar destino',
-              ),
+                const SizedBox(width: 10),
+                Expanded(child: _buildSearchPill()),
+                const SizedBox(width: 10),
+                _buildMessagesButton(),
+                const SizedBox(width: 8),
+                _ProfileButton(isDayMode: _isDayMode),
+              ],
             ),
           ),
+          // ── Controles del mapa (norte / seguir) ─────────────────
+          Positioned(right: 25, bottom: 138, child: _buildMapControls()),
+
           // ── Botón de pánico ─────────────────────────────────────
           Positioned(bottom: 64, right: 20, child: _PanicButton()),
 
@@ -6279,7 +6424,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
           // ── Hint "toca el mapa" cuando _routeAddMode ─────────────────────
           if (_routePlannerOpen && _routeAddMode)
             Positioned(
-              top: 100,
+              top: topInset + 118,
               left: 0,
               right: 0,
               child: Center(
@@ -6367,106 +6512,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
               child: _buildRoutePlannerPanel(),
             ),
 
-          Positioned(
-            top: 50,
-            right: 16,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: _dayNightBox(radius: 30),
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.explore,
-                      color: _isDayMode
-                          ? const Color(0xFF00A86B)
-                          : Colors.greenAccent,
-                      size: 22,
-                    ),
-                    onPressed: _resetNorth,
-                    tooltip: 'Orientar al norte',
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: _dayNightBox(radius: 30),
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.navigation,
-                      color: _isFollowingUser
-                          ? (_isDayMode
-                                ? const Color(0xFF00A86B)
-                                : Colors.greenAccent)
-                          : (_isDayMode
-                                ? const Color(0xFF333355)
-                                : Colors.white),
-                      size: 22,
-                    ),
-                    onPressed: _toggleFollowing,
-                    tooltip: 'Seguir ubicación',
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        decoration: _dayNightBox(radius: 30),
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.forum_rounded,
-                            color: _isDayMode
-                                ? const Color(0xFF00A86B)
-                                : Colors.greenAccent,
-                            size: 22,
-                          ),
-                          tooltip: 'Mensajes',
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const MessagesPage(),
-                              ),
-                            ).then((_) => _loadDmUnread());
-                          },
-                        ),
-                      ),
-                      if (_dmUnread > 0)
-                        Positioned(
-                          top: -2,
-                          right: -2,
-                          child: IgnorePointer(
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFF4D6D),
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                  minWidth: 17, minHeight: 17),
-                              child: Text(
-                                _dmUnread > 9 ? '9+' : '$_dmUnread',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                _ProfileButton(isDayMode: _isDayMode),
-              ],
-            ),
-          ),
-
           // ── Burbuja flotante de ayuda: se puede arrastrar por todo el
           // mapa; al tocarla hace un pequeño efecto y muestra un tip corto
           // al lado, sin abrir ningún modal.
@@ -6474,7 +6519,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             builder: (context) {
               final size = MediaQuery.of(context).size;
               final pos =
-                  _helpBubblePos ?? Offset(size.width - 64, size.height - 220);
+                  _helpBubblePos ?? Offset(16, size.height - 272);
               const bubbleSize = 48.0;
               const tipMaxWidth = 220.0;
               const gap = 8.0;
