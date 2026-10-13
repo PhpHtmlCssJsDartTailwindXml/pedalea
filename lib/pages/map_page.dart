@@ -5402,21 +5402,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
-  Widget _drawerIconTile(
-    IconData icon, {
-    Color color = const Color(0xFF7CF0BC),
-  }) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.09),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Icon(icon, color: color, size: 20),
-    );
-  }
-
   Widget _drawerFooter() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
@@ -5454,7 +5439,234 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
+  // ── Piezas del menú lateral ─────────────────────────────────────────────
+  static const _drawerAccent = Color(0xFF7CF0BC);
+
+  /// Sección del menú: tarjeta redondeada que se expande.
+  Widget _drawerSection({
+    required IconData icon,
+    required String title,
+    required String hint,
+    required List<Widget> children,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.035),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+        ),
+        child: ExpansionTile(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          collapsedShape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: _drawerAccent.withOpacity(0.025),
+          tilePadding: const EdgeInsets.only(left: 12, right: 14),
+          childrenPadding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+          iconColor: _drawerAccent,
+          collapsedIconColor: Colors.white38,
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _drawerAccent.withOpacity(0.22),
+                  _drawerAccent.withOpacity(0.06),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: _drawerAccent.withOpacity(0.18)),
+            ),
+            child: Icon(icon, color: _drawerAccent, size: 21),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            hint,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.38),
+              fontSize: 11.5,
+            ),
+          ),
+          children: children,
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItemIcon(IconData icon, Color color) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.13),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.18)),
+      ),
+      child: Icon(icon, color: color, size: 19),
+    );
+  }
+
+  Widget _drawerItemTexts(String title, String subtitle) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.48),
+              fontSize: 11.5,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Fila que navega a otra pantalla (o ejecuta una acción).
+  Widget _drawerNavItem({
+    required IconData icon,
+    Color color = _drawerAccent,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        child: Row(
+          children: [
+            _drawerItemIcon(icon, color),
+            const SizedBox(width: 12),
+            _drawerItemTexts(title, subtitle),
+            const SizedBox(width: 8),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white54,
+                size: 18,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Fila con interruptor. Tocar cualquier parte de la fila lo cambia.
+  Widget _drawerSwitchItem({
+    required IconData icon,
+    bool loading = false,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 7, 4, 7),
+        child: Row(
+          children: [
+            loading
+                ? Container(
+                    width: 36,
+                    height: 36,
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.13),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: CircularProgressIndicator(
+                      color: color,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : _drawerItemIcon(icon, color),
+            const SizedBox(width: 12),
+            _drawerItemTexts(title, subtitle),
+            Transform.scale(
+              scale: 0.82,
+              child: Switch(
+                value: value,
+                onChanged: onChanged,
+                activeThumbColor: color,
+                activeTrackColor: color.withOpacity(0.32),
+                inactiveThumbColor: Colors.white54,
+                inactiveTrackColor: Colors.white.withOpacity(0.08),
+                trackOutlineColor:
+                    const WidgetStatePropertyAll(Colors.transparent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Botón cuadrado/alargado del pie del menú (cerrar sesión, ajustes).
+  Widget _drawerFooterButton({
+    required Color color,
+    required VoidCallback onTap,
+    required Widget child,
+    double? width,
+  }) {
+    return Material(
+      color: color.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          width: width,
+          height: 46,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withOpacity(0.22)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
   Widget _buildDrawer() {
+    final isPlus = SubscriptionService.instance.isPlus.value;
     return Drawer(
       backgroundColor: const Color(0xFF12121C),
       shape: const RoundedRectangleBorder(
@@ -5469,43 +5681,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 padding: EdgeInsets.zero,
                 children: [
                   _DrawerProfileHeader(),
-                  ExpansionTile(
-                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
-                    iconColor: const Color(0xFF7CF0BC),
-                    collapsedIconColor: Colors.white38,
-                    leading: _drawerIconTile(Icons.monitor_heart_rounded),
-                    title: const Text(
-                      "Actividad",
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  const SizedBox(height: 10),
+                  _drawerSection(
+                    icon: Icons.monitor_heart_rounded,
+                    title: "Actividad",
+                    hint: "Estadísticas, rutas y seguimiento",
                     children: [
-                      ListTile(
-                        leading: _drawerIconTile(Icons.bar_chart_rounded),
-                        title: const Text(
-                          "Mis estadísticas",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Km de hoy, semana y racha",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: const Icon(
-                          Icons.chevron_right,
-                          color: Colors.white38,
-                          size: 20,
-                        ),
+                      _drawerNavItem(
+                        icon: Icons.bar_chart_rounded,
+                        title: "Mis estadísticas",
+                        subtitle: "Km de hoy, semana y racha",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(
@@ -5516,50 +5701,23 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           );
                         },
                       ),
-                      ListTile(
-                        leading: _drawerIconTile(
-                          Icons.route,
-                          color: Colors.lightBlueAccent,
-                        ),
-                        title: const Text(
-                          "Planificar ruta",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Multiparada con CO₂ estimado",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
+                      _drawerNavItem(
+                        icon: Icons.route,
+                        color: Colors.lightBlueAccent,
+                        title: "Planificar ruta",
+                        subtitle: "Multiparada con CO₂ estimado",
                         onTap: () {
                           Navigator.pop(context);
                           setState(() => _routePlannerOpen = true);
                           _loadFavorites();
                         },
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.directions_bike_rounded,
+                        color: Colors.greenAccent,
+                        title: "Modo activo",
+                        subtitle: "Cuenta tus km mientras pedaleas",
                         value: _modoActivo,
-                        activeThumbColor: Colors.greenAccent,
-                        title: const Text(
-                          "Modo activo",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Cuenta tus km mientras pedaleas",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (value) {
                           if (value) {
                             // Empieza una sesión nueva: limpia el trazado anterior.
@@ -5576,98 +5734,39 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           }
                         },
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: _shareLiveLocation
+                            ? Icons.share_location_rounded
+                            : Icons.location_off_outlined,
+                        color: Colors.greenAccent,
+                        title: "Compartir mi ubicación en vivo",
+                        subtitle: "Apagado por defecto. Si lo activas, solo te ven "
+                            "en el mapa quienes te siguen mutuamente (nunca "
+                            "toda la app) y con ~30 s de retraso.",
                         value: _shareLiveLocation,
-                        activeThumbColor: Colors.greenAccent,
-                        secondary: Icon(
-                          _shareLiveLocation
-                              ? Icons.share_location_rounded
-                              : Icons.location_off_outlined,
-                          color: Colors.greenAccent,
-                        ),
-                        title: const Text(
-                          "Compartir mi ubicación en vivo",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Apagado por defecto. Si lo activas, solo te ven "
-                          "en el mapa quienes te siguen mutuamente (nunca "
-                          "toda la app) y con ~30 s de retraso.",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: _toggleShareLocation,
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.gps_fixed,
+                        color: Colors.greenAccent,
+                        title: "Contar km en segundo plano",
+                        subtitle:
+                            "Suma tus km aunque no tengas la app abierta (usa más batería)",
                         value: _bgTrackingEnabled,
-                        activeThumbColor: Colors.greenAccent,
-                        secondary: const Icon(
-                          Icons.gps_fixed,
-                          color: Colors.greenAccent,
-                        ),
-                        title: const Text(
-                          "Contar km en segundo plano",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Suma tus km aunque no tengas la app abierta (usa más batería)",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: _toggleBgTracking,
                       ),
                     ],
                   ),
-                  const Divider(color: Colors.white24, height: 16),
-                  ExpansionTile(
-                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
-                    iconColor: const Color(0xFF7CF0BC),
-                    collapsedIconColor: Colors.white38,
-                    leading: _drawerIconTile(Icons.groups_rounded),
-                    title: const Text(
-                      "Comunidad",
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  _drawerSection(
+                    icon: Icons.groups_rounded,
+                    title: "Comunidad",
+                    hint: "Momentos, mensajes, rankings y eventos",
                     children: [
-                      ListTile(
-                        leading: _drawerIconTile(
-                          Icons.auto_awesome_rounded,
-                          color: const Color(0xFF69FF47),
-                        ),
-                        title: const Text(
-                          "Momentos",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Comparte tus mejores fotos pedaleando",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: const Icon(Icons.chevron_right,
-                            color: Colors.white38, size: 20),
+                      _drawerNavItem(
+                        icon: Icons.auto_awesome_rounded,
+                        color: const Color(0xFF69FF47),
+                        title: "Momentos",
+                        subtitle: "Comparte tus mejores fotos pedaleando",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(
@@ -5678,28 +5777,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           );
                         },
                       ),
-                      ListTile(
-                        leading: _drawerIconTile(
-                          Icons.forum_rounded,
-                          color: const Color(0xFF4FC3F7),
-                        ),
-                        title: const Text(
-                          "Mensajes",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Chat con ciclistas que sigues mutuamente",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: const Icon(Icons.chevron_right,
-                            color: Colors.white38, size: 20),
+                      _drawerNavItem(
+                        icon: Icons.forum_rounded,
+                        color: const Color(0xFF4FC3F7),
+                        title: "Mensajes",
+                        subtitle: "Chat con ciclistas que sigues mutuamente",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(
@@ -5710,26 +5792,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           );
                         },
                       ),
-                      ListTile(
-                        leading: _drawerIconTile(
-                          Icons.leaderboard,
-                          color: Colors.amberAccent,
-                        ),
-                        title: const Text(
-                          "Ranking local",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Top comunas y ciclistas",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
+                      _drawerNavItem(
+                        icon: Icons.leaderboard,
+                        color: Colors.amberAccent,
+                        title: "Ranking local",
+                        subtitle: "Top comunas y ciclistas",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(
@@ -5740,26 +5807,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           );
                         },
                       ),
-                      ListTile(
-                        leading: _drawerIconTile(
-                          Icons.emoji_events_rounded,
-                          color: Colors.amberAccent,
-                        ),
-                        title: const Text(
-                          "Ranking de ciclistas",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Km del día, semana y velocidad máx.",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
+                      _drawerNavItem(
+                        icon: Icons.emoji_events_rounded,
+                        color: Colors.amberAccent,
+                        title: "Ranking de ciclistas",
+                        subtitle: "Km del día, semana y velocidad máx.",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(
@@ -5770,23 +5822,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           );
                         },
                       ),
-                      ListTile(
-                        leading: _drawerIconTile(Icons.event),
-                        title: const Text(
-                          "Próximos eventos",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Encuentra ciclistas cerca",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
+                      _drawerNavItem(
+                        icon: Icons.event,
+                        title: "Próximos eventos",
+                        subtitle: "Encuentra ciclistas cerca",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(
@@ -5797,23 +5836,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
                           ).then((_) => _checkAchievementsAndNotify());
                         },
                       ),
-                      ListTile(
-                        leading: _drawerIconTile(Icons.add_location),
-                        title: const Text(
-                          "Crear evento",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Organiza una salida",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
+                      _drawerNavItem(
+                        icon: Icons.add_location,
+                        title: "Crear evento",
+                        subtitle: "Organiza una salida",
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(
@@ -5826,41 +5852,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
                       ),
                     ],
                   ),
-                  const Divider(color: Colors.white24, height: 16),
-                  ExpansionTile(
-                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
-                    iconColor: const Color(0xFF7CF0BC),
-                    collapsedIconColor: Colors.white38,
-                    leading: _drawerIconTile(Icons.notifications_rounded),
-                    title: const Text(
-                      "Alertas",
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  _drawerSection(
+                    icon: Icons.notifications_rounded,
+                    title: "Alertas",
+                    hint: "Reporta problemas en la vía",
                     children: [
-                      ListTile(
-                        leading: _drawerIconTile(
-                          Icons.add_alert,
-                          color: Colors.redAccent,
-                        ),
-                        title: const Text(
-                          "Reportar problema",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: const Text(
-                          "Mantén presionado el mapa donde ocurre el problema",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey,
-                          ),
-                        ),
+                      _drawerNavItem(
+                        icon: Icons.add_alert,
+                        color: Colors.redAccent,
+                        title: "Reportar problema",
+                        subtitle:
+                            "Mantén presionado el mapa donde ocurre el problema",
                         onTap: () {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -5876,42 +5878,19 @@ class _MapPageState extends State<MapPage> with RouteAware {
                       ),
                     ],
                   ),
-                  const Divider(color: Colors.white24, height: 16),
-                  ExpansionTile(
-                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
-                    iconColor: const Color(0xFF7CF0BC),
-                    collapsedIconColor: Colors.white38,
-                    leading: _drawerIconTile(Icons.map_rounded),
-                    title: const Text(
-                      "Mapa",
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  _drawerSection(
+                    icon: Icons.map_rounded,
+                    title: "Mapa",
+                    hint: "Estilo, capas y puntos de interés",
                     children: [
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.dark_mode_rounded,
+                        color: Colors.blueAccent,
+                        title: "Modo oscuro automático",
+                        subtitle: _autoDarkMode
+                            ? "Noche 7pm–7am, día 7am–7pm"
+                            : "Siempre modo noche",
                         value: _autoDarkMode,
-                        activeThumbColor: Colors.blueAccent,
-                        title: const Text(
-                          "Modo oscuro automático",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          _autoDarkMode
-                              ? "Noche 7pm–7am, día 7am–7pm"
-                              : "Siempre modo noche",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (val) {
                           setState(() {
                             _autoDarkMode = val;
@@ -5922,212 +5901,75 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         },
                       ),
                       _mapStylePicker(),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: isPlus
+                            ? Icons.local_fire_department_rounded
+                            : Icons.lock_outline_rounded,
+                        color: const Color(0xFFFF6D00),
+                        title: "Mi mapa de calor",
+                        subtitle: isPlus
+                            ? "Dónde has pedaleado más (Plus)"
+                            : "Función de Pedalea Plus",
                         value: _showHeatmap,
-                        activeThumbColor: const Color(0xFFFF6D00),
-                        secondary: Icon(
-                          SubscriptionService.instance.isPlus.value
-                              ? Icons.local_fire_department_rounded
-                              : Icons.lock_outline_rounded,
-                          color: const Color(0xFFFF6D00),
-                        ),
-                        title: const Text(
-                          "Mi mapa de calor",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          SubscriptionService.instance.isPlus.value
-                              ? "Dónde has pedaleado más (Plus)"
-                              : "Función de Pedalea Plus",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (_) => _toggleHeatmap(),
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.local_parking,
+                        loading: _bikeParkingsLoading,
+                        color: const Color(0xFF00BCD4),
+                        title: "Estacionamientos de bici",
+                        subtitle: "Biciparkings de OpenStreetMap",
                         value: _showBikeParkings,
-                        activeThumbColor: const Color(0xFF00BCD4),
-                        secondary: _bikeParkingsLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFF00BCD4),
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.local_parking,
-                                color: Color(0xFF00BCD4),
-                              ),
-                        title: const Text(
-                          "Estacionamientos de bici",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Biciparkings de OpenStreetMap",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (_) => _toggleBikeParkings(),
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.train,
+                        color: const Color(0xFF7C3AED),
+                        title: "BiciMetro",
+                        subtitle: "Estaciones Metro que permiten bici",
                         value: _showBicimetro,
-                        activeThumbColor: const Color(0xFF7C3AED),
-                        secondary: const Icon(
-                          Icons.train,
-                          color: Color(0xFF7C3AED),
-                        ),
-                        title: const Text(
-                          "BiciMetro",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Estaciones Metro que permiten bici",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (_) => _toggleBicimetro(),
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.pedal_bike,
+                        loading: _bikeServicesLoading,
+                        color: const Color(0xFF22C55E),
+                        title: "Inflado, talleres y agua",
+                        subtitle: "Aire, talleres, gasolineras y puntos de agua",
                         value: _showBikeServices,
-                        activeThumbColor: const Color(0xFF22C55E),
-                        secondary: _bikeServicesLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFF22C55E),
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.pedal_bike,
-                                color: Color(0xFF22C55E),
-                              ),
-                        title: const Text(
-                          "Inflado, talleres y agua",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Aire, talleres, gasolineras y puntos de agua",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (_) => _toggleBikeServices(),
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.event_available,
+                        color: const Color(0xFF7CB342),
+                        title: "CicloRecreoVía",
+                        subtitle: "Calles cerradas para ciclistas los domingos",
                         value: _showCicloRecreo,
-                        activeThumbColor: const Color(0xFF7CB342),
-                        secondary: const Icon(
-                          Icons.event_available,
-                          color: Color(0xFF7CB342),
-                        ),
-                        title: const Text(
-                          "CicloRecreoVía",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Calles cerradas para ciclistas los domingos",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (_) => _toggleCicloRecreo(),
                       ),
                     ],
                   ),
-                  const Divider(color: Colors.white24, height: 16),
-                  ExpansionTile(
-                    tilePadding: const EdgeInsets.only(left: 16, right: 20),
-                    iconColor: const Color(0xFF7CF0BC),
-                    collapsedIconColor: Colors.white38,
-                    leading: _drawerIconTile(Icons.shield_rounded),
-                    title: const Text(
-                      "Seguridad",
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  _drawerSection(
+                    icon: Icons.shield_rounded,
+                    title: "Seguridad",
+                    hint: "Caídas y alertas cercanas",
                     children: [
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.health_and_safety,
+                        color: Colors.redAccent,
+                        title: "Detección de caídas",
+                        subtitle:
+                            "Llama a emergencias si detecta una caída brusca",
                         value: _fallDetectionEnabled,
-                        activeThumbColor: Colors.redAccent,
-                        secondary: const Icon(
-                          Icons.health_and_safety,
-                          color: Colors.redAccent,
-                        ),
-                        title: const Text(
-                          "Detección de caídas",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Llama a emergencias si detecta una caída brusca",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: _setFallDetectionEnabled,
                       ),
-                      SwitchListTile(
+                      _drawerSwitchItem(
+                        icon: Icons.notifications_active,
+                        color: Colors.orangeAccent,
+                        title: "Alertas de proximidad",
+                        subtitle:
+                            "Notifica al acercarte a un incidente reportado",
                         value: _proximityAlertsEnabled,
-                        activeThumbColor: Colors.orangeAccent,
-                        secondary: const Icon(
-                          Icons.notifications_active,
-                          color: Colors.orangeAccent,
-                        ),
-                        title: const Text(
-                          "Alertas de proximidad",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Notifica al acercarte a un incidente reportado",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
                         onChanged: (val) {
                           setState(() => _proximityAlertsEnabled = val);
                           _proximityService.reset();
@@ -6135,51 +5977,79 @@ class _MapPageState extends State<MapPage> with RouteAware {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
-            const _DrawerPlusBanner(),
-            const Divider(color: Colors.white24, height: 1),
-            const Padding(
-              padding: EdgeInsets.only(left: 16, top: 8, bottom: 8),
-              child: Text(
-                "CUENTA",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.grey,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
+            Container(
+              padding: const EdgeInsets.only(top: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.white.withOpacity(0.06)),
                 ),
               ),
+              child: Column(
+                children: [
+                  const _DrawerPlusBanner(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _drawerFooterButton(
+                            color: Colors.redAccent,
+                            onTap: _confirmLogout,
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.logout_rounded,
+                                  color: Colors.redAccent,
+                                  size: 19,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  "Cerrar sesión",
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: Colors.redAccent,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Tooltip(
+                          message: 'Configuración',
+                          child: _drawerFooterButton(
+                            color: Colors.white,
+                            width: 46,
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SettingsPage(),
+                                ),
+                              );
+                            },
+                            child: const Icon(
+                              Icons.settings_rounded,
+                              color: Colors.white70,
+                              size: 21,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _drawerFooter(),
+                ],
+              ),
             ),
-            ListTile(
-              leading: _drawerIconTile(
-                Icons.logout_rounded,
-                color: Colors.redAccent,
-              ),
-              title: const Text(
-                "Cerrar sesión",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.redAccent,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.settings_rounded, color: Colors.white70),
-                tooltip: 'Configuración',
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsPage()),
-                  );
-                },
-              ),
-              onTap: _confirmLogout,
-            ),
-            _drawerFooter(),
           ],
         ),
       ),
@@ -6370,43 +6240,15 @@ class _MapPageState extends State<MapPage> with RouteAware {
           Positioned(
             top: 50,
             left: 16,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF12121C),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.35),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  transitionBuilder: (child, animation) => RotationTransition(
-                    turns: animation,
-                    child: FadeTransition(opacity: animation, child: child),
-                  ),
-                  child: Icon(
-                    _drawerOpen ? Icons.close_rounded : Icons.menu_rounded,
-                    key: ValueKey(_drawerOpen),
-                    color: const Color(0xFF7CF0BC),
-                    size: 22,
-                  ),
-                ),
-                onPressed: () {
-                  if (_drawerOpen) {
-                    _scaffoldKey.currentState?.closeDrawer();
-                  } else {
-                    _scaffoldKey.currentState?.openDrawer();
-                  }
-                },
-                tooltip: 'Menú',
-              ),
+            child: _MenuToggleButton(
+              open: _drawerOpen,
+              onPressed: () {
+                if (_drawerOpen) {
+                  _scaffoldKey.currentState?.closeDrawer();
+                } else {
+                  _scaffoldKey.currentState?.openDrawer();
+                }
+              },
             ),
           ),
           // ── Botón de búsqueda de destino ────────────────────────
@@ -9790,167 +9632,228 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
       _load();
     }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 44, 20, 20),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment(-0.7, -1),
-          end: Alignment(0.7, 1),
-          colors: [Color(0xFF2F8F63), Color(0xFF1E5C41), Color(0xFF153F2E)],
-          stops: [0.0, 0.55, 1.0],
-        ),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          InkWell(
-            onTap: openProfile,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 68,
-                      height: 68,
+    const accent = Color(0xFF7CF0BC);
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, topInset + 22, 12, 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: openProfile,
+          borderRadius: BorderRadius.circular(24),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2F8F63), Color(0xFF1E5C41), Color(0xFF153F2E)],
+                stops: [0.0, 0.55, 1.0],
+              ),
+              border: Border.all(color: accent.withOpacity(0.22)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2F8F63).withOpacity(0.25),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
+                children: [
+                  // Círculos decorativos (como una rueda) en la esquina.
+                  Positioned(
+                    right: -34,
+                    top: -34,
+                    child: Container(
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: ringColor, width: 2.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: avatarUrl != null && avatarUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: avatarUrl,
-                                fit: BoxFit.cover,
-                                fadeInDuration: Duration.zero,
-                                placeholder: (_, _) => _headerFallback(),
-                                errorWidget: (_, _, _) => _headerFallback(),
-                              )
-                            : _headerFallback(),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.07),
+                          width: 14,
+                        ),
                       ),
                     ),
-                    if (isPlus)
-                      const Positioned(
-                        bottom: -2,
-                        right: -2,
-                        child: PlusMedal(
-                            size: 24, ringColor: Color(0xFF153F2E)),
+                  ),
+                  Positioned(
+                    right: 18,
+                    bottom: -26,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.05),
                       ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              _displayName,
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.white,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (isPlus) ...[
-                            const SizedBox(width: 6),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+                    child: Row(
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
+                              width: 58,
+                              height: 58,
+                              padding: const EdgeInsets.all(2.5),
                               decoration: BoxDecoration(
-                                color: goldColor.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: goldColor.withOpacity(0.4),
-                                ),
+                                shape: BoxShape.circle,
+                                color: ringColor,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: ringColor.withOpacity(0.35),
+                                    blurRadius: 12,
+                                  ),
+                                ],
                               ),
-                              child: const Text(
-                                'PLUS',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: goldColor,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5,
-                                ),
+                              child: ClipOval(
+                                child: avatarUrl != null && avatarUrl.isNotEmpty
+                                    ? CachedNetworkImage(
+                                        imageUrl: avatarUrl,
+                                        fit: BoxFit.cover,
+                                        fadeInDuration: Duration.zero,
+                                        placeholder: (_, _) => _headerFallback(),
+                                        errorWidget: (_, _, _) =>
+                                            _headerFallback(),
+                                      )
+                                    : _headerFallback(),
                               ),
                             ),
+                            if (isPlus)
+                              const Positioned(
+                                bottom: -3,
+                                right: -3,
+                                child: PlusMedal(
+                                    size: 22, ringColor: Color(0xFF1E5C41)),
+                              ),
                           ],
-                        ],
-                      ),
-                      if (username.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '@$username',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white.withOpacity(0.65),
-                            fontSize: 13,
-                          ),
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.22),
-                          ),
-                        ),
-                        child: const Center(
-                          child: Row(
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                "Ver perfil",
+                                '¡Hola! 👋',
                                 style: TextStyle(
                                   fontFamily: 'Poppins',
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                color: Colors.white,
-                                size: 13,
+                              Text(
+                                _displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.25,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  if (isPlus) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            goldColor.withOpacity(0.35),
+                                            goldColor.withOpacity(0.15),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: goldColor.withOpacity(0.55),
+                                        ),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.workspace_premium_rounded,
+                                            color: goldColor,
+                                            size: 11,
+                                          ),
+                                          SizedBox(width: 3),
+                                          Text(
+                                            'PLUS',
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              color: goldColor,
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.6,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (username.isNotEmpty)
+                                      const SizedBox(width: 6),
+                                  ],
+                                  if (username.isNotEmpty)
+                                    Flexible(
+                                      child: Text(
+                                        '@$username',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: Colors.white.withOpacity(0.65),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: 'Ver perfil',
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withOpacity(0.14),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.22),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: Colors.white,
+                              size: 17,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -11432,4 +11335,150 @@ class _RoutePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RoutePainter oldDelegate) =>
       oldDelegate.route.length != route.length;
+}
+
+/// Botón del menú lateral: hamburguesa asimétrica que se transforma en una X
+/// al abrir el drawer, con un anillo y un leve brillo del color de acento.
+class _MenuToggleButton extends StatefulWidget {
+  final bool open;
+  final VoidCallback onPressed;
+
+  const _MenuToggleButton({required this.open, required this.onPressed});
+
+  @override
+  State<_MenuToggleButton> createState() => _MenuToggleButtonState();
+}
+
+class _MenuToggleButtonState extends State<_MenuToggleButton>
+    with SingleTickerProviderStateMixin {
+  static const _bg = Color(0xFF12121C);
+  static const _accent = Color(0xFF7CF0BC);
+
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: widget.open ? 1 : 0,
+  );
+  late final Animation<double> _t =
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutCubic);
+  bool _pressed = false;
+
+  @override
+  void didUpdateWidget(covariant _MenuToggleButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.open != oldWidget.open) {
+      widget.open ? _ctrl.forward() : _ctrl.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Menú',
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onPressed();
+        },
+        child: AnimatedScale(
+          scale: _pressed ? 0.9 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: AnimatedBuilder(
+            animation: _t,
+            builder: (context, _) {
+              final t = _t.value;
+              return Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.35, -0.45),
+                    radius: 1.0,
+                    colors: [
+                      Color.lerp(const Color(0xFF1E1E2C), const Color(0xFF1A2A26), t)!,
+                      _bg,
+                    ],
+                  ),
+                  border: Border.all(
+                    color: _accent.withOpacity(0.22 + 0.38 * t),
+                    width: 1.3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                    BoxShadow(
+                      color: _accent.withOpacity(0.10 + 0.22 * t),
+                      blurRadius: 10 + 8 * t,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+                child: CustomPaint(
+                  painter: _MenuIconPainter(progress: t, color: _accent),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dibuja las tres barras (larga, corta, media) y las transforma en una X.
+class _MenuIconPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _MenuIconPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, ui.Size size) {
+    final c = size.center(Offset.zero);
+    final t = progress;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round;
+
+    void bar(Offset a0, Offset b0, Offset a1, Offset b1, {double opacity = 1}) {
+      if (opacity <= 0) return;
+      paint.color = color.withOpacity(opacity);
+      canvas.drawLine(
+        c + Offset.lerp(a0, a1, t)!,
+        c + Offset.lerp(b0, b1, t)!,
+        paint,
+      );
+    }
+
+    const d = 6.2; // semilargo de cada brazo de la X
+    // Superior: barra larga → diagonal "\"
+    bar(const Offset(-9, -6), const Offset(9, -6),
+        const Offset(-d, -d), const Offset(d, d));
+    // Central: barra corta que se recoge y desaparece
+    bar(const Offset(-9, 0), const Offset(3, 0),
+        const Offset(-9, 0), const Offset(-9, 0),
+        opacity: (1 - t * 2).clamp(0.0, 1.0));
+    // Inferior: barra media → diagonal "/"
+    bar(const Offset(-9, 6), const Offset(5, 6),
+        const Offset(-d, d), const Offset(d, -d));
+  }
+
+  @override
+  bool shouldRepaint(covariant _MenuIconPainter old) =>
+      old.progress != progress || old.color != color;
 }
