@@ -558,11 +558,22 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
             switchInCurve: Curves.easeOut,
             switchOutCurve: Curves.easeIn,
             child: _showEmailForm
-                ? SingleChildScrollView(
+                ? LayoutBuilder(
                     key: const ValueKey('email-page'),
-                    physics: const ClampingScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(24, 64, 24, 24 + bottomSafe),
-                    child: _buildEmailFieldsSection(),
+                    builder: (context, constraints) => SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      padding:
+                          EdgeInsets.fromLTRB(20, 14, 20, 24 + bottomSafe),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: (constraints.maxHeight - 38 - bottomSafe)
+                              .clamp(0.0, double.infinity),
+                        ),
+                        child: IntrinsicHeight(
+                          child: _buildEmailFieldsSection(),
+                        ),
+                      ),
+                    ),
                   )
                 : Padding(
                     key: const ValueKey('carousel-page'),
@@ -1412,140 +1423,298 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
   }
 
   // ── Formulario de correo/contraseña ──────────────────────────────────
+  // ── Formulario de correo (iniciar sesión / crear cuenta) ──────────────────
+
+  /// Selector en cápsula para cambiar entre iniciar sesión y crear cuenta.
+  Widget _modeSwitch() {
+    Widget seg(String label, bool login) {
+      final sel = _isLogin == login;
+      return Expanded(
+        child: GestureDetector(
+          onTap: _loading || sel
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _isLogin = login);
+                },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: sel ? _kGreen : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: sel
+                  ? [
+                      BoxShadow(
+                        color: _kGreen.withOpacity(0.35),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Sora',
+                color: sel ? Colors.white : _pageFg.withOpacity(0.6),
+                fontSize: 13.5,
+                fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _pageFg.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _pageFg.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          seg('Iniciar sesión', true),
+          seg('Crear cuenta', false),
+        ],
+      ),
+    );
+  }
+
+  Widget _reqChip(String text, bool met) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: met ? _kGreen.withOpacity(0.14) : _pageFg.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: met ? _kGreen.withOpacity(0.5) : _pageFg.withOpacity(0.1),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            met ? Icons.check_rounded : Icons.circle_outlined,
+            size: 13,
+            color: met ? _kGreen : _pageFg.withOpacity(0.35),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Sora',
+              fontSize: 11.5,
+              fontWeight: met ? FontWeight.w600 : FontWeight.w400,
+              color: met ? _kGreen : _pageFg.withOpacity(0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _orDivider() {
+    final line = Expanded(
+      child: Container(height: 1, color: _pageFg.withOpacity(0.1)),
+    );
+    return Row(
+      children: [
+        line,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'o',
+            style: TextStyle(
+              fontFamily: 'Sora',
+              color: _pageFg.withOpacity(0.4),
+              fontSize: 12.5,
+            ),
+          ),
+        ),
+        line,
+      ],
+    );
+  }
+
   Widget _buildEmailFieldsSection() {
+    final pass = _passwordCtrl.text;
+    final confirm = _confirmSignupPasswordCtrl.text;
+    final matches = confirm.isNotEmpty && confirm == pass;
+
     return Column(
       key: const ValueKey('email-fields'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        InkWell(
-          onTap: _loading ? null : () => setState(() => _showEmailForm = false),
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.arrow_back_rounded,
-                    color: _pageFg.withOpacity(0.5), size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Volver',
-                  style: TextStyle(
-                    fontFamily: 'Sora',
-                    color: _pageFg.withOpacity(0.5),
-                    fontSize: 13,
+        // ── Barra superior: volver + selector de modo ───────────────
+        Row(
+          children: [
+            Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _loading
+                    ? null
+                    : () => setState(() => _showEmailForm = false),
+                child: Ink(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _pageFg.withOpacity(0.06),
+                    border: Border.all(color: _pageFg.withOpacity(0.1)),
                   ),
+                  child: Icon(Icons.arrow_back_ios_new_rounded,
+                      color: _pageFg, size: 17),
                 ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
-            style: const TextStyle(
-              fontFamily: 'Sora',
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-            children: [
-              TextSpan(
-                text: _isLogin ? 'Bienvenido ' : 'Únete a ',
-                style: TextStyle(color: _pageFg),
               ),
-              TextSpan(
-                text: _isLogin ? 'de vuelta' : 'Pedalea',
-                style: const TextStyle(
-                  color: _kGreen,
-                  fontStyle: FontStyle.italic,
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: _modeSwitch()),
+          ],
+        ),
+        const SizedBox(height: 24),
+        const Spacer(),
+
+        // ── Encabezado ──────────────────────────────────────────────
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: Column(
+            key: ValueKey(_isLogin),
+            children: [
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    height: 1.2,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: _isLogin ? 'Bienvenido ' : 'Únete a ',
+                      style: TextStyle(color: _pageFg),
+                    ),
+                    TextSpan(
+                      text: _isLogin ? 'de vuelta' : 'Pedalea',
+                      style: const TextStyle(
+                        color: _kGreen,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _isLogin
+                    ? 'Ingresa con tu correo y contraseña'
+                    : 'Crea tu cuenta y súmate a la comunidad',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Sora',
+                  color: _pageFg.withOpacity(0.5),
+                  fontSize: 13,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 26),
+
+        // ── Campos ──────────────────────────────────────────────────
         AnimatedSize(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!_isLogin) ...[
                 _buildTextField(
                   controller: _usernameCtrl,
-                  label: 'NOMBRE DE USUARIO',
+                  label: 'Nombre de usuario',
                   hint: 'tu_usuario',
+                  icon: Icons.alternate_email_rounded,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
               ],
               _buildTextField(
                 controller: _emailCtrl,
-                label: 'CORREO ELECTRÓNICO',
+                label: 'Correo electrónico',
                 hint: 'tu@correo.cl',
+                icon: Icons.mail_outline_rounded,
                 keyboardType: TextInputType.emailAddress,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               _buildTextField(
                 controller: _passwordCtrl,
-                label: 'CONTRASEÑA',
+                label: 'Contraseña',
                 hint: '••••••••',
+                icon: Icons.lock_outline_rounded,
                 obscure: _obscure,
                 onChanged: !_isLogin ? (_) => setState(() {}) : null,
                 suffix: IconButton(
+                  tooltip: _obscure ? 'Mostrar' : 'Ocultar',
                   icon: Icon(
                     _obscure
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
-                    color: _pageFg.withOpacity(0.4),
+                    color: _pageFg.withOpacity(0.45),
                     size: 20,
                   ),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
               ),
               if (!_isLogin) ...[
-                const SizedBox(height: 10),
-                _buildPasswordStrengthBar(_passwordCtrl.text, base: _pageFg),
                 const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildPasswordRequirement(
-                        'Mínimo 8 caracteres',
-                        _passwordCtrl.text.length >= 8,
-                        base: _pageFg,
-                      ),
-                      _buildPasswordRequirement(
-                        'Al menos una mayúscula',
-                        RegExp(r'[A-Z]').hasMatch(_passwordCtrl.text),
-                        base: _pageFg,
-                      ),
-                      _buildPasswordRequirement(
-                        'Al menos un número',
-                        RegExp(r'[0-9]').hasMatch(_passwordCtrl.text),
-                        base: _pageFg,
-                      ),
-                    ],
-                  ),
+                _buildPasswordStrengthBar(pass, base: _pageFg),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _reqChip('8+ caracteres', pass.length >= 8),
+                    _reqChip('Una mayúscula', RegExp(r'[A-Z]').hasMatch(pass)),
+                    _reqChip('Un número', RegExp(r'[0-9]').hasMatch(pass)),
+                  ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 _buildTextField(
                   controller: _confirmSignupPasswordCtrl,
-                  label: 'REPETIR CONTRASEÑA',
+                  label: 'Repetir contraseña',
                   hint: '••••••••',
+                  icon: Icons.lock_reset_rounded,
                   obscure: _obscure,
                   onChanged: (_) => setState(() {}),
+                  suffix: confirm.isEmpty
+                      ? null
+                      : Icon(
+                          matches
+                              ? Icons.check_circle_rounded
+                              : Icons.cancel_rounded,
+                          color: matches ? _kGreen : const Color(0xFFE24C4C),
+                          size: 20,
+                        ),
                 ),
-                if (_confirmSignupPasswordCtrl.text.isNotEmpty) ...[
+                if (confirm.isNotEmpty && !matches) ...[
                   const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: _buildPasswordRequirement(
-                      'Las contraseñas coinciden',
-                      _confirmSignupPasswordCtrl.text == _passwordCtrl.text,
-                      base: _pageFg,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      'Las contraseñas no coinciden',
+                      style: TextStyle(
+                        fontFamily: 'Sora',
+                        color: const Color(0xFFE24C4C).withOpacity(0.9),
+                        fontSize: 11.5,
+                      ),
                     ),
                   ),
                 ],
@@ -1554,55 +1723,59 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
           ),
         ),
 
+        // ── Mantener sesión / olvidé mi contraseña ──────────────────
         if (_isLogin) ...[
           const SizedBox(height: 14),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              InkWell(
+              GestureDetector(
                 onTap: _loading
                     ? null
                     : () => setState(() => _keepSession = !_keepSession),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: Checkbox(
-                          value: _keepSession,
-                          onChanged: _loading
-                              ? null
-                              : (v) => setState(() => _keepSession = v ?? true),
-                          activeColor: _kGreen,
-                          side: BorderSide(color: _pageFg.withOpacity(0.3)),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 36,
+                      height: 21,
+                      padding: const EdgeInsets.all(2.5),
+                      alignment: _keepSession
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      decoration: BoxDecoration(
+                        color: _keepSession
+                            ? _kGreen
+                            : _pageFg.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Mantener sesión',
-                        style: TextStyle(
-                          fontFamily: 'Sora',
-                          color: _pageFg.withOpacity(0.6),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                        ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Mantener sesión',
+                      style: TextStyle(
+                        fontFamily: 'Sora',
+                        color: _pageFg.withOpacity(0.65),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
+              const Spacer(),
               TextButton(
                 onPressed: _loading ? null : () => _showForgotPasswordDialog(),
                 style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -1611,9 +1784,8 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
                   style: TextStyle(
                     fontFamily: 'Sora',
                     color: _kGreen,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    fontStyle: FontStyle.italic,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -1621,10 +1793,15 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
           ),
         ],
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 26),
         _buildMainButton(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
+        _orDivider(),
+        const SizedBox(height: 18),
+        _buildGoogleButton(),
+        const SizedBox(height: 18),
         _buildTermsNotice(),
+        const Spacer(),
       ],
     );
   }
@@ -1633,76 +1810,85 @@ class _AuthPageState extends State<AuthPage> with TickerProviderStateMixin {
     required TextEditingController controller,
     required String label,
     required String hint,
+    IconData? icon,
     TextInputType? keyboardType,
     bool obscure = false,
     Widget? suffix,
     ValueChanged<String>? onChanged,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Sora',
-            color: _kGreen,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            fontStyle: FontStyle.italic,
-          ),
+    OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: c, width: w),
+        );
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscure,
+      onChanged: onChanged,
+      cursorColor: _kGreen,
+      style: TextStyle(
+        fontFamily: 'Sora',
+        color: _pageFg,
+        fontSize: 15,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        labelStyle: TextStyle(
+          fontFamily: 'Sora',
+          color: _pageFg.withOpacity(0.5),
+          fontSize: 14,
         ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          obscureText: obscure,
-          onChanged: onChanged,
-          style: TextStyle(
-            fontFamily: 'Sora',
-            color: _pageFg,
-            fontSize: 15,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              fontFamily: 'Sora',
-              color: _pageFg.withOpacity(0.25),
-              fontSize: 15,
-            ),
-            suffixIcon: suffix,
-            filled: true,
-            fillColor: _pageFg.withOpacity(0.04),
-            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: _pageFg.withOpacity(0.12)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: _pageFg.withOpacity(0.12)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: _kGreen, width: 1.6),
-            ),
-          ),
+        floatingLabelStyle: const TextStyle(
+          fontFamily: 'Sora',
+          color: _kGreen,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
         ),
-      ],
+        hintStyle: TextStyle(
+          fontFamily: 'Sora',
+          color: _pageFg.withOpacity(0.22),
+          fontSize: 15,
+        ),
+        prefixIcon: icon == null
+            ? null
+            : Icon(icon, color: _pageFg.withOpacity(0.45), size: 20),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: _pageFg.withOpacity(0.05),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        border: border(_pageFg.withOpacity(0.1)),
+        enabledBorder: border(_pageFg.withOpacity(0.1)),
+        focusedBorder: border(_kGreen, 1.6),
+      ),
     );
   }
 
   Widget _buildMainButton() {
-    return SizedBox(
+    return Container(
       height: 54,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(27),
+        boxShadow: _loading
+            ? null
+            : [
+                BoxShadow(
+                  color: _kGreen.withOpacity(0.35),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
       child: ElevatedButton(
         onPressed: _loading ? null : _submit,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _kNavy,
-          disabledBackgroundColor: _kNavy.withOpacity(0.5),
+          backgroundColor: _kGreen,
+          disabledBackgroundColor: _kGreen.withOpacity(0.5),
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(27),
           ),
           textStyle: const TextStyle(
             fontFamily: 'Sora',
