@@ -15,4 +15,4 @@
 - Ícono pequeño (headers, listas, favicon): 96×96 px → pedalea-icon-96.png
 - Ícono mínimo (barra de navegación, tab bar): 48×48 px → pedalea-icon-48.png
 
-Todos exportados desde el mismo isotipo vectorial (bicicleta + ciclovía) en Pedalea Logo.dc.html.
+Todos exportados desde PedaleaICon.png (1024×1024, "P" con ciclovía sobre #13233F).

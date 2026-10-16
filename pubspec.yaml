@@ -1,7 +1,7 @@
 name: pedalea
 description: "Pedalea: ciclovías de la Región Metropolitana."
 publish_to: 'none'
-version: 1.0.0+20
+version: 1.0.0+21
 
 environment:
   sdk: ^3.11.3
@@ -60,13 +60,13 @@ flutter_launcher_icons:
   ios: true
   remove_alpha_ios: true
   image_path: "assets/icon/pedalea_icon_master.png"
-  adaptive_icon_background: "#12213F"
+  adaptive_icon_background: "#13233F"
   adaptive_icon_foreground: "assets/icon/pedalea_icon_foreground.png"
   web:
     generate: true
     image_path: "assets/icon/pedalea_icon_master.png"
-    background_color: "#12213F"
-    theme_color: "#12213F"
+    background_color: "#13233F"
+    theme_color: "#13233F"
   windows:
     generate: true
     image_path: "assets/icon/pedalea_icon_master.png"
@@ -75,14 +75,14 @@ flutter_launcher_icons:
     image_path: "assets/icon/pedalea_icon_master.png"
 
 flutter_native_splash:
-  color: "#12213F"
+  color: "#13233F"
   image: assets/branding/pedalea-icono-fondo-oscuro.png
   android_12:
     # Android 12+ dibuja el ícono dentro de un círculo; necesita más margen
     # que la versión "full bleed" para no verse recortado/gigante.
     image: assets/icon/pedalea_icon_foreground.png
-    icon_background_color: "#12213F"
-    color: "#12213F"
+    icon_background_color: "#13233F"
+    color: "#13233F"
 
 flutter:
   uses-material-design: true
