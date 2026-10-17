@@ -57,3 +57,6 @@ linux/flutter/generated_plugins.cmake
 # Claude Code
 .claude/
 .mcp.json
+
+# Reporte de cobertura de flutter test --coverage
+coverage/
