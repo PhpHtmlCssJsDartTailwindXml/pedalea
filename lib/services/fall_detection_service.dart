@@ -63,10 +63,19 @@ class FallDetector {
 /// notifica mediante un callback cuando ocurre una caída. Incluye un período
 /// de enfriamiento para no disparar repetidamente por el mismo evento.
 class FallDetectionService {
-  FallDetectionService({FallDetector? detector})
-    : _detector = detector ?? FallDetector();
+  /// [events] y [clock] permiten inyectar un flujo de muestras y un reloj en
+  /// las pruebas; por defecto se usan el acelerómetro real y la hora actual.
+  FallDetectionService({
+    FallDetector? detector,
+    Stream<AccelerometerEvent>? events,
+    DateTime Function()? clock,
+  }) : _detector = detector ?? FallDetector(),
+       _events = events,
+       _clock = clock ?? DateTime.now;
 
   final FallDetector _detector;
+  final Stream<AccelerometerEvent>? _events;
+  final DateTime Function() _clock;
   StreamSubscription<AccelerometerEvent>? _sub;
   DateTime? _lastTrigger;
   bool get isRunning => _sub != null;
@@ -78,12 +87,12 @@ class FallDetectionService {
     if (_sub != null) return;
     _detector.reset();
     try {
-      _sub =
-          accelerometerEventStream(
-            samplingPeriod: SensorInterval.gameInterval,
-          ).listen((event) {
+      final stream =
+          _events ??
+          accelerometerEventStream(samplingPeriod: SensorInterval.gameInterval);
+      _sub = stream.listen((event) {
             final mag = FallDetector.magnitude(event.x, event.y, event.z);
-            final now = DateTime.now();
+            final now = _clock();
             if (_detector.process(mag, now)) {
               if (_lastTrigger != null &&
                   now.difference(_lastTrigger!) < _cooldown) {
