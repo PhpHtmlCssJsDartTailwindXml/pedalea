@@ -7,6 +7,7 @@ import 'services/app_update_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
+import 'services/push_service.dart';
 import 'services/chat_notifications_service.dart';
 import 'services/social_notifications_service.dart';
 import 'services/ride_stats_service.dart';
@@ -33,6 +34,7 @@ Future<void> main() async {
   await RideHeatService.init();
   unawaited(PlusPrefsService.init()); // personalización Plus desde profiles
   unawaited(SubscriptionService.instance.init());
+  unawaited(PushService.instance.init()); // push real (FCM), si está configurado
   ChatNotificationsService.instance.start(); // avisa mensajes de grupos
   SocialNotificationsService.instance.start(); // avisa seguidores / momentos
 

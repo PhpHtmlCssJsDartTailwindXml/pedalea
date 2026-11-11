@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'notification_service.dart';
+import 'push_service.dart';
 
 /// Escucha en tiempo real la actividad social del usuario y lanza
 /// notificaciones locales:
@@ -107,6 +108,7 @@ class SocialNotificationsService {
   }
 
   Future<void> _onFollowInsert(PostgresChangePayload p) async {
+    if (PushService.active) return; // lo avisa el push, no duplicar
     final row = p.newRecord;
     if (row['status'] != 'pending') return;
     final from = row['follower_id'] as String?;
@@ -121,6 +123,7 @@ class SocialNotificationsService {
   }
 
   Future<void> _onFollowUpdate(PostgresChangePayload p) async {
+    if (PushService.active) return; // lo avisa el push, no duplicar
     final row = p.newRecord;
     if (row['status'] != 'accepted') return;
     final who = row['following_id'] as String?; // quien aceptó
@@ -135,6 +138,7 @@ class SocialNotificationsService {
   }
 
   Future<void> _onLike(PostgresChangePayload p) async {
+    if (PushService.active) return; // lo avisa el push, no duplicar
     final row = p.newRecord;
     final who = row['user_id'] as String?;
     final me = _sb.auth.currentUser?.id;
@@ -149,6 +153,7 @@ class SocialNotificationsService {
   }
 
   Future<void> _onComment(PostgresChangePayload p) async {
+    if (PushService.active) return; // lo avisa el push, no duplicar
     final row = p.newRecord;
     // Las respuestas las maneja _onReply (para no duplicar la notificación).
     if (row['parent_id'] != null) return;
@@ -166,6 +171,7 @@ class SocialNotificationsService {
   }
 
   Future<void> _onReply(PostgresChangePayload p) async {
+    if (PushService.active) return; // lo avisa el push, no duplicar
     final row = p.newRecord;
     final who = row['user_id'] as String?;
     final me = _sb.auth.currentUser?.id;

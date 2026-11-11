@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'notification_service.dart';
+import 'push_service.dart';
 
 /// Escucha en tiempo real los mensajes nuevos de **todos los grupos (eventos)
 /// en los que participa el usuario** y muestra una notificación local cuando
@@ -80,6 +81,7 @@ class ChatNotificationsService {
 
   Future<void> _onDmInsert(PostgresChangePayload payload) async {
     try {
+      if (PushService.active) return; // lo avisa el push, no duplicar
       final row = payload.newRecord;
       final uid = _sb.auth.currentUser?.id;
       final senderId = row['sender_id'] as String?;
@@ -116,6 +118,7 @@ class ChatNotificationsService {
 
   Future<void> _onInsert(PostgresChangePayload payload) async {
     try {
+      if (PushService.active) return; // lo avisa el push, no duplicar
       final row = payload.newRecord;
       final uid = _sb.auth.currentUser?.id;
       if (uid == null) return;

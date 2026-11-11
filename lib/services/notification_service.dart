@@ -53,6 +53,27 @@ class NotificationService {
           >();
       await androidImpl?.requestNotificationsPermission();
 
+      // Los canales de mensajes y actividad social se crean desde ya (antes
+      // se creaban al mostrar el primer aviso): las notificaciones push
+      // llegan con la app cerrada y necesitan que el canal exista.
+      await androidImpl?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _chatChannelId,
+          _chatChannelName,
+          description:
+              'Avisa cuando alguien escribe en un grupo del que eres parte',
+          importance: Importance.high,
+        ),
+      );
+      await androidImpl?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _socialChannelId,
+          _socialChannelName,
+          description: 'Solicitudes de seguimiento y actividad en tus momentos',
+          importance: Importance.high,
+        ),
+      );
+
       _initialized = true;
     } catch (e) {
       debugPrint('NotificationService init error: $e');
@@ -238,8 +259,15 @@ class NotificationService {
   static void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null) return;
+    openPayload(payload);
+  }
+
+  /// Abre la pantalla que corresponde a un [payload] de notificación (local
+  /// o push). Devuelve false si la app aún no tiene Navigator (recién
+  /// arrancando) para que quien llama pueda reintentar.
+  static bool openPayload(String payload) {
     final nav = appNavigatorKey.currentState;
-    if (nav == null) return;
+    if (nav == null) return false;
     final parts = payload.split('|');
 
     if (payload.startsWith('chat|') && parts.length >= 3) {
@@ -265,6 +293,7 @@ class NotificationService {
         builder: (_) => PublicProfilePage(userId: parts[1]),
       ));
     }
+    return true;
   }
 
   Future<void> _ensureInit() async {
