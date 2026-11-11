@@ -1,6 +1,7 @@
 // ignore_for_file: unused_field
 
 import 'dart:math' as dmath;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -1009,6 +1010,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _eventsSubscription?.cancel();
     _alertsSubscription?.cancel();
     _connectivitySub?.cancel();
+    _speedWatchdog?.cancel();
     _speedNotifier.dispose();
     _longPressTimer?.cancel();
     _styleCheckTimer?.cancel();
@@ -1313,46 +1315,139 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
+  /// Metros que hay que moverse para que un fix cuente como "posición
+  /// nueva" (km, cámara, presencia…). Navegando o siguiendo al usuario: 5 m
+  /// (cámara fluida). Idle: 15 m.
+  double get _gpsMinMoveM => (_navigating || _isFollowingUser) ? 5 : 15;
+
   /// Ajusta la precisión del GPS según el estado.
-  /// Navegando o siguiendo al usuario: máxima precisión + filtro 5m (cámara
-  /// fluida). Idle: precisión alta + filtro 15m (ahorra ~50% batería).
+  ///
+  /// El GPS entrega un fix por segundo SIN filtro de distancia: así el
+  /// velocímetro se actualiza al instante y baja a 0 al detenerse (con el
+  /// filtro, al parar no llegaba ningún fix y la velocidad quedaba pegada).
+  /// El filtro de distancia se aplica después, en el listener, solo a lo que
+  /// depende de la posición (ver [_gpsMinMoveM]).
   geo.LocationSettings _gpsSettings() {
     final bool precise = _navigating || _isFollowingUser;
     final accuracy = precise
         ? geo.LocationAccuracy.bestForNavigation
         : geo.LocationAccuracy.high;
-    final filter = precise ? 5 : 15;
 
-    // Con tracking en segundo plano: servicio en primer plano (notificación
-    // fija) para seguir contando km aunque la app no esté visible.
-    if (_bgTrackingEnabled) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       return geo.AndroidSettings(
         accuracy: accuracy,
-        distanceFilter: filter,
-        foregroundNotificationConfig: const geo.ForegroundNotificationConfig(
-          notificationTitle: 'Pedalea',
-          notificationText: 'Contando tus kilómetros 🚴',
-          enableWakeLock: true,
-          setOngoing: true,
-        ),
+        distanceFilter: 0,
+        intervalDuration: const Duration(seconds: 1),
+        // Con tracking en segundo plano: servicio en primer plano
+        // (notificación fija) para seguir contando km aunque la app no esté
+        // visible.
+        foregroundNotificationConfig: _bgTrackingEnabled
+            ? const geo.ForegroundNotificationConfig(
+                notificationTitle: 'Pedalea',
+                notificationText: 'Contando tus kilómetros 🚴',
+                enableWakeLock: true,
+                setOngoing: true,
+              )
+            : null,
       );
     }
-    return geo.LocationSettings(accuracy: accuracy, distanceFilter: filter);
+    return geo.LocationSettings(accuracy: accuracy, distanceFilter: 0);
+  }
+
+  // ── Velocímetro ─────────────────────────────────────────────────────────
+  double _speedEmaKmh = 0;
+  geo.Position? _speedPrevFix;
+  DateTime? _lastSpeedFixAt;
+  Timer? _speedWatchdog;
+
+  /// Calcula la velocidad a mostrar a partir de un fix y actualiza el
+  /// velocímetro. Devuelve la velocidad suavizada en km/h.
+  ///
+  /// - Usa la velocidad Doppler del GPS (la más precisa). Si el teléfono no
+  ///   la entrega, la estima con distancia/tiempo entre fixes seguidos.
+  /// - Bajo 1,5 km/h es ruido del sensor estando detenido: se muestra 0.
+  /// - Suavizado adaptativo: reacciona casi al instante a cambios grandes
+  ///   (arrancar, frenar) y filtra el temblor de ±1 km/h a ritmo constante.
+  double _updateSpeedometer(geo.Position p) {
+    final prev = _speedPrevFix;
+    _speedPrevFix = p;
+    _lastSpeedFixAt = DateTime.now();
+
+    double? ms;
+    final hasDoppler = p.speed > 0 || p.speedAccuracy > 0;
+    if (hasDoppler) {
+      ms = p.speed < 0 ? 0 : p.speed;
+    } else if (prev != null) {
+      final dt = p.timestamp.difference(prev.timestamp).inMilliseconds / 1000.0;
+      if (dt >= 0.5 && dt <= 5 && p.accuracy <= 20) {
+        final d = geo.Geolocator.distanceBetween(
+          prev.latitude,
+          prev.longitude,
+          p.latitude,
+          p.longitude,
+        );
+        // Menos de 2,5 m entre fixes es deriva del GPS, no movimiento.
+        ms = d < 2.5 ? 0 : d / dt;
+      }
+    }
+    if (ms == null) return _speedEmaKmh; // fix sin dato útil: se mantiene
+
+    var kmh = ms * 3.6;
+    if (kmh > 150) return _speedEmaKmh; // salto imposible del sensor
+    if (kmh < 1.5) kmh = 0;
+
+    final diff = (kmh - _speedEmaKmh).abs();
+    final alpha = diff > 4 ? 0.85 : 0.5;
+    _speedEmaKmh += alpha * (kmh - _speedEmaKmh);
+    if (kmh == 0 && _speedEmaKmh < 2) _speedEmaKmh = 0;
+
+    _speedNotifier.value = _speedEmaKmh;
+    return _speedEmaKmh;
+  }
+
+  /// Si el GPS deja de entregar fixes (túnel, señal perdida), el velocímetro
+  /// vuelve a 0 en vez de quedarse mostrando la última velocidad.
+  void _ensureSpeedWatchdog() {
+    _speedWatchdog ??= Timer.periodic(const Duration(seconds: 2), (_) {
+      final last = _lastSpeedFixAt;
+      if (last == null || _speedEmaKmh == 0) return;
+      if (DateTime.now().difference(last) > const Duration(seconds: 5)) {
+        _speedEmaKmh = 0;
+        _speedNotifier.value = 0;
+      }
+    });
   }
 
   void _startFollowing() {
     if (_positionStreamSubscription != null) return;
+    _ensureSpeedWatchdog();
     _positionStreamSubscription =
         geo.Geolocator.getPositionStream(
           locationSettings: _gpsSettings(),
         ).listen((position) async {
           if (!mounted) return;
 
-          final curSpeedKmh = position.speed < 0 ? 0.0 : position.speed * 3.6;
-          _speedNotifier.value = curSpeedKmh;
+          // Velocímetro: se actualiza con CADA fix (1 por segundo).
+          final shownSpeedKmh = _updateSpeedometer(position);
 
           // Detección de modo pasajero (auto/micro/metro) según la velocidad.
-          _maybeHandlePassengerMode(curSpeedKmh);
+          _maybeHandlePassengerMode(shownSpeedKmh);
+
+          // Filtro de distancia: todo lo que sigue (caídas, km, cámara,
+          // presencia…) solo corre cuando te moviste lo suficiente desde el
+          // último fix aceptado, igual que antes con el filtro del GPS.
+          final lastAccepted = _lastPosition;
+          if (lastAccepted != null) {
+            final moved = geo.Geolocator.distanceBetween(
+              lastAccepted.latitude,
+              lastAccepted.longitude,
+              position.latitude,
+              position.longitude,
+            );
+            if (moved < _gpsMinMoveM) return;
+          }
+
+          final curSpeedKmh = position.speed < 0 ? 0.0 : position.speed * 3.6;
 
           // Detección de choque por frenada imposible (solo pedaleando de verdad,
           // no en modo pasajero, donde frenar fuerte en auto/micro es normal).
