@@ -175,84 +175,294 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
     }
   }
 
+  static const _lime = Color(0xFF69FF47);
+  static const _panel = Color(0xFF0F0F1A);
+
+  bool get _canUndo => _stickers.isNotEmpty || _strokes.isNotEmpty;
+
+  void _undo() {
+    setState(() {
+      if (_selectedSticker != -1) {
+        _stickers.removeAt(_selectedSticker);
+        _selectedSticker = -1;
+      } else if (_stickers.isNotEmpty) {
+        _stickers.removeLast();
+      } else if (_strokes.isNotEmpty) {
+        _strokes.removeLast();
+      }
+    });
+  }
+
+  /// Hoja inferior para escribir un texto y elegir su color, con vista previa
+  /// en el mismo campo.
   void _addText() {
     final ctrl = TextEditingController();
     Color color = Colors.white;
-    showDialog<void>(
+    void submit(BuildContext sheetContext) {
+      final t = ctrl.text.trim();
+      if (t.isNotEmpty) {
+        setState(() {
+          _stickers.add(_Sticker(
+            text: t,
+            pos: const Offset(0, 0),
+            isText: true,
+            color: color,
+            scale: 1.2,
+          ));
+          _selectedSticker = _stickers.length - 1;
+        });
+      }
+      Navigator.pop(sheetContext);
+    }
+
+    showModalBottomSheet<void>(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setLocal) => AlertDialog(
-          backgroundColor: const Color(0xFF161622),
-          title: const Text('Texto',
-              style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                maxLength: 80,
-                style: TextStyle(fontFamily: 'Poppins', color: color),
-                decoration: const InputDecoration(
-                  hintText: 'Escribe algo…',
-                  hintStyle:
-                      TextStyle(fontFamily: 'Poppins', color: Colors.white38),
-                ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setLocal) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF161622),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(30)),
+              border: Border(
+                top: BorderSide(color: Colors.white.withOpacity(0.10)),
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final c in _drawColors)
-                    GestureDetector(
-                      onTap: () => setLocal(() => color = c),
-                      child: Container(
-                        width: 26,
-                        height: 26,
-                        decoration: BoxDecoration(
-                          color: c,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: color == c ? Colors.white : Colors.white24,
-                            width: 2,
-                          ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const Text('Añadir texto',
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          child: const Text('Cancelar',
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white54)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35),
+                        borderRadius: BorderRadius.circular(20),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: TextField(
+                        controller: ctrl,
+                        autofocus: true,
+                        maxLength: 80,
+                        textAlign: TextAlign.center,
+                        cursorColor: _lime,
+                        textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => submit(sheetContext),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: color,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          shadows: const [
+                            Shadow(blurRadius: 6, color: Colors.black54)
+                          ],
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Escribe algo…',
+                          hintStyle: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white30,
+                              fontWeight: FontWeight.w600),
+                          border: InputBorder.none,
+                          counterStyle: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white30,
+                              fontSize: 11),
                         ),
                       ),
                     ),
-                ],
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        for (final c in _drawColors)
+                          _colorDot(c, color == c,
+                              () => setLocal(() => color = c)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: () => submit(sheetContext),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _lime,
+                          foregroundColor: Colors.black,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18)),
+                        ),
+                        child: const Text('Añadir',
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar',
-                  style:
-                      TextStyle(fontFamily: 'Poppins', color: Colors.white54)),
-            ),
-            TextButton(
-              onPressed: () {
-                final t = ctrl.text.trim();
-                if (t.isNotEmpty) {
-                  setState(() {
-                    _stickers.add(_Sticker(
-                      text: t,
-                      pos: const Offset(0, 0),
-                      isText: true,
-                      color: color,
-                      scale: 1.2,
-                    ));
-                    _selectedSticker = _stickers.length - 1;
-                  });
-                }
-                Navigator.pop(context);
-              },
-              child: const Text('Añadir',
-                  style: TextStyle(
-                      fontFamily: 'Poppins', color: Color(0xFF69FF47))),
-            ),
-          ],
         ),
+      ),
+    );
+  }
+
+  /// Punto de color seleccionable (pincel y texto). Zona táctil de 44 px.
+  Widget _colorDot(Color c, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: 40,
+        height: 44,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: selected ? 34 : 26,
+            height: selected ? 34 : 26,
+            decoration: BoxDecoration(
+              color: c,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? Colors.white : Colors.white24,
+                width: selected ? 3 : 1.5,
+              ),
+              boxShadow: selected
+                  ? [BoxShadow(color: c.withOpacity(0.55), blurRadius: 12)]
+                  : const [],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _circleButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onTap,
+  }) {
+    final enabled = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withOpacity(0.08),
+        shape: CircleBorder(
+          side: BorderSide(color: Colors.white.withOpacity(0.10)),
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon,
+                color: enabled ? Colors.white : Colors.white24, size: 21),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _topBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      child: Row(
+        children: [
+          _circleButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Cerrar',
+            onTap: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text('Editar foto',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 18,
+                    letterSpacing: -0.2,
+                    fontWeight: FontWeight.w700)),
+          ),
+          _circleButton(
+            icon: Icons.undo_rounded,
+            tooltip: 'Deshacer',
+            onTap: _canUndo ? _undo : null,
+          ),
+          const SizedBox(width: 10),
+          Material(
+            color: _lime,
+            borderRadius: BorderRadius.circular(22),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: _exporting ? null : _done,
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                alignment: Alignment.center,
+                child: _exporting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.2, color: Colors.black))
+                    : const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Siguiente',
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.black,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700)),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_forward_rounded,
+                              color: Colors.black, size: 17),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -262,103 +472,95 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
     final filter = _filters[_filterIndex];
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _exporting ? null : _done,
-            child: _exporting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white54))
-                : const Text('Siguiente',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFF69FF47),
-                        fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          const Spacer(),
-          // ── Lienzo cuadrado ────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: LayoutBuilder(builder: (context, c) {
-                return GestureDetector(
-                  onTapDown: (_) {
-                    if (_selectedSticker != -1) {
-                      setState(() => _selectedSticker = -1);
-                    }
-                  },
-                  onPanStart: _tool == _Tool.draw
-                      ? (d) {
-                          _liveStroke = _Stroke(
-                              [d.localPosition], _brushColor, _brushWidth);
-                          setState(() {});
-                        }
-                      : null,
-                  onPanUpdate: _tool == _Tool.draw
-                      ? (d) => setState(
-                          () => _liveStroke?.points.add(d.localPosition))
-                      : null,
-                  onPanEnd: _tool == _Tool.draw
-                      ? (_) {
-                          if (_liveStroke != null) {
-                            _strokes.add(_liveStroke!);
-                            _liveStroke = null;
-                            setState(() {});
-                          }
-                        }
-                      : null,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: RepaintBoundary(
-                      key: _captureKey,
-                      child: Stack(
-                        children: [
-                          // Imagen + filtro
-                          Positioned.fill(
-                            child: ColorFiltered(
-                              colorFilter: ColorFilter.matrix(
-                                  filter.matrix ?? _identity),
-                              child: Image.file(widget.source,
-                                  fit: BoxFit.cover),
-                            ),
-                          ),
-                          // Trazos
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _StrokePainter([
-                                ..._strokes,
-                                ?_liveStroke,
-                              ]),
-                            ),
-                          ),
-                          // Stickers
-                          for (int i = 0; i < _stickers.length; i++)
-                            _buildSticker(i, c.biggest),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _topBar(),
+            // ── Lienzo cuadrado ────────────────────────────────────────
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(26),
+                        boxShadow: [
+                          BoxShadow(
+                              color: _lime.withOpacity(0.10), blurRadius: 40),
                         ],
                       ),
+                      child: LayoutBuilder(builder: (context, c) {
+                        return GestureDetector(
+                          onTapDown: (_) {
+                            if (_selectedSticker != -1) {
+                              setState(() => _selectedSticker = -1);
+                            }
+                          },
+                          onPanStart: _tool == _Tool.draw
+                              ? (d) {
+                                  _liveStroke = _Stroke([d.localPosition],
+                                      _brushColor, _brushWidth);
+                                  setState(() {});
+                                }
+                              : null,
+                          onPanUpdate: _tool == _Tool.draw
+                              ? (d) => setState(() =>
+                                  _liveStroke?.points.add(d.localPosition))
+                              : null,
+                          onPanEnd: _tool == _Tool.draw
+                              ? (_) {
+                                  if (_liveStroke != null) {
+                                    _strokes.add(_liveStroke!);
+                                    _liveStroke = null;
+                                    setState(() {});
+                                  }
+                                }
+                              : null,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(26),
+                            child: RepaintBoundary(
+                              key: _captureKey,
+                              child: Stack(
+                                children: [
+                                  // Imagen + filtro
+                                  Positioned.fill(
+                                    child: ColorFiltered(
+                                      colorFilter: ColorFilter.matrix(
+                                          filter.matrix ?? _identity),
+                                      child: Image.file(widget.source,
+                                          fit: BoxFit.cover),
+                                    ),
+                                  ),
+                                  // Trazos
+                                  Positioned.fill(
+                                    child: CustomPaint(
+                                      painter: _StrokePainter([
+                                        ..._strokes,
+                                        ?_liveStroke,
+                                      ]),
+                                    ),
+                                  ),
+                                  // Stickers
+                                  for (int i = 0; i < _stickers.length; i++)
+                                    _buildSticker(i, c.biggest),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
                     ),
                   ),
-                );
-              }),
+                ),
+              ),
             ),
-          ),
-          const Spacer(),
-          _bottomBar(),
-        ],
+            _bottomBar(),
+          ],
+        ),
       ),
     );
   }
@@ -447,92 +649,112 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
     );
   }
 
+  /// Panel inferior: controles de la herramienta activa + selector de
+  /// herramienta.
   Widget _bottomBar() {
+    final Widget controls = switch (_tool) {
+      _Tool.draw => _drawControls(),
+      _Tool.emoji => _emojiStrip(),
+      _ => _filterStrip(),
+    };
     return Container(
-      color: Colors.black,
-      padding: const EdgeInsets.only(top: 6, bottom: 10),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_tool == _Tool.none) _filterStrip(),
-          if (_tool == _Tool.draw) _drawControls(),
-          if (_tool == _Tool.emoji) _emojiStrip(),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 14, bottom: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _toolBtn(Icons.tune_rounded, 'Filtros', _Tool.none),
-              _toolBtn(Icons.brush_rounded, 'Dibujar', _Tool.draw),
-              _toolBtn(Icons.text_fields_rounded, 'Texto', _Tool.text),
-              _toolBtn(Icons.emoji_emotions_outlined, 'Emoji', _Tool.emoji),
-              _iconAction(Icons.undo_rounded, 'Deshacer', () {
-                setState(() {
-                  if (_stickers.isNotEmpty && _selectedSticker == -1) {
-                    _stickers.removeLast();
-                  } else if (_selectedSticker != -1) {
-                    _stickers.removeAt(_selectedSticker);
-                    _selectedSticker = -1;
-                  } else if (_strokes.isNotEmpty) {
-                    _strokes.removeLast();
-                  }
-                });
-              }),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.bottomCenter,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: KeyedSubtree(key: ValueKey(_tool), child: controls),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.07)),
+                  ),
+                  child: Row(
+                    children: [
+                      _toolBtn(Icons.tune_rounded, 'Filtros', _Tool.none),
+                      _toolBtn(Icons.brush_rounded, 'Dibujar', _Tool.draw),
+                      _toolBtn(Icons.text_fields_rounded, 'Texto', _Tool.text),
+                      _toolBtn(
+                          Icons.emoji_emotions_rounded, 'Emoji', _Tool.emoji),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _toolBtn(IconData icon, String label, _Tool tool) {
     final active = _tool == tool;
-    return GestureDetector(
-      onTap: () {
-        if (tool == _Tool.text) {
-          _addText();
-          return;
-        }
-        setState(() => _tool = active ? _Tool.none : tool);
-      },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon,
-              color: active ? const Color(0xFF69FF47) : Colors.white70,
-              size: 24),
-          const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 10,
-                  color: active ? const Color(0xFF69FF47) : Colors.white54)),
-        ],
-      ),
-    );
-  }
-
-  Widget _iconAction(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white70, size: 24),
-          const SizedBox(height: 2),
-          Text(label,
-              style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 10, color: Colors.white54)),
-        ],
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (tool == _Tool.text) {
+            _addText();
+            return;
+          }
+          setState(() => _tool = tool);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          height: 52,
+          decoration: BoxDecoration(
+            color: active ? _lime : Colors.transparent,
+            borderRadius: BorderRadius.circular(19),
+            boxShadow: active
+                ? [BoxShadow(color: _lime.withOpacity(0.35), blurRadius: 14)]
+                : const [],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  color: active ? Colors.black : Colors.white70, size: 21),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 10.5,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                      color: active ? Colors.black : Colors.white54)),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _filterStrip() {
     return SizedBox(
-      height: 78,
+      height: 100,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         itemCount: _filters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
@@ -542,30 +764,40 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
             onTap: () => setState(() => _filterIndex = i),
             child: Column(
               children: [
-                Container(
-                  width: 52,
-                  height: 52,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 70,
+                  height: 70,
+                  padding: EdgeInsets.all(sel ? 3 : 0),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: sel ? const Color(0xFF69FF47) : Colors.white24,
-                      width: sel ? 2 : 1,
+                      color: sel ? _lime : Colors.white.withOpacity(0.14),
+                      width: sel ? 2.2 : 1,
+                    ),
+                    boxShadow: sel
+                        ? [
+                            BoxShadow(
+                                color: _lime.withOpacity(0.35), blurRadius: 14),
+                          ]
+                        : const [],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(sel ? 14 : 19),
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.matrix(f.matrix ?? _identity),
+                      child: Image.file(widget.source,
+                          fit: BoxFit.cover, cacheWidth: 180),
                     ),
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: ColorFiltered(
-                    colorFilter:
-                        ColorFilter.matrix(f.matrix ?? _identity),
-                    child: Image.file(widget.source,
-                        fit: BoxFit.cover, cacheWidth: 140),
-                  ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
                 Text(f.name,
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 9,
-                        color: sel ? const Color(0xFF69FF47) : Colors.white54)),
+                        fontSize: 11,
+                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                        color: sel ? _lime : Colors.white54)),
               ],
             ),
           );
@@ -575,63 +807,80 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
   }
 
   Widget _drawControls() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 40,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _drawColors.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (_, i) {
-              final c = _drawColors[i];
-              return GestureDetector(
-                onTap: () => setState(() => _brushColor = c),
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: c,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color:
-                          _brushColor == c ? Colors.white : Colors.white24,
-                      width: 2.5,
+    return SizedBox(
+      height: 100,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (final c in _drawColors)
+                  _colorDot(c, _brushColor == c,
+                      () => setState(() => _brushColor = c)),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Row(
+              children: [
+                const Icon(Icons.line_weight_rounded,
+                    color: Colors.white54, size: 18),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 5,
+                      activeTrackColor: _lime,
+                      inactiveTrackColor: Colors.white.withOpacity(0.12),
+                      thumbColor: Colors.white,
+                      overlayColor: _lime.withOpacity(0.15),
+                    ),
+                    child: Slider(
+                      value: _brushWidth,
+                      min: 2,
+                      max: 24,
+                      onChanged: (v) => setState(() => _brushWidth = v),
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-        Row(
-          children: [
-            const SizedBox(width: 16),
-            const Icon(Icons.line_weight_rounded,
-                color: Colors.white54, size: 18),
-            Expanded(
-              child: Slider(
-                value: _brushWidth,
-                min: 2,
-                max: 24,
-                activeColor: const Color(0xFF69FF47),
-                onChanged: (v) => setState(() => _brushWidth = v),
-              ),
+                // Vista previa del grosor y color del pincel.
+                SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: Center(
+                    child: Container(
+                      width: _brushWidth,
+                      height: _brushWidth,
+                      decoration: BoxDecoration(
+                        color: _brushColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white30),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _emojiStrip() {
     return SizedBox(
-      height: 46,
-      child: ListView.builder(
+      height: 100,
+      child: GridView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+        ),
         itemCount: _emojis.length,
         itemBuilder: (_, i) => GestureDetector(
           onTap: () {
@@ -644,9 +893,14 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
               _tool = _Tool.none;
             });
           },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Text(_emojis[i], style: const TextStyle(fontSize: 28)),
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
+            ),
+            child: Text(_emojis[i], style: const TextStyle(fontSize: 24)),
           ),
         ),
       ),

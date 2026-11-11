@@ -5377,63 +5377,153 @@ class _MapPageState extends State<MapPage> with RouteAware {
   // ── Piezas del menú lateral ─────────────────────────────────────────────
   static const _drawerAccent = Color(0xFF7CF0BC);
 
-  /// Sección del menú: tarjeta redondeada que se expande.
+  /// Secciones del menú que están desplegadas (por título).
+  final Set<String> _drawerOpenSections = {};
+
+  /// Sección del menú: tarjeta que se ilumina con el acento al desplegarse.
   Widget _drawerSection({
     required IconData icon,
     required String title,
     required String hint,
     required List<Widget> children,
   }) {
+    final open = _drawerOpenSections.contains(title);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
-      child: Container(
+      padding: const EdgeInsets.fromLTRB(14, 5, 14, 5),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.035),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: open
+                ? [
+                    _drawerAccent.withOpacity(0.11),
+                    Colors.white.withOpacity(0.03),
+                  ]
+                : [
+                    Colors.white.withOpacity(0.05),
+                    Colors.white.withOpacity(0.02),
+                  ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: open
+                ? _drawerAccent.withOpacity(0.30)
+                : Colors.white.withOpacity(0.06),
+          ),
+          boxShadow: open
+              ? [
+                  BoxShadow(
+                    color: _drawerAccent.withOpacity(0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : const [],
         ),
         child: ExpansionTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          key: PageStorageKey('drawer_section_$title'),
+          initiallyExpanded: open,
+          onExpansionChanged: (v) => setState(() {
+            v
+                ? _drawerOpenSections.add(title)
+                : _drawerOpenSections.remove(title);
+          }),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           collapsedShape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: _drawerAccent.withOpacity(0.025),
-          tilePadding: const EdgeInsets.only(left: 12, right: 14),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          backgroundColor: Colors.transparent,
+          collapsedBackgroundColor: Colors.transparent,
+          tilePadding: const EdgeInsets.only(left: 12, right: 12),
           childrenPadding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
-          iconColor: _drawerAccent,
-          collapsedIconColor: Colors.white38,
-          leading: Container(
-            width: 40,
-            height: 40,
+          leading: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  _drawerAccent.withOpacity(0.22),
-                  _drawerAccent.withOpacity(0.06),
-                ],
+                colors: open
+                    ? const [_drawerAccent, Color(0xFF2F8F63)]
+                    : [
+                        _drawerAccent.withOpacity(0.22),
+                        _drawerAccent.withOpacity(0.06),
+                      ],
               ),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: _drawerAccent.withOpacity(0.18)),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: _drawerAccent.withOpacity(open ? 0.0 : 0.18),
+              ),
+              boxShadow: open
+                  ? [
+                      BoxShadow(
+                        color: _drawerAccent.withOpacity(0.35),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : const [],
             ),
-            child: Icon(icon, color: _drawerAccent, size: 21),
+            child: Icon(
+              icon,
+              color: open ? const Color(0xFF12121C) : _drawerAccent,
+              size: 22,
+            ),
           ),
           title: Text(
             title,
             style: const TextStyle(
               fontFamily: 'Poppins',
               color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
+              fontSize: 15.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
           subtitle: Text(
             hint,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.38),
+              color: Colors.white.withOpacity(0.42),
               fontSize: 11.5,
             ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Cuántas opciones hay dentro.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: open
+                      ? _drawerAccent.withOpacity(0.16)
+                      : Colors.white.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${children.length}',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: open ? _drawerAccent : Colors.white54,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              AnimatedRotation(
+                turns: open ? 0.5 : 0,
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: open ? _drawerAccent : Colors.white38,
+                ),
+              ),
+            ],
           ),
           children: children,
         ),
@@ -5441,14 +5531,111 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
+  /// Acceso rápido del menú: mosaico con icono grande y etiqueta.
+  Widget _drawerQuickAction({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.pop(context);
+            onTap();
+          },
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(4, 12, 4, 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [color.withOpacity(0.16), color.withOpacity(0.04)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withOpacity(0.22)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: color, size: 24),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Fila de accesos rápidos bajo el perfil.
+  Widget _drawerQuickActions() {
+    void go(Widget page) => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => page),
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+      child: Row(
+        children: [
+          _drawerQuickAction(
+            icon: Icons.auto_awesome_rounded,
+            color: const Color(0xFF69FF47),
+            label: 'Momentos',
+            onTap: () => go(const MomentsPage()),
+          ),
+          const SizedBox(width: 8),
+          _drawerQuickAction(
+            icon: Icons.forum_rounded,
+            color: const Color(0xFF4FC3F7),
+            label: 'Mensajes',
+            onTap: () => go(const MessagesPage()),
+          ),
+          const SizedBox(width: 8),
+          _drawerQuickAction(
+            icon: Icons.bar_chart_rounded,
+            color: _drawerAccent,
+            label: 'Stats',
+            onTap: () => go(const StatsPage()),
+          ),
+          const SizedBox(width: 8),
+          _drawerQuickAction(
+            icon: Icons.emoji_events_rounded,
+            color: Colors.amberAccent,
+            label: 'Ranking',
+            onTap: () => go(const RiderRankingPage()),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _drawerItemIcon(IconData icon, Color color) {
     return Container(
-      width: 36,
-      height: 36,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.13),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.18)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color.withOpacity(0.22), color.withOpacity(0.07)],
+        ),
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withOpacity(0.22)),
       ),
       child: Icon(icon, color: color, size: 19),
     );
@@ -5502,19 +5689,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
             const SizedBox(width: 12),
             _drawerItemTexts(title, subtitle),
             const SizedBox(width: 8),
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.white54,
-                size: 18,
-              ),
+            Icon(
+              Icons.arrow_outward_rounded,
+              color: color.withOpacity(0.75),
+              size: 17,
             ),
+            const SizedBox(width: 4),
           ],
         ),
       ),
@@ -5540,12 +5720,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
           children: [
             loading
                 ? Container(
-                    width: 36,
-                    height: 36,
-                    padding: const EdgeInsets.all(9),
+                    width: 38,
+                    height: 38,
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.13),
-                      borderRadius: BorderRadius.circular(12),
+                      shape: BoxShape.circle,
                     ),
                     child: CircularProgressIndicator(
                       color: color,
@@ -5608,7 +5788,21 @@ class _MapPageState extends State<MapPage> with RouteAware {
         borderRadius: BorderRadius.horizontal(right: Radius.circular(28)),
       ),
       child: Container(
-        decoration: const BoxDecoration(color: Color(0xFF12121C)),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: const Color(0xFF12121C),
+          borderRadius:
+              const BorderRadius.horizontal(right: Radius.circular(28)),
+          // Brillo suave del acento en la esquina superior.
+          gradient: RadialGradient(
+            center: const Alignment(-1.0, -1.0),
+            radius: 1.1,
+            colors: [
+              _drawerAccent.withOpacity(0.13),
+              _drawerAccent.withOpacity(0.0),
+            ],
+          ),
+        ),
         child: Column(
           children: [
             Expanded(
@@ -5616,7 +5810,20 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 padding: EdgeInsets.zero,
                 children: [
                   _DrawerProfileHeader(),
-                  const SizedBox(height: 10),
+                  _drawerQuickActions(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 6),
+                    child: Text(
+                      'EXPLORAR',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.35),
+                        fontSize: 10.5,
+                        letterSpacing: 1.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                   _drawerSection(
                     icon: Icons.monitor_heart_rounded,
                     title: "Actividad",
@@ -11479,22 +11686,21 @@ class _MenuToggleButtonState extends State<_MenuToggleButton>
             animation: _t,
             builder: (context, _) {
               final t = _t.value;
+              // Anillo en degradado del acento; al abrir, el botón se rellena
+              // de acento y el icono pasa a oscuro.
               return Container(
                 width: 48,
                 height: 48,
+                padding: const EdgeInsets.all(1.6),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    center: const Alignment(-0.35, -0.45),
-                    radius: 1.0,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                     colors: [
-                      Color.lerp(const Color(0xFF1E1E2C), const Color(0xFF1A2A26), t)!,
-                      _bg,
+                      _accent.withOpacity(0.85),
+                      const Color(0xFF2F8F63).withOpacity(0.35 + 0.65 * t),
                     ],
-                  ),
-                  border: Border.all(
-                    color: _accent.withOpacity(0.22 + 0.38 * t),
-                    width: 1.3,
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -11503,14 +11709,30 @@ class _MenuToggleButtonState extends State<_MenuToggleButton>
                       offset: const Offset(0, 4),
                     ),
                     BoxShadow(
-                      color: _accent.withOpacity(0.10 + 0.22 * t),
-                      blurRadius: 10 + 8 * t,
+                      color: _accent.withOpacity(0.16 + 0.24 * t),
+                      blurRadius: 12 + 8 * t,
                       spreadRadius: -2,
                     ),
                   ],
                 ),
-                child: CustomPaint(
-                  painter: _MenuIconPainter(progress: t, color: _accent),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      center: const Alignment(-0.35, -0.45),
+                      radius: 1.0,
+                      colors: [
+                        Color.lerp(const Color(0xFF1E1E2C), _accent, t)!,
+                        Color.lerp(_bg, const Color(0xFF2F8F63), t)!,
+                      ],
+                    ),
+                  ),
+                  child: CustomPaint(
+                    painter: _MenuIconPainter(
+                      progress: t,
+                      color: Color.lerp(_accent, _bg, t)!,
+                    ),
+                  ),
                 ),
               );
             },

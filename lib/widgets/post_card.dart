@@ -167,11 +167,18 @@ class _PostCardState extends State<PostCard>
     ].join('  ·  ');
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 22),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.035),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withOpacity(0.06),
+            Colors.white.withOpacity(0.025),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -181,25 +188,35 @@ class _PostCardState extends State<PostCard>
           InkWell(
             onTap: widget.onAuthorTap,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 13, 6, 13),
+              padding: const EdgeInsets.fromLTRB(14, 13, 6, 12),
               child: Row(
                 children: [
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      CircleAvatar(
-                        radius: 19,
-                        backgroundColor: Colors.white12,
-                        backgroundImage: avatarUrl.isNotEmpty
-                            ? CachedNetworkImageProvider(avatarUrl)
-                            : null,
-                        child: avatarUrl.isEmpty
-                            ? Text(
-                                _authorName.substring(0, 1).toUpperCase(),
-                                style: const TextStyle(
-                                    fontFamily: 'Poppins', color: Colors.white),
-                              )
-                            : null,
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF69FF47), Color(0xFF7CF0BC)],
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 19,
+                          backgroundColor: const Color(0xFF161622),
+                          backgroundImage: avatarUrl.isNotEmpty
+                              ? CachedNetworkImageProvider(avatarUrl)
+                              : null,
+                          child: avatarUrl.isEmpty
+                              ? Text(
+                                  _authorName.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.white),
+                                )
+                              : null,
+                        ),
                       ),
                       if (isPlus)
                         Positioned(
@@ -253,7 +270,169 @@ class _PostCardState extends State<PostCard>
             ),
           ),
           // Imagen con burst de corazón al doble tap
-          GestureDetector(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: _photo(),
+            ),
+          ),
+          // Acciones
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+            child: Row(
+              children: [
+                _actionPill(
+                  icon: _liked ? Icons.favorite : Icons.favorite_border,
+                  iconKey: ValueKey(_liked),
+                  count: _likeCount,
+                  color: const Color(0xFFFF4D6D),
+                  active: _liked,
+                  tooltip: 'Me gusta',
+                  onTap: () => _toggleLike(),
+                ),
+                const SizedBox(width: 8),
+                _actionPill(
+                  icon: Icons.mode_comment_outlined,
+                  count: comments,
+                  color: const Color(0xFF7CF0BC),
+                  active: false,
+                  tooltip: 'Comentar',
+                  onTap: widget.canInteract
+                      ? widget.onOpenComments
+                      : widget.onBlockedInteract,
+                ),
+                const Spacer(),
+                if (!widget.canInteract && !widget.isMine)
+                  Row(
+                    children: [
+                      const Icon(Icons.lock_outline,
+                          size: 13, color: Colors.white30),
+                      const SizedBox(width: 4),
+                      Text('síguela para reaccionar',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white.withOpacity(0.3),
+                              fontSize: 10.5)),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          if (caption.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$_authorName  ',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(
+                      text: caption,
+                      style: TextStyle(color: Colors.white.withOpacity(0.85)),
+                    ),
+                  ],
+                ),
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontSize: 13.5,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          if (comments > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              child: GestureDetector(
+                onTap: widget.canInteract
+                    ? widget.onOpenComments
+                    : widget.onBlockedInteract,
+                child: Text(
+                  comments == 1
+                      ? 'Ver el comentario'
+                      : 'Ver los $comments comentarios',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white.withOpacity(0.45),
+                      fontSize: 12),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Botón-píldora de la fila de acciones (me gusta / comentar).
+  Widget _actionPill({
+    required IconData icon,
+    Key? iconKey,
+    required int count,
+    required Color color,
+    required bool active,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            height: 44,
+            constraints: const BoxConstraints(minWidth: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            decoration: BoxDecoration(
+              color: active
+                  ? color.withOpacity(0.15)
+                  : Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: active
+                    ? color.withOpacity(0.45)
+                    : Colors.white.withOpacity(0.08),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 260),
+                  switchInCurve: Curves.easeOutBack,
+                  transitionBuilder: (child, anim) =>
+                      ScaleTransition(scale: anim, child: child),
+                  child: Icon(icon,
+                      key: iconKey,
+                      size: 21,
+                      color: active ? color : Colors.white70),
+                ),
+                if (count > 0) ...[
+                  const SizedBox(width: 7),
+                  Text('$count',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: active ? color : Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Foto del momento, con el corazón que estalla al doble tap.
+  Widget _photo() {
+    return GestureDetector(
             onDoubleTap: () => _toggleLike(fromDoubleTap: true),
             child: Stack(
               alignment: Alignment.center,
@@ -289,96 +468,17 @@ class _PostCardState extends State<PostCard>
                       child: Transform.scale(
                         scale: scale,
                         child: const Icon(Icons.favorite,
-                            color: Colors.white, size: 88),
+                            color: Colors.white,
+                            size: 88,
+                            shadows: [
+                              Shadow(blurRadius: 24, color: Colors.black45),
+                            ]),
                       ),
                     );
                   },
                 ),
               ],
             ),
-          ),
-          // Acciones
-          Padding(
-            padding: const EdgeInsets.fromLTRB(6, 4, 12, 2),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    _liked ? Icons.favorite : Icons.favorite_border,
-                    color: _liked ? const Color(0xFFFF4D6D) : Colors.white70,
-                  ),
-                  onPressed: () => _toggleLike(),
-                ),
-                if (_likeCount > 0)
-                  Text('$_likeCount',
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w600)),
-                const SizedBox(width: 6),
-                IconButton(
-                  icon: const Icon(Icons.mode_comment_outlined,
-                      color: Colors.white70),
-                  onPressed: widget.canInteract
-                      ? widget.onOpenComments
-                      : widget.onBlockedInteract,
-                ),
-                if (comments > 0)
-                  Text('$comments',
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w600)),
-                const Spacer(),
-                if (!widget.canInteract && !widget.isMine)
-                  Row(
-                    children: [
-                      const Icon(Icons.lock_outline,
-                          size: 13, color: Colors.white30),
-                      const SizedBox(width: 4),
-                      Text('síguela para reaccionar',
-                          style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white.withOpacity(0.3),
-                              fontSize: 10.5)),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-          if (caption.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
-              child: Text(
-                caption,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 14,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          if (comments > 0)
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, caption.isEmpty ? 2 : 0, 16, 14),
-              child: GestureDetector(
-                onTap: widget.canInteract
-                    ? widget.onOpenComments
-                    : widget.onBlockedInteract,
-                child: Text(
-                  comments == 1
-                      ? 'Ver el comentario'
-                      : 'Ver los $comments comentarios',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.45),
-                      fontSize: 12),
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
