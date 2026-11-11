@@ -133,19 +133,47 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
   ];
 
   static const _emojis = [
-    '🚴', '🚵', '🚲', '🔥', '💪', '🌄', '🌅', '☀️', '🌈', '🍃',
-    '⚡', '❤️', '💚', '✨', '🎉', '😎', '🥵', '🤙', '🙌', '🏆',
-    '📍', '🗺️', '🌳', '🌸', '🐕', '☕', '🍺', '💨', '👀', '💯',
+    '🚴',
+    '🚵',
+    '🚲',
+    '🔥',
+    '💪',
+    '🌄',
+    '🌅',
+    '☀️',
+    '🌈',
+    '🍃',
+    '⚡',
+    '❤️',
+    '💚',
+    '✨',
+    '🎉',
+    '😎',
+    '🥵',
+    '🤙',
+    '🙌',
+    '🏆',
+    '📍',
+    '🗺️',
+    '🌳',
+    '🌸',
+    '🐕',
+    '☕',
+    '🍺',
+    '💨',
+    '👀',
+    '💯',
   ];
 
   Future<File> _export() async {
-    final boundary = _captureKey.currentContext!.findRenderObject()
-        as RenderRepaintBoundary;
+    final boundary =
+        _captureKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
     final image = await boundary.toImage(pixelRatio: 2.5);
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     final dir = await getTemporaryDirectory();
     final file = File(
-        '${dir.path}/moment_${DateTime.now().millisecondsSinceEpoch}.png');
+      '${dir.path}/moment_${DateTime.now().millisecondsSinceEpoch}.png',
+    );
     await file.writeAsBytes(data!.buffer.asUint8List());
     return file;
   }
@@ -166,16 +194,20 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
     } catch (e) {
       if (mounted) {
         setState(() => _exporting = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No se pudo procesar la foto: $e',
-              style: const TextStyle(fontFamily: 'Poppins')),
-          backgroundColor: Colors.redAccent,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No se pudo procesar la foto: $e',
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     }
   }
 
-  static const _lime = Color(0xFF69FF47);
+  static const _green = Colors.greenAccent;
   static const _panel = Color(0xFF0F0F1A);
 
   bool get _canUndo => _stickers.isNotEmpty || _strokes.isNotEmpty;
@@ -202,13 +234,15 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
       final t = ctrl.text.trim();
       if (t.isNotEmpty) {
         setState(() {
-          _stickers.add(_Sticker(
-            text: t,
-            pos: const Offset(0, 0),
-            isText: true,
-            color: color,
-            scale: 1.2,
-          ));
+          _stickers.add(
+            _Sticker(
+              text: t,
+              pos: const Offset(0, 0),
+              isText: true,
+              color: color,
+              scale: 1.2,
+            ),
+          );
           _selectedSticker = _stickers.length - 1;
         });
       }
@@ -222,12 +256,14 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setLocal) => Padding(
           padding: EdgeInsets.only(
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
           child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF161622),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(30)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
               border: Border(
                 top: BorderSide(color: Colors.white.withOpacity(0.10)),
               ),
@@ -250,38 +286,47 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                     const SizedBox(height: 14),
                     Row(
                       children: [
-                        const Text('Añadir texto',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700)),
+                        const Text(
+                          'Añadir texto',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const Spacer(),
                         TextButton(
                           onPressed: () => Navigator.pop(sheetContext),
-                          child: const Text('Cancelar',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.white54)),
+                          child: const Text(
+                            'Cancelar',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white54,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 6),
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.35),
                         borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.08)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.08),
+                        ),
                       ),
                       child: TextField(
                         controller: ctrl,
                         autofocus: true,
                         maxLength: 80,
                         textAlign: TextAlign.center,
-                        cursorColor: _lime,
+                        cursorColor: _green,
                         textCapitalization: TextCapitalization.sentences,
                         onSubmitted: (_) => submit(sheetContext),
                         style: TextStyle(
@@ -290,20 +335,22 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                           shadows: const [
-                            Shadow(blurRadius: 6, color: Colors.black54)
+                            Shadow(blurRadius: 6, color: Colors.black54),
                           ],
                         ),
                         decoration: const InputDecoration(
                           hintText: 'Escribe algo…',
                           hintStyle: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white30,
-                              fontWeight: FontWeight.w600),
+                            fontFamily: 'Poppins',
+                            color: Colors.white30,
+                            fontWeight: FontWeight.w600,
+                          ),
                           border: InputBorder.none,
                           counterStyle: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white30,
-                              fontSize: 11),
+                            fontFamily: 'Poppins',
+                            color: Colors.white30,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ),
@@ -312,8 +359,11 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         for (final c in _drawColors)
-                          _colorDot(c, color == c,
-                              () => setLocal(() => color = c)),
+                          _colorDot(
+                            c,
+                            color == c,
+                            () => setLocal(() => color = c),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -323,17 +373,21 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                       child: ElevatedButton(
                         onPressed: () => submit(sheetContext),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _lime,
+                          backgroundColor: _green,
                           foregroundColor: Colors.black,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18)),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
                         ),
-                        child: const Text('Añadir',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700)),
+                        child: const Text(
+                          'Añadir',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -366,9 +420,6 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                 color: selected ? Colors.white : Colors.white24,
                 width: selected ? 3 : 1.5,
               ),
-              boxShadow: selected
-                  ? [BoxShadow(color: c.withOpacity(0.55), blurRadius: 12)]
-                  : const [],
             ),
           ),
         ),
@@ -395,8 +446,11 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(icon,
-                color: enabled ? Colors.white : Colors.white24, size: 21),
+            child: Icon(
+              icon,
+              color: enabled ? Colors.white : Colors.white24,
+              size: 21,
+            ),
           ),
         ),
       ),
@@ -415,13 +469,16 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
           ),
           const SizedBox(width: 12),
           const Expanded(
-            child: Text('Editar foto',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontSize: 18,
-                    letterSpacing: -0.2,
-                    fontWeight: FontWeight.w700)),
+            child: Text(
+              'Editar foto',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 18,
+                letterSpacing: -0.2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           _circleButton(
             icon: Icons.undo_rounded,
@@ -430,7 +487,7 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
           ),
           const SizedBox(width: 10),
           Material(
-            color: _lime,
+            color: _green,
             borderRadius: BorderRadius.circular(22),
             child: InkWell(
               borderRadius: BorderRadius.circular(22),
@@ -444,19 +501,28 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: Colors.black))
+                          strokeWidth: 2.2,
+                          color: Colors.black,
+                        ),
+                      )
                     : const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Siguiente',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.black,
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w700)),
+                          Text(
+                            'Siguiente',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.black,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           SizedBox(width: 4),
-                          Icon(Icons.arrow_forward_rounded,
-                              color: Colors.black, size: 17),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.black,
+                            size: 17,
+                          ),
                         ],
                       ),
               ),
@@ -482,77 +548,86 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   child: AspectRatio(
                     aspectRatio: 1,
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(26),
-                        boxShadow: [
-                          BoxShadow(
-                              color: _lime.withOpacity(0.10), blurRadius: 40),
-                        ],
                       ),
-                      child: LayoutBuilder(builder: (context, c) {
-                        return GestureDetector(
-                          onTapDown: (_) {
-                            if (_selectedSticker != -1) {
-                              setState(() => _selectedSticker = -1);
-                            }
-                          },
-                          onPanStart: _tool == _Tool.draw
-                              ? (d) {
-                                  _liveStroke = _Stroke([d.localPosition],
-                                      _brushColor, _brushWidth);
-                                  setState(() {});
-                                }
-                              : null,
-                          onPanUpdate: _tool == _Tool.draw
-                              ? (d) => setState(() =>
-                                  _liveStroke?.points.add(d.localPosition))
-                              : null,
-                          onPanEnd: _tool == _Tool.draw
-                              ? (_) {
-                                  if (_liveStroke != null) {
-                                    _strokes.add(_liveStroke!);
-                                    _liveStroke = null;
+                      child: LayoutBuilder(
+                        builder: (context, c) {
+                          return GestureDetector(
+                            onTapDown: (_) {
+                              if (_selectedSticker != -1) {
+                                setState(() => _selectedSticker = -1);
+                              }
+                            },
+                            onPanStart: _tool == _Tool.draw
+                                ? (d) {
+                                    _liveStroke = _Stroke(
+                                      [d.localPosition],
+                                      _brushColor,
+                                      _brushWidth,
+                                    );
                                     setState(() {});
                                   }
-                                }
-                              : null,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(26),
-                            child: RepaintBoundary(
-                              key: _captureKey,
-                              child: Stack(
-                                children: [
-                                  // Imagen + filtro
-                                  Positioned.fill(
-                                    child: ColorFiltered(
-                                      colorFilter: ColorFilter.matrix(
-                                          filter.matrix ?? _identity),
-                                      child: Image.file(widget.source,
-                                          fit: BoxFit.cover),
+                                : null,
+                            onPanUpdate: _tool == _Tool.draw
+                                ? (d) => setState(
+                                    () => _liveStroke?.points.add(
+                                      d.localPosition,
                                     ),
-                                  ),
-                                  // Trazos
-                                  Positioned.fill(
-                                    child: CustomPaint(
-                                      painter: _StrokePainter([
-                                        ..._strokes,
-                                        ?_liveStroke,
-                                      ]),
+                                  )
+                                : null,
+                            onPanEnd: _tool == _Tool.draw
+                                ? (_) {
+                                    if (_liveStroke != null) {
+                                      _strokes.add(_liveStroke!);
+                                      _liveStroke = null;
+                                      setState(() {});
+                                    }
+                                  }
+                                : null,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(26),
+                              child: RepaintBoundary(
+                                key: _captureKey,
+                                child: Stack(
+                                  children: [
+                                    // Imagen + filtro
+                                    Positioned.fill(
+                                      child: ColorFiltered(
+                                        colorFilter: ColorFilter.matrix(
+                                          filter.matrix ?? _identity,
+                                        ),
+                                        child: Image.file(
+                                          widget.source,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  // Stickers
-                                  for (int i = 0; i < _stickers.length; i++)
-                                    _buildSticker(i, c.biggest),
-                                ],
+                                    // Trazos
+                                    Positioned.fill(
+                                      child: CustomPaint(
+                                        painter: _StrokePainter([
+                                          ..._strokes,
+                                          ?_liveStroke,
+                                        ]),
+                                      ),
+                                    ),
+                                    // Stickers
+                                    for (int i = 0; i < _stickers.length; i++)
+                                      _buildSticker(i, c.biggest),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -589,8 +664,7 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
               onScaleUpdate: (d) {
                 setState(() {
                   s.pos += d.focalPointDelta;
-                  s.scale =
-                      (_gestureStartScale * d.scale).clamp(0.4, 6.0);
+                  s.scale = (_gestureStartScale * d.scale).clamp(0.4, 6.0);
                   s.rotation = _gestureStartRotation + d.rotation;
                 });
               },
@@ -615,12 +689,11 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                               fontSize: 26,
                               fontWeight: FontWeight.w800,
                               shadows: const [
-                                Shadow(blurRadius: 6, color: Colors.black54)
+                                Shadow(blurRadius: 6, color: Colors.black54),
                               ],
                             ),
                           )
-                        : Text(s.text,
-                            style: const TextStyle(fontSize: 40)),
+                        : Text(s.text, style: const TextStyle(fontSize: 40)),
                   ),
                 ),
               ),
@@ -637,9 +710,14 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: const BoxDecoration(
-                        color: Color(0xFFFF4D6D), shape: BoxShape.circle),
-                    child: const Icon(Icons.close,
-                        color: Colors.white, size: 14),
+                      color: Color(0xFFFF4D6D),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 14,
+                    ),
                   ),
                 ),
               ),
@@ -695,7 +773,10 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                       _toolBtn(Icons.brush_rounded, 'Dibujar', _Tool.draw),
                       _toolBtn(Icons.text_fields_rounded, 'Texto', _Tool.text),
                       _toolBtn(
-                          Icons.emoji_emotions_rounded, 'Emoji', _Tool.emoji),
+                        Icons.emoji_emotions_rounded,
+                        'Emoji',
+                        _Tool.emoji,
+                      ),
                     ],
                   ),
                 ),
@@ -724,24 +805,27 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
           curve: Curves.easeOutCubic,
           height: 52,
           decoration: BoxDecoration(
-            color: active ? _lime : Colors.transparent,
+            color: active ? _green : Colors.transparent,
             borderRadius: BorderRadius.circular(19),
-            boxShadow: active
-                ? [BoxShadow(color: _lime.withOpacity(0.35), blurRadius: 14)]
-                : const [],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  color: active ? Colors.black : Colors.white70, size: 21),
+              Icon(
+                icon,
+                color: active ? Colors.black : Colors.white70,
+                size: 21,
+              ),
               const SizedBox(height: 2),
-              Text(label,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 10.5,
-                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                      color: active ? Colors.black : Colors.white54)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10.5,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active ? Colors.black : Colors.white54,
+                ),
+              ),
             ],
           ),
         ),
@@ -772,32 +856,32 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: sel ? _lime : Colors.white.withOpacity(0.14),
+                      color: sel ? _green : Colors.white.withOpacity(0.14),
                       width: sel ? 2.2 : 1,
                     ),
-                    boxShadow: sel
-                        ? [
-                            BoxShadow(
-                                color: _lime.withOpacity(0.35), blurRadius: 14),
-                          ]
-                        : const [],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(sel ? 14 : 19),
                     child: ColorFiltered(
                       colorFilter: ColorFilter.matrix(f.matrix ?? _identity),
-                      child: Image.file(widget.source,
-                          fit: BoxFit.cover, cacheWidth: 180),
+                      child: Image.file(
+                        widget.source,
+                        fit: BoxFit.cover,
+                        cacheWidth: 180,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(f.name,
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                        color: sel ? _lime : Colors.white54)),
+                Text(
+                  f.name,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                    color: sel ? _green : Colors.white54,
+                  ),
+                ),
               ],
             ),
           );
@@ -818,8 +902,11 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 for (final c in _drawColors)
-                  _colorDot(c, _brushColor == c,
-                      () => setState(() => _brushColor = c)),
+                  _colorDot(
+                    c,
+                    _brushColor == c,
+                    () => setState(() => _brushColor = c),
+                  ),
               ],
             ),
           ),
@@ -827,16 +914,19 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
             padding: const EdgeInsets.symmetric(horizontal: 18),
             child: Row(
               children: [
-                const Icon(Icons.line_weight_rounded,
-                    color: Colors.white54, size: 18),
+                const Icon(
+                  Icons.line_weight_rounded,
+                  color: Colors.white54,
+                  size: 18,
+                ),
                 Expanded(
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 5,
-                      activeTrackColor: _lime,
+                      activeTrackColor: _green,
                       inactiveTrackColor: Colors.white.withOpacity(0.12),
                       thumbColor: Colors.white,
-                      overlayColor: _lime.withOpacity(0.15),
+                      overlayColor: _green.withOpacity(0.15),
                     ),
                     child: Slider(
                       value: _brushWidth,
@@ -885,10 +975,9 @@ class _MomentEditorPageState extends State<MomentEditorPage> {
         itemBuilder: (_, i) => GestureDetector(
           onTap: () {
             setState(() {
-              _stickers.add(_Sticker(
-                text: _emojis[i],
-                pos: const Offset(0, 0),
-              ));
+              _stickers.add(
+                _Sticker(text: _emojis[i], pos: const Offset(0, 0)),
+              );
               _selectedSticker = _stickers.length - 1;
               _tool = _Tool.none;
             });

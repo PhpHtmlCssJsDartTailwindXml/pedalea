@@ -1,5 +1,6 @@
 // ignore_for_file: unused_field
 
+import 'dart:math' as dmath;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -3811,6 +3812,86 @@ class _MapPageState extends State<MapPage> with RouteAware {
     await prefs.setInt('route_plan_count', count + 1);
   }
 
+  /// Corrige las paradas intermedias que están "de pasada".
+  ///
+  /// Mapbox obliga a la ruta a pasar por el punto exacto de cada parada. Si
+  /// tocaste unos metros al lado (la vereda del frente, la calzada contraria
+  /// de una avenida, la esquina de una calle lateral), la ruta se mete ahí y
+  /// da una vuelta para volver. Para evitarlo, por cada parada intermedia se
+  /// pide el trayecto directo entre la anterior y la siguiente: si la parada
+  /// queda a menos de [_kStopSnapMeters] de ese trayecto, se mueve al punto
+  /// más cercano sobre él y la ruta sigue recto. Si queda más lejos es un
+  /// desvío real y se respeta tal cual.
+  static const double _kStopSnapMeters = 40;
+
+  Future<List<(double, double)>> _straightenIntermediateStops(
+    List<(double, double)> pts,
+  ) async {
+    if (pts.length < 3) return pts;
+    final out = [...pts];
+
+    Future<void> fix(int i) async {
+      try {
+        final a = pts[i - 1];
+        final b = pts[i + 1];
+        final url =
+            'https://api.mapbox.com/directions/v5/mapbox/cycling/'
+            '${a.$1},${a.$2};${b.$1},${b.$2}'
+            '?geometries=geojson&overview=full&steps=false'
+            '&access_token=$kMapboxToken';
+        final res = await http
+            .get(Uri.parse(url))
+            .timeout(const Duration(seconds: 6));
+        if (res.statusCode != 200) return;
+        final routes = (jsonDecode(res.body) as Map)['routes'] as List?;
+        if (routes == null || routes.isEmpty) return;
+        final line =
+            ((routes.first as Map)['geometry'] as Map)['coordinates'] as List;
+        final near = _nearestPointOnLine(pts[i], line);
+        if (near != null && near.$3 <= _kStopSnapMeters) {
+          out[i] = (near.$1, near.$2);
+        }
+      } catch (_) {
+        // Sin red o sin ruta directa: la parada se usa tal como se tocó.
+      }
+    }
+
+    await Future.wait([for (var i = 1; i < pts.length - 1; i++) fix(i)]);
+    return out;
+  }
+
+  /// Punto de [line] (lista de [lng, lat]) más cercano a [p], y a cuántos
+  /// metros queda: (lng, lat, metros).
+  (double, double, double)? _nearestPointOnLine(
+    (double, double) p,
+    List line,
+  ) {
+    if (line.length < 2) return null;
+    // Proyección plana local, suficiente a escala de cuadras.
+    final kx = 111320.0 * dmath.cos(p.$2 * dmath.pi / 180);
+    const ky = 110540.0;
+    (double, double, double)? best;
+    for (var i = 0; i < line.length - 1; i++) {
+      final ax = ((line[i][0] as num).toDouble() - p.$1) * kx;
+      final ay = ((line[i][1] as num).toDouble() - p.$2) * ky;
+      final bx = ((line[i + 1][0] as num).toDouble() - p.$1) * kx;
+      final by = ((line[i + 1][1] as num).toDouble() - p.$2) * ky;
+      final dx = bx - ax;
+      final dy = by - ay;
+      final len2 = dx * dx + dy * dy;
+      final t = len2 == 0
+          ? 0.0
+          : (-(ax * dx + ay * dy) / len2).clamp(0.0, 1.0);
+      final qx = ax + dx * t;
+      final qy = ay + dy * t;
+      final d = dmath.sqrt(qx * qx + qy * qy);
+      if (best == null || d < best.$3) {
+        best = (p.$1 + qx / kx, p.$2 + qy / ky, d);
+      }
+    }
+    return best;
+  }
+
   /// [countUsage] debe ser false cuando es una re-planificación interna
   /// (p.ej. al saltar una parada durante la navegación) — el límite diario
   /// es sobre "planificar una ruta nueva", no sobre sus ajustes internos.
@@ -3841,10 +3922,13 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
       // Se respeta el orden exacto en que tocaste las paradas (Parada 1,
       // 2, 3...) — no se reordenan por cercanía.
-      final allPoints = [
-        '${current.longitude},${current.latitude}',
-        ..._routeWps.map((w) => '${w.lng},${w.lat}'),
-      ];
+      // Las paradas intermedias que quedan "de pasada" se alinean con la
+      // calle del trayecto directo, para no forzar vueltas a la manzana.
+      final routePts = await _straightenIntermediateStops([
+        (current.longitude, current.latitude),
+        ..._routeWps.map((w) => (w.lng, w.lat)),
+      ]);
+      final allPoints = [for (final p in routePts) '${p.$1},${p.$2}'];
       final coords = allPoints.join(';');
       // Limita a ~25m cuánto puede "pegar" cada punto a una calle distinta
       // de la que realmente tocaste — si el radio es muy amplio, Mapbox
@@ -3852,10 +3936,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // una avenida dividida, y ahí nace el rodeo/vuelta rara.
       final radiuses = List.filled(allPoints.length, '25').join(';');
 
+      // continue_straight=false: en una parada intermedia la bici puede
+      // devolverse por donde venía. Con "true" Mapbox prohíbe ese giro y,
+      // si la parada cayó en una calle lateral o de un solo sentido, obliga
+      // a rodear la manzana completa para seguir.
       final url =
           'https://api.mapbox.com/directions/v5/mapbox/cycling/$coords'
           '?geometries=geojson&overview=full&steps=false'
-          '&continue_straight=true&alternatives=true&radiuses=$radiuses'
+          '&continue_straight=false&alternatives=true&radiuses=$radiuses'
           '&access_token=$kMapboxToken';
       final res = await http.get(Uri.parse(url));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');

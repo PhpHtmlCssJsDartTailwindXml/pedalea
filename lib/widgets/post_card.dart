@@ -199,7 +199,7 @@ class _PostCardState extends State<PostCard>
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [Color(0xFF69FF47), Color(0xFF7CF0BC)],
+                            colors: [Colors.greenAccent, Color(0xFF7CF0BC)],
                           ),
                         ),
                         child: CircleAvatar(

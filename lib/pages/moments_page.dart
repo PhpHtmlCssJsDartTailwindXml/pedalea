@@ -23,7 +23,7 @@ class MomentsPage extends StatefulWidget {
 }
 
 class _MomentsPageState extends State<MomentsPage> {
-  static const _lime = Color(0xFF69FF47);
+  static const _green = Colors.greenAccent;
   static const _mint = Color(0xFF7CF0BC);
   static const _pink = Color(0xFFFF4D6D);
 
@@ -88,7 +88,7 @@ class _MomentsPageState extends State<MomentsPage> {
       _postsToday = results[3] as int;
       _myAvatar =
           ((results[4] as Map<String, dynamic>?)?['avatar_url'] as String?) ??
-              '';
+          '';
       _loading = false;
       _reachedEnd = _posts.length < 12;
     });
@@ -124,16 +124,18 @@ class _MomentsPageState extends State<MomentsPage> {
   void _blocked(Map<String, dynamic> post) {
     final authorId =
         (post['author'] as Map?)?['id'] as String? ?? post['user_id'] as String;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text(
-        'Reaccionar y comentar solo entre quienes se siguen mutuamente.',
-        style: TextStyle(fontFamily: 'Poppins'),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Reaccionar y comentar solo entre quienes se siguen mutuamente.',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+        action: SnackBarAction(
+          label: 'Ver perfil',
+          onPressed: () => _openAuthor(authorId),
+        ),
       ),
-      action: SnackBarAction(
-        label: 'Ver perfil',
-        onPressed: () => _openAuthor(authorId),
-      ),
-    ));
+    );
   }
 
   void _openPaywall(String reason) {
@@ -146,7 +148,8 @@ class _MomentsPageState extends State<MomentsPage> {
   Future<void> _compose() async {
     if (!_canPostToday) {
       _openPaywall(
-          'El plan gratis permite 2 momentos al día. Hazte Plus para publicar sin límite.');
+        'El plan gratis permite 2 momentos al día. Hazte Plus para publicar sin límite.',
+      );
       return;
     }
     final created = await Navigator.push(
@@ -164,8 +167,6 @@ class _MomentsPageState extends State<MomentsPage> {
       body: Stack(
         children: [
           // Brillos de fondo con los colores de acento.
-          Positioned(top: -130, right: -90, child: _glow(_lime, 320, 0.15)),
-          Positioned(top: 150, left: -160, child: _glow(_mint, 300, 0.10)),
           SafeArea(
             bottom: false,
             child: Column(
@@ -175,10 +176,13 @@ class _MomentsPageState extends State<MomentsPage> {
                   child: _loading
                       ? const Center(
                           child: CircularProgressIndicator(
-                              strokeWidth: 2.5, color: _lime))
+                            strokeWidth: 2.5,
+                            color: _green,
+                          ),
+                        )
                       : RefreshIndicator(
                           onRefresh: _refresh,
-                          color: _lime,
+                          color: _green,
                           backgroundColor: const Color(0xFF161622),
                           child: _feed(),
                         ),
@@ -187,21 +191,6 @@ class _MomentsPageState extends State<MomentsPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _glow(Color color, double size, double opacity) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withOpacity(opacity), color.withOpacity(0)],
-          ),
-        ),
       ),
     );
   }
@@ -244,14 +233,17 @@ class _MomentsPageState extends State<MomentsPage> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: kBgDark, width: 2),
                 ),
-                child: Text('$badge',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 9.5,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  '$badge',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 9.5,
+                    height: 1.1,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
         ],
@@ -277,23 +269,29 @@ class _MomentsPageState extends State<MomentsPage> {
                 ShaderMask(
                   blendMode: BlendMode.srcIn,
                   shaderCallback: (r) => const LinearGradient(
-                    colors: [Colors.white, _mint, _lime],
+                    colors: [Colors.white, _mint, _green],
                     stops: [0.0, 0.6, 1.0],
                   ).createShader(r),
-                  child: const Text('Momentos',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 25,
-                          height: 1.15,
-                          letterSpacing: -0.4,
-                          fontWeight: FontWeight.w800)),
-                ),
-                Text('El diario de la comunidad',
+                  child: const Text(
+                    'Momentos',
                     style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 12)),
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 25,
+                      height: 1.15,
+                      letterSpacing: -0.4,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  'El diario de la comunidad',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -326,16 +324,9 @@ class _MomentsPageState extends State<MomentsPage> {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [_lime, _mint],
+              colors: [_green, _mint],
             ),
             borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: _lime.withOpacity(0.35),
-                blurRadius: 22,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -353,12 +344,15 @@ class _MomentsPageState extends State<MomentsPage> {
                 child: _fabExtended
                     ? const Padding(
                         padding: EdgeInsets.only(left: 10),
-                        child: Text('Compartir',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.black,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700)),
+                        child: Text(
+                          'Compartir',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.black,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       )
                     : const SizedBox.shrink(),
               ),
@@ -374,7 +368,8 @@ class _MomentsPageState extends State<MomentsPage> {
       controller: _scroll,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 110),
-      itemCount: 1 + // cabecera
+      itemCount:
+          1 + // cabecera
           (_posts.isEmpty ? 1 : _posts.length) +
           (_reachedEnd || _posts.isEmpty ? 0 : 1),
       itemBuilder: (context, i) {
@@ -386,12 +381,15 @@ class _MomentsPageState extends State<MomentsPage> {
             padding: EdgeInsets.all(20),
             child: Center(
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white24),
+                strokeWidth: 2,
+                color: Colors.white24,
+              ),
             ),
           );
         }
         final post = _posts[idx];
-        final authorId = (post['author'] as Map?)?['id'] as String? ??
+        final authorId =
+            (post['author'] as Map?)?['id'] as String? ??
             post['user_id'] as String;
         return PostCard(
           key: ValueKey(post['id']),
@@ -439,30 +437,32 @@ class _MomentsPageState extends State<MomentsPage> {
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
-                    color: _lime,
+                    color: _green,
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(color: _lime.withOpacity(0.7), blurRadius: 8),
-                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('RECIENTES',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white.withOpacity(0.55),
-                        fontSize: 11,
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  'RECIENTES',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.55),
+                    fontSize: 11,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Container(
                     height: 1,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [
-                        Colors.white.withOpacity(0.12),
-                        Colors.white.withOpacity(0),
-                      ]),
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.12),
+                          Colors.white.withOpacity(0),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -488,14 +488,14 @@ class _MomentsPageState extends State<MomentsPage> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                _lime.withOpacity(can ? 0.13 : 0.04),
+                _green.withOpacity(can ? 0.13 : 0.04),
                 Colors.white.withOpacity(0.04),
               ],
             ),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: can
-                  ? _lime.withOpacity(0.22)
+                  ? _green.withOpacity(0.22)
                   : Colors.white.withOpacity(0.08),
             ),
           ),
@@ -505,7 +505,7 @@ class _MomentsPageState extends State<MomentsPage> {
                 padding: const EdgeInsets.all(2.2),
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [_lime, _mint]),
+                  gradient: LinearGradient(colors: [_green, _mint]),
                 ),
                 child: CircleAvatar(
                   radius: 21,
@@ -514,7 +514,11 @@ class _MomentsPageState extends State<MomentsPage> {
                       ? CachedNetworkImageProvider(_myAvatar)
                       : null,
                   child: _myAvatar.isEmpty
-                      ? const Icon(Icons.person, color: Colors.white38, size: 20)
+                      ? const Icon(
+                          Icons.person,
+                          color: Colors.white38,
+                          size: 20,
+                        )
                       : null,
                 ),
               ),
@@ -528,10 +532,11 @@ class _MomentsPageState extends State<MomentsPage> {
                           ? 'Comparte un momento lindo'
                           : 'Llegaste al límite de hoy',
                       style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w600),
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 1),
                     Text(
@@ -539,9 +544,10 @@ class _MomentsPageState extends State<MomentsPage> {
                           ? 'Una foto de tu ruta de hoy'
                           : 'Publica sin límite con Plus',
                       style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white.withOpacity(0.5),
-                          fontSize: 12),
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -552,13 +558,7 @@ class _MomentsPageState extends State<MomentsPage> {
                 height: 44,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: can ? _lime : Colors.white.withOpacity(0.08),
-                  boxShadow: can
-                      ? [
-                          BoxShadow(
-                              color: _lime.withOpacity(0.4), blurRadius: 14),
-                        ]
-                      : const [],
+                  color: can ? _green : Colors.white.withOpacity(0.08),
                 ),
                 child: Icon(
                   can ? Icons.add_a_photo_rounded : Icons.lock_outline_rounded,
@@ -589,11 +589,8 @@ class _MomentsPageState extends State<MomentsPage> {
               width: 26,
               height: 6,
               decoration: BoxDecoration(
-                color: i < used ? _lime : Colors.white.withOpacity(0.12),
+                color: i < used ? _green : Colors.white.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(3),
-                boxShadow: i < used
-                    ? [BoxShadow(color: _lime.withOpacity(0.5), blurRadius: 6)]
-                    : const [],
               ),
             ),
           const SizedBox(width: 5),
@@ -605,17 +602,21 @@ class _MomentsPageState extends State<MomentsPage> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 11.5),
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 11.5,
+              ),
             ),
           ),
-          Text('Plus es ilimitado',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: _lime.withOpacity(0.85),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            'Plus es ilimitado',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: _green.withOpacity(0.85),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -634,15 +635,12 @@ class _MomentsPageState extends State<MomentsPage> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            _lime.withOpacity(0.14),
-            _lime.withOpacity(0.03),
-          ],
+          colors: [_green.withOpacity(0.14), _green.withOpacity(0.03)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _lime.withOpacity(0.3)),
+        border: Border.all(color: _green.withOpacity(0.3)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -659,36 +657,47 @@ class _MomentsPageState extends State<MomentsPage> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: _lime.withOpacity(0.16),
+                        color: _green.withOpacity(0.16),
                         borderRadius: BorderRadius.circular(13),
                       ),
-                      child: const Icon(Icons.workspace_premium_rounded,
-                          color: _lime, size: 21),
+                      child: const Icon(
+                        Icons.workspace_premium_rounded,
+                        color: _green,
+                        size: 21,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('¿Por qué Pedalea Plus?',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700)),
-                          Text('Momentos sin límite y mucho más',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.white.withOpacity(0.55),
-                                  fontSize: 11.5)),
+                          const Text(
+                            '¿Por qué Pedalea Plus?',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            'Momentos sin límite y mucho más',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white.withOpacity(0.55),
+                              fontSize: 11.5,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     AnimatedRotation(
                       turns: _plusExpanded ? 0.5 : 0,
                       duration: const Duration(milliseconds: 220),
-                      child: const Icon(Icons.keyboard_arrow_down_rounded,
-                          color: _lime),
+                      child: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: _green,
+                      ),
                     ),
                   ],
                 ),
@@ -718,16 +727,21 @@ class _MomentsPageState extends State<MomentsPage> {
                                     color: Colors.white.withOpacity(0.06),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: Text(p.$1,
-                                      style: const TextStyle(fontSize: 14)),
+                                  child: Text(
+                                    p.$1,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text(p.$2,
-                                      style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: Colors.white.withOpacity(0.85),
-                                          fontSize: 12.5)),
+                                  child: Text(
+                                    p.$2,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.white.withOpacity(0.85),
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -737,19 +751,24 @@ class _MomentsPageState extends State<MomentsPage> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () => _openPaywall(
-                                'Publica momentos sin límite y desbloquea todo Pedalea Plus.'),
+                              'Publica momentos sin límite y desbloquea todo Pedalea Plus.',
+                            ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _lime,
+                              backgroundColor: _green,
                               foregroundColor: Colors.black,
                               elevation: 0,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
-                            child: const Text('Ver Pedalea Plus',
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontWeight: FontWeight.w700)),
+                            child: const Text(
+                              'Ver Pedalea Plus',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -774,42 +793,53 @@ class _MomentsPageState extends State<MomentsPage> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [_lime.withOpacity(0.22), _mint.withOpacity(0.06)],
+                colors: [_green.withOpacity(0.22), _mint.withOpacity(0.06)],
               ),
-              border: Border.all(color: _lime.withOpacity(0.3)),
-              boxShadow: [
-                BoxShadow(color: _lime.withOpacity(0.18), blurRadius: 30),
-              ],
+              border: Border.all(color: _green.withOpacity(0.3)),
             ),
-            child: const Icon(Icons.auto_awesome_rounded,
-                size: 40, color: _lime),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 40,
+              color: _green,
+            ),
           ),
           const SizedBox(height: 18),
-          const Text('Aún no hay momentos',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700)),
+          const Text(
+            'Aún no hay momentos',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('Sé quien abra el diario de la comunidad',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white.withOpacity(0.45),
-                  fontSize: 12.5)),
+          Text(
+            'Sé quien abra el diario de la comunidad',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withOpacity(0.45),
+              fontSize: 12.5,
+            ),
+          ),
           const SizedBox(height: 18),
           OutlinedButton.icon(
             onPressed: _compose,
             icon: const Icon(Icons.add_a_photo_rounded, size: 18),
-            label: const Text('Compartir el primero',
-                style: TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+            label: const Text(
+              'Compartir el primero',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             style: OutlinedButton.styleFrom(
-              foregroundColor: _lime,
-              side: BorderSide(color: _lime.withOpacity(0.5)),
+              foregroundColor: _green,
+              side: BorderSide(color: _green.withOpacity(0.5)),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
         ],

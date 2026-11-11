@@ -17,7 +17,7 @@ class CreateMomentPage extends StatefulWidget {
 }
 
 class _CreateMomentPageState extends State<CreateMomentPage> {
-  static const _lime = Color(0xFF69FF47);
+  static const _green = Colors.greenAccent;
   static const _mint = Color(0xFF7CF0BC);
   static const _captionMax = 500;
 
@@ -50,11 +50,15 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
       await _openEditor(File(picked.path));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No se pudo abrir la imagen: $e',
-              style: const TextStyle(fontFamily: 'Poppins')),
-          backgroundColor: Colors.redAccent,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No se pudo abrir la imagen: $e',
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     }
   }
@@ -90,12 +94,16 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
           builder: (_) => AlertDialog(
             backgroundColor: const Color(0xFF161622),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24)),
-            title: const Text('Límite diario',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700)),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: const Text(
+              'Límite diario',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             content: const Text(
               'El plan gratis permite 2 momentos al día. Hazte Pedalea Plus '
               'para publicar sin límite.',
@@ -104,9 +112,13 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Entendido',
-                    style: TextStyle(
-                        fontFamily: 'Poppins', color: Colors.white54)),
+                child: const Text(
+                  'Entendido',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white54,
+                  ),
+                ),
               ),
               TextButton(
                 onPressed: () {
@@ -115,27 +127,33 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const PaywallPage(
-                        reason:
-                            'Publica momentos sin límite con Pedalea Plus.',
+                        reason: 'Publica momentos sin límite con Pedalea Plus.',
                       ),
                     ),
                   );
                 },
-                child: const Text('Ver Plus',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: _lime,
-                        fontWeight: FontWeight.w700)),
+                child: const Text(
+                  'Ver Plus',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: _green,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No se pudo publicar: $e',
-              style: const TextStyle(fontFamily: 'Poppins')),
-          backgroundColor: Colors.redAccent,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No se pudo publicar: $e',
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     }
   }
@@ -147,8 +165,6 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
       backgroundColor: kBgDark,
       body: Stack(
         children: [
-          Positioned(top: -140, left: -100, child: _glow(_lime, 340, 0.13)),
-          Positioned(bottom: -120, right: -120, child: _glow(_mint, 300, 0.08)),
           SafeArea(
             child: Column(
               children: [
@@ -182,21 +198,6 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
     );
   }
 
-  Widget _glow(Color color, double size, double opacity) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color.withOpacity(opacity), color.withOpacity(0)],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _topBar(bool hasImage) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 16, 6),
@@ -215,7 +216,11 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                 child: const SizedBox(
                   width: 44,
                   height: 44,
-                  child: Icon(Icons.close_rounded, color: Colors.white, size: 21),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 21,
+                  ),
                 ),
               ),
             ),
@@ -225,22 +230,26 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Nuevo momento',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 21,
-                        height: 1.2,
-                        letterSpacing: -0.3,
-                        fontWeight: FontWeight.w800)),
+                const Text(
+                  'Nuevo momento',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 21,
+                    height: 1.2,
+                    letterSpacing: -0.3,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 Text(
                   hasImage
                       ? 'Dale el último toque y publícalo'
                       : 'Empieza eligiendo una foto',
                   style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 12),
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -264,7 +273,7 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
       width: on ? 22 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: on ? _lime : Colors.white.withOpacity(0.16),
+        color: on ? _green : Colors.white.withOpacity(0.16),
         borderRadius: BorderRadius.circular(4),
       ),
     );
@@ -275,7 +284,7 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
     return CustomPaint(
       key: key,
       painter: _DashedBorderPainter(
-        color: _lime.withOpacity(0.45),
+        color: _green.withOpacity(0.45),
         radius: 30,
       ),
       child: Container(
@@ -284,7 +293,7 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [_lime.withOpacity(0.10), Colors.white.withOpacity(0.03)],
+            colors: [_green.withOpacity(0.10), Colors.white.withOpacity(0.03)],
           ),
         ),
         padding: const EdgeInsets.all(22),
@@ -299,29 +308,35 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [_lime, _mint],
+                  colors: [_green, _mint],
                 ),
-                boxShadow: [
-                  BoxShadow(color: _lime.withOpacity(0.35), blurRadius: 28),
-                ],
               ),
-              child: const Icon(Icons.add_a_photo_rounded,
-                  size: 34, color: Colors.black),
+              child: const Icon(
+                Icons.add_a_photo_rounded,
+                size: 34,
+                color: Colors.black,
+              ),
             ),
             const SizedBox(height: 18),
-            const Text('Sube tu mejor foto',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700)),
+            const Text(
+              'Sube tu mejor foto',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(height: 3),
-            Text('Después podrás añadir filtros, dibujo y stickers',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 12.5)),
+            Text(
+              'Después podrás añadir filtros, dibujo y stickers',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 12.5,
+              ),
+            ),
             const SizedBox(height: 22),
             Row(
               children: [
@@ -357,7 +372,7 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
     required VoidCallback onTap,
   }) {
     return Material(
-      color: filled ? _lime : Colors.white.withOpacity(0.08),
+      color: filled ? _green : Colors.white.withOpacity(0.08),
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -373,15 +388,17 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  size: 20, color: filled ? Colors.black : Colors.white),
+              Icon(icon, size: 20, color: filled ? Colors.black : Colors.white),
               const SizedBox(width: 8),
-              Text(label,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: filled ? Colors.black : Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: filled ? Colors.black : Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -393,16 +410,7 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
   Widget _preview({Key? key}) {
     return Container(
       key: key,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: _lime.withOpacity(0.14),
-            blurRadius: 36,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(30)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(30),
         child: Stack(
@@ -437,13 +445,19 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _glassPill(Icons.auto_fix_high_rounded, 'Editar',
-                        () => _openEditor(_image!)),
+                    child: _glassPill(
+                      Icons.auto_fix_high_rounded,
+                      'Editar',
+                      () => _openEditor(_image!),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _glassPill(Icons.swap_horiz_rounded, 'Cambiar',
-                        _showPickSheet),
+                    child: _glassPill(
+                      Icons.swap_horiz_rounded,
+                      'Cambiar',
+                      _showPickSheet,
+                    ),
                   ),
                 ],
               ),
@@ -474,12 +488,15 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                 children: [
                   Icon(icon, color: Colors.white, size: 18),
                   const SizedBox(width: 7),
-                  Text(label,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -505,27 +522,36 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
             children: [
               const Icon(Icons.edit_note_rounded, color: _mint, size: 19),
               const SizedBox(width: 6),
-              Text('Descripción',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.75),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                'Descripción',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white.withOpacity(0.75),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(width: 6),
-              Text('opcional',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.35),
-                      fontSize: 11.5)),
+              Text(
+                'opcional',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white.withOpacity(0.35),
+                  fontSize: 11.5,
+                ),
+              ),
               const Spacer(),
-              Text('$len/$_captionMax',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: len > _captionMax - 40
-                          ? _lime
-                          : Colors.white.withOpacity(0.35),
-                      fontSize: 11.5,
-                      fontFeatures: const [FontFeature.tabularFigures()])),
+              Text(
+                '$len/$_captionMax',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: len > _captionMax - 40
+                      ? _green
+                      : Colors.white.withOpacity(0.35),
+                  fontSize: 11.5,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
             ],
           ),
           TextField(
@@ -533,14 +559,19 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
             minLines: 2,
             maxLines: 5,
             maxLength: _captionMax,
-            cursorColor: _lime,
+            cursorColor: _green,
             textCapitalization: TextCapitalization.sentences,
             style: const TextStyle(
-                fontFamily: 'Poppins', color: Colors.white, fontSize: 14.5),
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 14.5,
+            ),
             decoration: InputDecoration(
               hintText: 'Cuenta algo de este momento…',
               hintStyle: TextStyle(
-                  fontFamily: 'Poppins', color: Colors.white.withOpacity(0.35)),
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.35),
+              ),
               border: InputBorder.none,
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -577,10 +608,11 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
               'Cualquier ciclista podrá ver tu momento. Solo quienes se sigan '
               'mutuamente contigo podrán reaccionar o comentar.',
               style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white.withOpacity(0.6),
-                  fontSize: 11.5,
-                  height: 1.4),
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 11.5,
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -602,19 +634,10 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
             height: 56,
             decoration: BoxDecoration(
               gradient: hasImage
-                  ? const LinearGradient(colors: [_lime, _mint])
+                  ? const LinearGradient(colors: [_green, _mint])
                   : null,
               color: hasImage ? null : Colors.white.withOpacity(0.07),
               borderRadius: BorderRadius.circular(20),
-              boxShadow: hasImage
-                  ? [
-                      BoxShadow(
-                        color: _lime.withOpacity(0.32),
-                        blurRadius: 22,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                  : const [],
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -624,24 +647,29 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2.2, color: Colors.black),
+                      strokeWidth: 2.2,
+                      color: Colors.black,
+                    ),
                   )
                 else
-                  Icon(Icons.send_rounded,
-                      size: 19,
-                      color: hasImage ? Colors.black : Colors.white30),
+                  Icon(
+                    Icons.send_rounded,
+                    size: 19,
+                    color: hasImage ? Colors.black : Colors.white30,
+                  ),
                 const SizedBox(width: 10),
                 Text(
                   _publishing
                       ? 'Publicando…'
                       : hasImage
-                          ? 'Publicar'
-                          : 'Elige una foto para publicar',
+                      ? 'Publicar'
+                      : 'Elige una foto para publicar',
                   style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: hasImage ? Colors.black : Colors.white38,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700),
+                    fontFamily: 'Poppins',
+                    color: hasImage ? Colors.black : Colors.white38,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -681,12 +709,15 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Cambiar foto',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700)),
+                const Text(
+                  'Cambiar foto',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -695,7 +726,7 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                         icon: Icons.photo_library_rounded,
                         label: 'Galería',
                         hint: 'Elige una foto guardada',
-                        color: _lime,
+                        color: _green,
                         source: ImageSource.gallery,
                       ),
                     ),
@@ -754,17 +785,23 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
                 child: Icon(icon, color: color, size: 22),
               ),
               const SizedBox(height: 12),
-              Text(label,
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700)),
-              Text(hint,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 11.5)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                hint,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 11.5,
+                ),
+              ),
             ],
           ),
         ),
@@ -787,10 +824,12 @@ class _DashedBorderPainter extends CustomPainter {
       ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round;
     final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        (Offset.zero & size).deflate(1),
-        Radius.circular(radius),
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          (Offset.zero & size).deflate(1),
+          Radius.circular(radius),
+        ),
+      );
     for (final metric in path.computeMetrics()) {
       double d = 0;
       while (d < metric.length) {
