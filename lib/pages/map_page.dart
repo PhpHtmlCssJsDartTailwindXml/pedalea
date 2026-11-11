@@ -1276,6 +1276,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
           // Primer fix de GPS → cargar las capas por defecto alrededor del usuario.
           _maybeAutoLoadLayers();
 
+          if (_navigating) _checkStopArrival(position);
+
           if (_navigating && _routeCoords.isNotEmpty) {
             _advanceRouteProgress(position.latitude, position.longitude);
           }
@@ -3892,6 +3894,109 @@ class _MapPageState extends State<MapPage> with RouteAware {
     return best;
   }
 
+  /// Tramos (uno por parada) de la misma ruta hecha a pie, o null si falla.
+  Future<List?> _fetchWalkingLegs(String coords, String radiuses) async {
+    try {
+      final url =
+          'https://api.mapbox.com/directions/v5/mapbox/walking/$coords'
+          '?geometries=geojson&overview=false&steps=true'
+          '&radiuses=$radiuses&access_token=$kMapboxToken';
+      final res = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+      final routes = (jsonDecode(res.body) as Map)['routes'] as List?;
+      if (routes == null || routes.isEmpty) return null;
+      return (routes.first as Map)['legs'] as List?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Coordenadas [lng, lat] de un tramo, uniendo la geometría de sus pasos.
+  List _legCoords(Map leg) {
+    final out = [];
+    for (final step in (leg['steps'] as List? ?? const [])) {
+      final c = ((step as Map)['geometry'] as Map?)?['coordinates'] as List?;
+      if (c == null || c.isEmpty) continue;
+      // El primer punto de cada paso repite el último del anterior.
+      out.addAll(out.isEmpty ? c : c.skip(1));
+    }
+    return out;
+  }
+
+  /// Combina la ruta en bici con la ruta a pie, tramo por tramo.
+  ///
+  /// El perfil de bici de Mapbox trata la bici como un vehículo: en una
+  /// avenida de doble calzada (p.ej. Camino a Melipilla) no puede cruzar al
+  /// frente y sube hasta el próximo retorno para volver por la otra calzada.
+  /// Un ciclista real se baja y cruza. Por eso, si un tramo en bici mide
+  /// bastante más que el mismo tramo a pie, se usa el trazado a pie.
+  ({List coords, double distance, double duration, int walkedLegs, double savedMeters})
+  _mergeWithWalkingLegs(Map<String, dynamic> route, List? walkLegs) {
+    final full = (route['geometry'] as Map)['coordinates'] as List;
+    final bikeLegs = route['legs'] as List?;
+    final total = (route['distance'] as num).toDouble();
+    final totalDur = (route['duration'] as num).toDouble();
+    if (bikeLegs == null ||
+        walkLegs == null ||
+        walkLegs.length != bikeLegs.length) {
+      return (
+        coords: full,
+        distance: total,
+        duration: totalDur,
+        walkedLegs: 0,
+        savedMeters: 0.0,
+      );
+    }
+
+    final coords = [];
+    double distance = 0, duration = 0, saved = 0;
+    int walked = 0;
+    for (var i = 0; i < bikeLegs.length; i++) {
+      final bike = bikeLegs[i] as Map;
+      final walk = walkLegs[i] as Map;
+      final bikeDist = (bike['distance'] as num).toDouble();
+      final bikeDur = (bike['duration'] as num).toDouble();
+      final walkDist = (walk['distance'] as num).toDouble();
+      final walkCoords = _legCoords(walk);
+      // Solo si el rodeo es claro: 40 % más largo y al menos 300 m extra.
+      final detour =
+          walkCoords.length >= 2 &&
+          bikeDist > walkDist * 1.4 &&
+          bikeDist - walkDist > 300;
+      if (detour) {
+        coords.addAll(walkCoords);
+        distance += walkDist;
+        // Se pedalea casi todo el tramo; se suma 1 min por el cruce a pie.
+        final speed = bikeDur > 0 ? bikeDist / bikeDur : 4.2;
+        duration += walkDist / speed + 60;
+        saved += bikeDist - walkDist;
+        walked++;
+      } else {
+        coords.addAll(_legCoords(bike));
+        distance += bikeDist;
+        duration += bikeDur;
+      }
+    }
+    if (walked == 0 || coords.length < 2) {
+      return (
+        coords: full,
+        distance: total,
+        duration: totalDur,
+        walkedLegs: 0,
+        savedMeters: 0.0,
+      );
+    }
+    return (
+      coords: coords,
+      distance: distance,
+      duration: duration,
+      walkedLegs: walked,
+      savedMeters: saved,
+    );
+  }
+
   /// [countUsage] debe ser false cuando es una re-planificación interna
   /// (p.ej. al saltar una parada durante la navegación) — el límite diario
   /// es sobre "planificar una ruta nueva", no sobre sus ajustes internos.
@@ -3942,9 +4047,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // a rodear la manzana completa para seguir.
       final url =
           'https://api.mapbox.com/directions/v5/mapbox/cycling/$coords'
-          '?geometries=geojson&overview=full&steps=false'
+          '?geometries=geojson&overview=full&steps=true'
           '&continue_straight=false&alternatives=true&radiuses=$radiuses'
           '&access_token=$kMapboxToken';
+      // En paralelo, la misma ruta a pie: sirve para detectar tramos donde
+      // la bici queda obligada a un rodeo largo (ver _mergeWithWalkingLegs).
+      final walkFuture = _fetchWalkingLegs(coords, radiuses);
       final res = await http.get(Uri.parse(url));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -3977,14 +4085,31 @@ class _MapPageState extends State<MapPage> with RouteAware {
               })
               as Map<String, dynamic>;
 
+      final merged = _mergeWithWalkingLegs(route, await walkFuture);
+
       setState(() {
-        _routeDistKm = (route['distance'] as num).toDouble() / 1000;
-        _routeDurMin = (route['duration'] as num).toDouble() / 60;
+        _routeDistKm = merged.distance / 1000;
+        _routeDurMin = merged.duration / 60;
         _routeCalculating = false;
         _routeDifficulty = null;
         _routeElevGain = null;
       });
-      await _drawRouteLine((route['geometry'] as Map)['coordinates'] as List);
+      await _drawRouteLine(merged.coords);
+      if (merged.walkedLegs > 0 && mounted) {
+        final km = (merged.savedMeters / 1000).toStringAsFixed(1);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Esta ruta incluye un cruce a pie: te ahorra $km km de rodeo.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
       _fetchRouteElevation(); // Fire-and-forget; actualiza dificultad cuando llega
       if (countUsage) await _recordRoutePlanUsage();
     } catch (e) {
@@ -4869,6 +4994,55 @@ class _MapPageState extends State<MapPage> with RouteAware {
   String get _navNextStopLabel => _navNextWpIndex < _routeWps.length
       ? _routeWps[_navNextWpIndex].label
       : 'Destino final';
+
+  /// Radio de llegada: basta pasar a esta distancia de una parada para darla
+  /// por visitada — no hace falta pararse justo encima del pin.
+  static const double _kStopArrivalRadiusM = 35;
+  bool _handlingArrival = false;
+
+  /// Durante la navegación, marca como visitada (y quita del mapa y de la
+  /// lista) la próxima parada cuando entras en su radio de llegada. Al
+  /// llegar a la última, termina la navegación con el resumen.
+  Future<void> _checkStopArrival(geo.Position pos) async {
+    if (_handlingArrival || _rerouting) return;
+    if (_navNextWpIndex >= _routeWps.length) return;
+    final wp = _routeWps[_navNextWpIndex];
+    final dist = geo.Geolocator.distanceBetween(
+      pos.latitude,
+      pos.longitude,
+      wp.lat,
+      wp.lng,
+    );
+    if (dist > _kStopArrivalRadiusM) return;
+
+    _handlingArrival = true;
+    try {
+      HapticFeedback.mediumImpact();
+      setState(() => _routeWps.removeAt(_navNextWpIndex));
+      if (_routeWps.isEmpty) {
+        await _stopNavigation();
+        return;
+      }
+      await _redrawRoutePins();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Llegaste a ${wp.label}. Siguiente: ${_routeWps[_navNextWpIndex].label}',
+            ),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } finally {
+      _handlingArrival = false;
+    }
+  }
 
   /// Salta la próxima parada de verdad: la saca de la ruta, recalcula el
   /// trayecto desde tu posición actual (saltándosela) y redibuja pines y
