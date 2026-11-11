@@ -1,6 +1,7 @@
 // ignore_for_file: unused_field
 
 import 'dart:math' as dmath;
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx show Layer;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -480,7 +481,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
 
       await style.addSource(GeoJsonSource(id: _heatSrcId, data: fc));
-      await style.addLayer(HeatmapLayer(
+      await _addLayerBelowPuck(style, HeatmapLayer(
         id: _heatLyrId,
         sourceId: _heatSrcId,
         heatmapOpacity: 0.75,
@@ -1789,14 +1790,54 @@ class _MapPageState extends State<MapPage> with RouteAware {
     });
   }
 
+  /// Capa nativa donde Mapbox dibuja el marcador de GPS (Android / iOS).
+  static const _puckLayerIds = ['mapbox-location-indicator-layer', 'puck'];
+
+  /// Agrega una capa al mapa dejándola SIEMPRE por debajo del marcador de
+  /// GPS. Mapbox apila cada capa nueva encima de todo, así que alertas,
+  /// eventos y pines terminaban tapando tu posición al alejar el mapa.
+  /// Entre sí, las capas conservan el orden en que se agregan.
+  Future<void> _addLayerBelowPuck(StyleManager style, mbx.Layer layer) async {
+    for (final id in _puckLayerIds) {
+      try {
+        if (await style.styleLayerExists(id)) {
+          await style.addLayerAt(layer, LayerPosition(below: id));
+          return;
+        }
+      } catch (_) {
+        // Si falla la inserción posicionada, se agrega de la forma normal.
+        break;
+      }
+    }
+    await style.addLayer(layer);
+  }
+
+  /// Sube el marcador de GPS sobre todas las capas ya existentes.
+  Future<void> _raisePuckToTop() async {
+    final style = mapboxMap?.style;
+    if (style == null) return;
+    for (final id in _puckLayerIds) {
+      try {
+        if (await style.styleLayerExists(id)) {
+          await style.moveStyleLayer(id, null);
+          return;
+        }
+      } catch (_) {}
+    }
+  }
+
   Future<void> _setupUserPuck() async {
     if (mapboxMap == null) return;
     try {
-      final Uint8List bikeBytes = (await rootBundle.load(
-        "assets/icons/gps_puck_top.png",
+      // Flecha de navegación azul con borde blanco (estilo Maps). Va como
+      // bearingImage porque es la única imagen que Mapbox rota con el
+      // rumbo; topImage queda transparente para que no tape la flecha ni
+      // aparezca el punto azul por defecto.
+      final Uint8List emptyBytes = (await rootBundle.load(
+        "assets/icons/gps_puck_empty.png",
       )).buffer.asUint8List();
       final Uint8List arrowBytes = (await rootBundle.load(
-        "assets/icons/gps_puck_bearing.png",
+        "assets/icons/gps_puck_arrow.png",
       )).buffer.asUint8List();
 
       await mapboxMap!.location.updateSettings(
@@ -1804,19 +1845,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
           enabled: true,
           // El puck nativo de Mapbox rota según la brújula del teléfono
           // (PuckBearing.HEADING) — nunca según el rumbo GPS/movimiento.
-          // topImage (la bici) queda SIEMPRE fija/vertical: Mapbox solo rota
-          // bearingImage (el cono), por eso van en imágenes separadas.
+          // Mapbox solo rota bearingImage (la flecha).
           puckBearingEnabled: true,
           puckBearing: PuckBearing.HEADING,
           showAccuracyRing: false,
           pulsingEnabled: false,
           locationPuck: LocationPuck(
             locationPuck2D: DefaultLocationPuck2D(
-              topImage: bikeBytes,
+              topImage: emptyBytes,
               bearingImage: arrowBytes,
               shadowImage: Uint8List.fromList([]),
               scaleExpression:
-                  '["interpolate",["linear"],["zoom"],0,0.40,22,0.40]',
+                  '["interpolate",["linear"],["zoom"],0,0.34,22,0.34]',
               opacity: 1.0,
             ),
           ),
@@ -1826,6 +1866,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       debugPrint("Error configurando puck personalizado: $e");
     }
 
+    await _raisePuckToTop();
     _startDiagnosticCompass();
   }
 
@@ -2493,7 +2534,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         GeoJsonSource(id: tempSourceId, data: featureCollection),
       );
 
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         SymbolLayer(
           id: tempLayerId,
           sourceId: tempSourceId,
@@ -2555,7 +2596,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         GeoJsonSource(id: _selectionSourceId, data: featureCollection),
       );
 
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         SymbolLayer(
           id: _selectionLayerId,
           sourceId: _selectionSourceId,
@@ -2630,7 +2671,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         GeoJsonSource(id: _eventsSourceId, data: featureCollection),
       );
 
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         SymbolLayer(
           id: _eventsLayerId,
           sourceId: _eventsSourceId,
@@ -2711,7 +2752,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         GeoJsonSource(id: _alertsSourceId, data: featureCollection),
       );
 
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         SymbolLayer(
           id: _alertsLayerId,
           sourceId: _alertsSourceId,
@@ -3915,7 +3956,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         'features': features,
       });
       await style.addSource(GeoJsonSource(id: _rpWpSrc, data: fc));
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         CircleLayer(
           id: _rpWpLyr,
           sourceId: _rpWpSrc,
@@ -3980,7 +4021,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         ],
       });
       await style.addSource(GeoJsonSource(id: _rpRouteSrc, data: fc));
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         LineLayer(
           id: _rpRouteLyr,
           sourceId: _rpRouteSrc,
@@ -5138,7 +5179,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         ],
       });
       await style.addSource(GeoJsonSource(id: _rpRouteSrc, data: fc));
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         LineLayer(
           id: _rpRouteLyr,
           sourceId: _rpRouteSrc,
@@ -7268,7 +7309,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ],
             });
             await style.addSource(GeoJsonSource(id: _rpRouteSrc, data: fc));
-            await style.addLayer(
+            await _addLayerBelowPuck(style, 
               LineLayer(
                 id: _rpRouteLyr,
                 sourceId: _rpRouteSrc,
@@ -7465,7 +7506,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
           GeoJsonSource(id: "ciclovias-source", data: _cicloviasGeoJson!),
         );
         for (final l in _cicloviaLayers()) {
-          await style.addLayer(l);
+          await _addLayerBelowPuck(style, l);
         }
         _cicloviasAdded = true;
         if (_currentAlerts.isNotEmpty) await _updateAlertsLayer(_currentAlerts);
@@ -7552,7 +7593,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         }
       }
       for (final l in _cicloviaLayers()) {
-        await style.addLayer(l);
+        await _addLayerBelowPuck(style, l);
       }
       debugPrint("✅ Capas de ciclovías agregadas");
       _cicloviasGeoJson = geoJson;
@@ -7670,7 +7711,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
       final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
       await style.addSource(GeoJsonSource(id: _cyclistsSourceId, data: fc));
-      await style.addLayer(
+      await _addLayerBelowPuck(style, 
         SymbolLayer(
           id: _cyclistsLayerId,
           sourceId: _cyclistsSourceId,
@@ -7845,7 +7886,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _parkingSrcId, data: fc));
-    await style.addLayer(
+    await _addLayerBelowPuck(style, 
       SymbolLayer(
         id: _parkingLyrId,
         sourceId: _parkingSrcId,
@@ -7989,7 +8030,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _bicimetroSrcId, data: fc));
-    await style.addLayer(
+    await _addLayerBelowPuck(style, 
       SymbolLayer(
         id: _bicimetroLyrId,
         sourceId: _bicimetroSrcId,
@@ -8304,7 +8345,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _servicesSrcId, data: fc));
-    await style.addLayer(
+    await _addLayerBelowPuck(style, 
       SymbolLayer(
         id: _servicesLyrId,
         sourceId: _servicesSrcId,
@@ -8497,7 +8538,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         .toList();
     final fc = jsonEncode({'type': 'FeatureCollection', 'features': features});
     await style.addSource(GeoJsonSource(id: _crvSrcId, data: fc));
-    await style.addLayer(
+    await _addLayerBelowPuck(style, 
       SymbolLayer(
         id: _crvLyrId,
         sourceId: _crvSrcId,

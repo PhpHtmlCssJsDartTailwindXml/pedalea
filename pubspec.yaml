@@ -93,6 +93,8 @@ flutter:
     - assets/icons/gps_puck.png
     - assets/icons/gps_puck_top.png
     - assets/icons/gps_puck_bearing.png
+    - assets/icons/gps_puck_arrow.png
+    - assets/icons/gps_puck_empty.png
     - assets/icons/gps_puck_bearing_test.png
     - assets/brands/copec.png
     - assets/branding/pedalea-icono.png
