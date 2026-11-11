@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Una celda del mapa de calor: centro aproximado + cuántas veces se ha
 /// pedaleado por ahí (peso).
@@ -19,8 +20,11 @@ class HeatCell {
 /// ~110 m y solo cuenta cuántas veces se ha pasado por cada celda. Así el
 /// archivo es pequeño y no queda un historial de rutas reconstruible.
 /// Todo vive en el dispositivo (SharedPreferences); nunca se sube.
+///
+/// Se guarda por cuenta: si en el mismo teléfono inicia sesión otra
+/// persona, no ve (ni ensucia) el mapa de calor de la anterior.
 class RideHeatService {
-  static const _key = 'ride_heat_cells_v1'; // SharedPreferences
+  static const _key = 'ride_heat_cells_v1'; // SharedPreferences (prefijo)
 
   /// Tamaño de celda en grados (~0.001° ≈ 111 m de latitud).
   static const _cellDeg = 0.001;
@@ -33,10 +37,44 @@ class RideHeatService {
   static bool _loaded = false;
   static Timer? _saveTimer;
 
+  /// Cuenta a la que pertenecen las celdas cargadas en memoria.
+  static String _loadedFor = _anon;
+  static const _anon = 'anon';
+
+  static String _currentUid() {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id ?? _anon;
+    } catch (_) {
+      return _anon; // Supabase aún sin inicializar (tests)
+    }
+  }
+
+  static String _keyFor(String uid) => '${_key}_$uid';
+
   static Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
-    if (_loaded) return;
-    final raw = _prefs?.getString(_key);
+    final uid = _currentUid();
+    if (_loaded && _loadedFor == uid) return;
+
+    // Cambió la cuenta: guarda lo pendiente de la anterior antes de soltarlo.
+    if (_loaded && _saveTimer?.isActive == true) {
+      _saveTimer?.cancel();
+      await _prefs?.setString(_keyFor(_loadedFor), jsonEncode(_cells));
+    }
+    _cells.clear();
+    _loadedFor = uid;
+
+    var raw = _prefs?.getString(_keyFor(uid));
+    // Datos de antes de separar por cuenta: pasan a la primera cuenta que
+    // inicie sesión y se quita la clave antigua.
+    if (raw == null && uid != _anon) {
+      final legacy = _prefs?.getString(_key);
+      if (legacy != null) {
+        raw = legacy;
+        await _prefs?.setString(_keyFor(uid), legacy);
+        await _prefs?.remove(_key);
+      }
+    }
     if (raw != null) {
       try {
         final m = jsonDecode(raw) as Map<String, dynamic>;
@@ -79,7 +117,7 @@ class RideHeatService {
         ..clear()
         ..addEntries(entries.take(_maxCells));
     }
-    await _prefs?.setString(_key, jsonEncode(_cells));
+    await _prefs?.setString(_keyFor(_loadedFor), jsonEncode(_cells));
   }
 
   /// Fuerza el guardado inmediato (p. ej. al terminar una sesión de pedaleo).
@@ -116,13 +154,14 @@ class RideHeatService {
     await init();
     _cells.clear();
     _saveTimer?.cancel();
-    await _prefs?.remove(_key);
+    await _prefs?.remove(_keyFor(_loadedFor));
   }
 
   @visibleForTesting
   static void resetForTest() {
     _prefs = null;
     _loaded = false;
+    _loadedFor = _anon;
     _cells.clear();
   }
 }

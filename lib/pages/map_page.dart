@@ -240,6 +240,99 @@ class _MapPageState extends State<MapPage> with RouteAware {
       (_autoDarkMode && _currentStyle == kMapStyleDay) ||
       _currentStyle == kMapStyleMinimal;
 
+  bool get _isSatelliteStyle => _currentStyle == kMapStyleSatellite;
+
+  /// Mapas base de fondo claro (día, minimalista y exterior).
+  bool get _isLightBaseMap =>
+      _isDayMode || _currentStyle == kMapStyleOutdoors;
+
+  /// Color con que se dibujan las ciclovías según el mapa base. La leyenda
+  /// del mapa usa este mismo valor, así siempre coincide con las líneas.
+  Color get _cicloviaColor => _isSatelliteStyle
+      ? const Color(0xFF00E5FF)
+      : _isLightBaseMap
+      ? const Color(0xFF0047FF)
+      : const Color(0xFFB8FF1F);
+
+  /// Leyenda del mapa: muestra el color actual de las ciclovías. Al tocarla
+  /// lo explica con una frase.
+  Widget _buildCicloviaLegend() {
+    final color = _cicloviaColor;
+    return Tooltip(
+      message: 'Leyenda del mapa',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Las líneas de este color son ciclovías. '
+                        'El color cambia según el estilo del mapa.',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: const Color(0xFF161622),
+                duration: const Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.all(16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            );
+        },
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: _dayNightBox(radius: 19),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 20,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                'Ciclovías',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: _overlayText,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Estilo de mapa a usar: si el ciclista es Plus y eligió un estilo premium,
   /// ese; si no, el modo día/noche automático (o siempre noche).
   String _resolveMapStyle() {
@@ -304,6 +397,59 @@ class _MapPageState extends State<MapPage> with RouteAware {
     await _updateHeatmapLayer();
   }
 
+  /// Borra el mapa de calor de esta cuenta (con confirmación).
+  Future<void> _confirmClearHeatmap() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161622),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text(
+          'Borrar mi mapa de calor',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: const Text(
+          'Se eliminan todas las zonas registradas en este teléfono y el mapa '
+          'empieza de cero. No se puede deshacer.',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white54),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Borrar',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await RideHeatService.clear();
+    await _updateHeatmapLayer();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Mapa de calor borrado. Se irá llenando con tus próximos pedaleos.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _updateHeatmapLayer() async {
     if (mapboxMap == null || !_styleIsLoaded) return;
     final style = mapboxMap!.style;
@@ -345,7 +491,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         ],
         heatmapRadiusExpression: <Object>[
           'interpolate', ['linear'], ['zoom'],
-          8, 6.0, 12, 16.0, 15, 28.0, 18, 46.0,
+          8, 2.0, 12, 7.0, 15, 26.0, 18, 46.0,
         ],
         heatmapColorExpression: <Object>[
           'interpolate', ['linear'], ['heatmap-density'],
@@ -1250,7 +1396,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
               }
               _routePoints.add(position);
               // Mapa de calor personal (Plus): registra la zona, no el trazado.
-              RideHeatService.addPoint(position.latitude, position.longitude);
+              // Más estricto que el conteo de km: un salto de GPS o un
+              // tramo en auto antes de detectar "pasajero" pintaría calor
+              // en calles donde nunca pedaleaste.
+              if (position.accuracy <= 25 && speedKmh <= 45 && distM < 200) {
+                RideHeatService.addPoint(position.latitude, position.longitude);
+              }
               // Se persiste seguido (0,2 km) para no perder km si el SO mata
               // la app; el RPC de Supabase es incremental, no pesa.
               if (_unsavedKm >= 0.2) {
@@ -3479,6 +3630,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
             decoration: _dayNightBox(radius: 19),
             child: WeatherPill(isDayMode: _isDayMode),
           ),
+          const SizedBox(width: 8),
+          _buildCicloviaLegend(),
         ],
       ],
     );
@@ -5796,7 +5949,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
   /// Acceso rápido del menú: mosaico con icono grande y etiqueta.
   Widget _drawerQuickAction({
     required IconData icon,
-    required Color color,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -5812,18 +5964,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
           child: Ink(
             padding: const EdgeInsets.fromLTRB(4, 12, 4, 10),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [color.withOpacity(0.16), color.withOpacity(0.04)],
-              ),
+              color: Colors.white.withOpacity(0.05),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withOpacity(0.22)),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: color, size: 24),
+                Icon(icon, color: Colors.white.withOpacity(0.9), size: 23),
                 const SizedBox(height: 6),
                 Text(
                   label,
@@ -5856,28 +6004,24 @@ class _MapPageState extends State<MapPage> with RouteAware {
         children: [
           _drawerQuickAction(
             icon: Icons.auto_awesome_rounded,
-            color: const Color(0xFF69FF47),
             label: 'Momentos',
             onTap: () => go(const MomentsPage()),
           ),
           const SizedBox(width: 8),
           _drawerQuickAction(
             icon: Icons.forum_rounded,
-            color: const Color(0xFF4FC3F7),
             label: 'Mensajes',
             onTap: () => go(const MessagesPage()),
           ),
           const SizedBox(width: 8),
           _drawerQuickAction(
             icon: Icons.bar_chart_rounded,
-            color: _drawerAccent,
             label: 'Stats',
             onTap: () => go(const StatsPage()),
           ),
           const SizedBox(width: 8),
           _drawerQuickAction(
             icon: Icons.emoji_events_rounded,
-            color: Colors.amberAccent,
             label: 'Ranking',
             onTap: () => go(const RiderRankingPage()),
           ),
@@ -6317,6 +6461,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         value: _showHeatmap,
                         onChanged: (_) => _toggleHeatmap(),
                       ),
+                      if (isPlus && _showHeatmap)
+                        _drawerNavItem(
+                          icon: Icons.delete_sweep_rounded,
+                          color: const Color(0xFFFF6D00),
+                          title: "Borrar mi mapa de calor",
+                          subtitle: "Empieza de cero si ves zonas que no son tuyas",
+                          onTap: () {
+                            Navigator.pop(context);
+                            _confirmClearHeatmap();
+                          },
+                        ),
                       _drawerSwitchItem(
                         icon: Icons.local_parking,
                         loading: _bikeParkingsLoading,
@@ -7044,14 +7199,46 @@ class _MapPageState extends State<MapPage> with RouteAware {
     // del mapa — usamos un azul mucho más saturado y opaco. En modo oscuro
     // cambiamos a lima (el acento de marca de Pedalea), que resalta mucho
     // más contra el navy oscuro que el celeste que había antes.
-    final mainColor = _isDayMode
-        ? const Color(0xFF0B5FFF)
-        : const Color(0xFFC9FF5C);
-    final centerColor = _isDayMode
+    // En satélite ninguno de los dos sirve: la foto aérea mezcla verdes,
+    // cafés y grises. Ahí va un cian intenso, opaco y más grueso, con borde
+    // negro debajo para que se recorte sobre cualquier fondo.
+    final satellite = _isSatelliteStyle;
+    final lightBase = _isLightBaseMap;
+    final mainColor = _cicloviaColor;
+    final centerColor = satellite
+        ? Colors.white
+        : lightBase
         ? const Color(0xFF6FA8FF)
         : const Color(0xFFE6FFB0);
-    final mainOpacity = _isDayMode
-        ? [
+    // Casi opacas desde lejos y del todo opacas al acercarse, en todos los
+    // estilos: antes se veían lavadas al mirar la ciudad completa.
+    final mainOpacity = ['interpolate', ['linear'], ['zoom'], 11, 0.85, 13, 1.0];
+
+    return [
+      // Halo blanco debajo, solo en modo claro, para que la línea azul no se
+      // confunda con calles o límites del propio mapa base.
+      // Borde negro debajo en satélite y en modo oscuro: recorta la línea.
+      if (!lightBase)
+        LineLayer(
+          id: "ciclovias-halo-layer",
+          sourceId: "ciclovias-source",
+          lineColor: Colors.black.value,
+          lineCap: LineCap.ROUND,
+          lineJoin: LineJoin.ROUND,
+          lineWidthExpression: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            2.6,
+            13,
+            4.4,
+            15,
+            7.0,
+            17,
+            10.0,
+          ],
+          lineOpacityExpression: [
             'interpolate',
             ['linear'],
             ['zoom'],
@@ -7059,25 +7246,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
             0.55,
             13,
             0.75,
-            15,
-            0.9,
-          ]
-        : [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            11,
-            0.35,
-            13,
-            0.6,
-            15,
-            0.85,
-          ];
-
-    return [
-      // Halo blanco debajo, solo en modo claro, para que la línea azul no se
-      // confunda con calles o límites del propio mapa base.
-      if (_isDayMode)
+          ],
+        )
+      else if (lightBase)
         LineLayer(
           id: "ciclovias-halo-layer",
           sourceId: "ciclovias-source",
@@ -7116,19 +7287,33 @@ class _MapPageState extends State<MapPage> with RouteAware {
         lineColor: mainColor.value,
         lineCap: LineCap.ROUND,
         lineJoin: LineJoin.ROUND,
-        lineWidthExpression: [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11,
-          0.6,
-          13,
-          1.4,
-          15,
-          3.0,
-          17,
-          5.0,
-        ],
+        lineWidthExpression: satellite
+            ? [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                11,
+                1.6,
+                13,
+                3.0,
+                15,
+                5.0,
+                17,
+                7.5,
+              ]
+            : [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                11,
+                1.1,
+                13,
+                2.2,
+                15,
+                3.8,
+                17,
+                6.0,
+              ],
         lineOpacityExpression: mainOpacity,
       ),
       // Centro claro — solo aparece al acercarse, da sensación de carril
