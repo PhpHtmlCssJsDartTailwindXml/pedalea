@@ -23,6 +23,9 @@ import '../services/social_service.dart';
 import 'public_profile_page.dart';
 import 'follow_requests_page.dart';
 import 'moments_page.dart';
+import 'my_bikes_page.dart';
+import '../services/bike_service.dart';
+import '../services/alert_impact_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -58,6 +61,7 @@ class _ProfilePageState extends State<ProfilePage> {
   int _followers = 0, _following = 0, _momentCount = 0, _pendingReqs = 0;
   List<Map<String, dynamic>> _myPosts = [];
   RiderActivity? _activity;
+  AlertImpact _impact = AlertImpact.empty;
 
   @override
   void initState() {
@@ -65,6 +69,10 @@ class _ProfilePageState extends State<ProfilePage> {
     _showCachedDataImmediately();
     _loadProfile();
     _loadSocial();
+    BikeService.instance.load();
+    AlertImpactService.myImpact().then((v) {
+      if (mounted) setState(() => _impact = v);
+    });
     PlusPrefsService.refresh(); // trae medalla/acento/estilo desde la BD
     _connectivitySub = ConnectivityService.stream.listen((online) {
       if (mounted) setState(() => _isOffline = !online);
@@ -463,6 +471,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                                 const SizedBox(height: 12),
                                 _buildStatsRow(),
+                                if (_impact.headline != null) ...[
+                                  const SizedBox(height: 10),
+                                  _buildImpactBanner(),
+                                ],
+                                const SizedBox(height: 24),
+                                _buildBikesSection(),
                                 const SizedBox(height: 24),
                                 _buildMomentsPreview(),
                                 const SizedBox(height: 14),
@@ -1037,6 +1051,229 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
       ),
+    );
+  }
+
+  /// "Tus reportes ayudaron a N ciclistas": cuántas personas distintas
+  /// vieron tus alertas (al abrirlas o al pasar cerca).
+  Widget _buildImpactBanner() {
+    const color = Color(0xFFFFB74D);
+    final week = _impact.week;
+    final alerts = _impact.alerts;
+    final alertsText = alerts == 1
+        ? '1 alerta tuya sirvió'
+        : '$alerts alertas tuyas sirvieron';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: glassDecoration(
+          radius: 20, tint: color, opacity: 0.08, borderOpacity: 0.12),
+      child: Row(
+        children: [
+          const Text('🙌', style: TextStyle(fontSize: 26)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _impact.headline!,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  week > 0
+                      ? '$week esta semana · $alertsText'
+                      : 'Vieron tus alertas al pasar cerca o al abrirlas',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.55),
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Mis bicis: la activa con su odómetro y mantenciones pendientes.
+  Widget _buildBikesSection() {
+    return ValueListenableBuilder<List<Bike>>(
+      valueListenable: BikeService.instance.bikes,
+      builder: (context, bikes, _) {
+        final active = BikeService.instance.activeBike;
+        final due = active?.dueMaintenance ?? const <Maintenance>[];
+        void openList() => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyBikesPage()),
+            );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _sectionLabel('MIS BICIS'),
+                const Spacer(),
+                if (bikes.isNotEmpty)
+                  TextButton(
+                    onPressed: openList,
+                    child: Text(
+                      bikes.length == 1 ? 'Ver' : 'Ver las ${bikes.length}',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: _accent,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: active == null
+                    ? () => showBikeEditor(context)
+                    : () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BikeDetailPage(bikeId: active.id),
+                          ),
+                        ),
+                child: Ink(
+                  padding: const EdgeInsets.all(12),
+                  decoration: glassDecoration(
+                    radius: 20,
+                    tint: _accent,
+                    opacity: 0.06,
+                    borderOpacity: 0.12,
+                  ),
+                  child: active == null
+                      ? _bikeEmptyRow()
+                      : _bikeActiveRow(active, due),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _bikeEmptyRow() {
+    return Row(
+      children: [
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: _accent.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(Icons.pedal_bike_rounded, color: _accent),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Registra tu bici',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                'Sus km y avisos de mantención',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white54,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.add_rounded, color: _accent),
+      ],
+    );
+  }
+
+  Widget _bikeActiveRow(Bike active, List<Maintenance> due) {
+    final odo = active.odometerKm;
+    final odoText = odo >= 100 ? odo.toStringAsFixed(0) : odo.toStringAsFixed(1);
+    final photo = active.photoUrl ?? '';
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: 54,
+            height: 54,
+            child: photo.isNotEmpty
+                ? CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover)
+                : Container(
+                    color: _accent.withOpacity(0.12),
+                    alignment: Alignment.center,
+                    child: Text(active.type.emoji,
+                        style: const TextStyle(fontSize: 24)),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                active.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                '$odoText km · ${active.type.label}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white.withOpacity(0.55),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                due.isEmpty
+                    ? 'Mantención al día'
+                    : '🔧 Toca: ${due.first.kind.label.toLowerCase()}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: due.isEmpty ? _accent : const Color(0xFFFFB74D),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+      ],
     );
   }
 

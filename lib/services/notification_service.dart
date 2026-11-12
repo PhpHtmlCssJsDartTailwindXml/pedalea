@@ -7,6 +7,8 @@ import '../pages/event_chat_page.dart';
 import '../pages/follow_requests_page.dart';
 import '../pages/public_profile_page.dart';
 import '../pages/dm_thread_page.dart';
+import '../pages/my_bikes_page.dart';
+import '../pages/profile_page.dart';
 
 /// Servicio centralizado de notificaciones locales (alertas push).
 ///
@@ -32,6 +34,8 @@ class NotificationService {
   static const String _chatChannelName = 'Mensajes de grupos';
   static const String _socialChannelId = 'social_activity';
   static const String _socialChannelName = 'Momentos y seguidores';
+  static const String _maintenanceChannelId = 'bike_maintenance';
+  static const String _maintenanceChannelName = 'Mantención de tu bici';
 
   /// Inicializa el plugin y solicita permiso de notificaciones (Android 13+).
   Future<void> init() async {
@@ -255,6 +259,38 @@ class NotificationService {
     }
   }
 
+  /// Aviso de que a una bici le toca mantención (lubricar, frenos…).
+  Future<void> showMaintenance({
+    required int id,
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    await _ensureInit();
+    try {
+      await _plugin.show(
+        id,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _maintenanceChannelId,
+            _maintenanceChannelName,
+            channelDescription:
+                'Avisa cuando a tu bici le toca una mantención según sus km',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            icon: '@mipmap/ic_launcher',
+            styleInformation: BigTextStyleInformation(body),
+          ),
+        ),
+        payload: payload,
+      );
+    } catch (e) {
+      debugPrint('showMaintenance error: $e');
+    }
+  }
+
   /// Abre la pantalla correspondiente al tocar una notificación.
   static void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
@@ -285,6 +321,12 @@ class NotificationService {
           otherUserId: parts[1],
           otherName: parts.sublist(2).join('|'),
         ),
+      ));
+    } else if (payload == 'my_impact') {
+      nav.push(MaterialPageRoute(builder: (_) => const ProfilePage()));
+    } else if (payload.startsWith('bike|') && parts.length >= 2) {
+      nav.push(MaterialPageRoute(
+        builder: (_) => BikeDetailPage(bikeId: parts[1]),
       ));
     } else if ((payload.startsWith('follow_accept|') ||
             payload.startsWith('post_activity|')) &&

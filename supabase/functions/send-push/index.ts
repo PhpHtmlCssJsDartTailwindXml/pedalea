@@ -24,7 +24,7 @@ type Row = Record<string, unknown>;
 
 interface Push {
   to: string[]; // user ids
-  type: string; // chat | dm | follow_req | follow_accept | like | comment | reply
+  type: string; // chat | dm | follow_req | follow_accept | like | comment | reply | alert_impact
   title: string;
   body: string;
   payload: string; // lo que la app usa para abrir la pantalla correcta
@@ -144,6 +144,31 @@ async function buildPush(table: string, op: string, r: Row): Promise<Push | null
         payload: `dm|${sender}|${name}`,
         channel: "social_activity",
         data: { sender_id: sender },
+      };
+    }
+
+    case "alert_milestone": {
+      // Lo envía register_alert_view() al llegar a 3, 10, 25… ciclistas.
+      const author = str(r.author_id);
+      const count = Number(r.count) || 0;
+      if (!author || count <= 0) return null;
+      const labels: Record<string, string> = {
+        danger: "peligro",
+        theft: "robo",
+        construction: "obras",
+        accident: "accidente",
+      };
+      const what = labels[str(r.type)] ?? "incidente";
+      const place = clip(str(r.place).trim(), 60);
+      return {
+        to: [author],
+        type: "alert_impact",
+        title: `Tu alerta ya ayudó a ${count} ciclistas 🙌`,
+        body: place
+          ? `Tu reporte de ${what} en ${place} lo vieron ${count} ciclistas. ¡Gracias por cuidar a la comunidad!`
+          : `Tu reporte de ${what} lo vieron ${count} ciclistas. ¡Gracias por cuidar a la comunidad!`,
+        payload: "my_impact",
+        channel: "social_activity",
       };
     }
 

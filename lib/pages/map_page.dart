@@ -2,6 +2,9 @@
 
 import 'dart:math' as dmath;
 import '../services/review_prompt_service.dart';
+import '../services/bike_service.dart';
+import '../services/alert_impact_service.dart';
+import 'my_bikes_page.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx show Layer;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -256,6 +259,44 @@ class _MapPageState extends State<MapPage> with RouteAware {
       : _isLightBaseMap
       ? const Color(0xFF0047FF)
       : const Color(0xFFB8FF1F);
+
+  /// Botón redondo para cambiar la bici activa. Solo aparece si el ciclista
+  /// tiene 2 o más bicis registradas.
+  Widget _buildBikeSwitcher() {
+    return ValueListenableBuilder<List<Bike>>(
+      valueListenable: BikeService.instance.bikes,
+      builder: (context, bikes, _) {
+        if (bikes.length < 2) return const SizedBox.shrink();
+        final active = BikeService.instance.activeBike;
+        final photo = active?.photoUrl ?? '';
+        return Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Tooltip(
+            message: 'Bici activa: ${active?.name ?? ''}',
+            child: GestureDetector(
+              onTap: () => showActiveBikePicker(context),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: _dayNightBox(radius: 19),
+                padding: const EdgeInsets.all(3),
+                child: ClipOval(
+                  child: photo.isNotEmpty
+                      ? CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover)
+                      : Center(
+                          child: Text(
+                            active?.type.emoji ?? '🚲',
+                            style: const TextStyle(fontSize: 17),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   /// Leyenda del mapa: muestra el color actual de las ciclovías. Al tocarla
   /// lo explica con una frase.
@@ -832,6 +873,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
     _currentStyle = _resolveMapStyle();
     PlusPrefsService.mapStyle.addListener(_onMapStylePrefChanged);
+    BikeService.instance.load();
     // Pedir calificación en Play Store a quien ya pedaleó con la app, con
     // calma: unos segundos después de abrir, no en medio de un recorrido.
     Future.delayed(const Duration(seconds: 12), () {
@@ -1246,6 +1288,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _currentAlerts,
     );
     for (final alert in nearby) {
+      // "Tu aporte ayudó a…": este ciclista recibió el aviso de la alerta.
+      AlertImpactService.registerView(alert['id']?.toString(), 'nearby');
       final type = alert['type'] as String? ?? 'other';
       NotificationService.instance.showProximityAlert(
         id: (alert['id']?.toString() ?? '').hashCode & 0x7fffffff,
@@ -2942,6 +2986,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   void _showAlertModal(Map<String, dynamic> alert) {
+    // "Tu aporte ayudó a…": este ciclista abrió la alerta.
+    AlertImpactService.registerView(alert['id']?.toString(), 'open');
     final userId = Supabase.instance.client.auth.currentUser?.id;
     final isCreator = alert['user_id'] == userId;
     final hasVotedUp = (alert['voters_up'] as List?)?.contains(userId) ?? false;
@@ -3774,6 +3820,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
           ),
           const SizedBox(width: 8),
           _buildCicloviaLegend(),
+          _buildBikeSwitcher(),
         ],
       ],
     );
@@ -5800,6 +5847,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // total_km solo se modifica vía el RPC (la BD bloquea el update directo).
       debugPrint('Error guardando km: $e');
     }
+    BikeService.instance.addKm(km); // km de la bici activa + aviso de mantención
     _maybeAutofillCommune(uid); // sin await: no bloquea el conteo
     _checkAchievementsAndNotify();
   }
