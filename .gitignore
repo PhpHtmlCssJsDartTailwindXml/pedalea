@@ -60,3 +60,4 @@ linux/flutter/generated_plugins.cmake
 
 # Reporte de cobertura de flutter test --coverage
 coverage/
+__pycache__/

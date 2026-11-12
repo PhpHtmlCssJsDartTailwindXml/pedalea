@@ -1,6 +1,7 @@
 // ignore_for_file: unused_field
 
 import 'dart:math' as dmath;
+import '../services/review_prompt_service.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx show Layer;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -831,6 +832,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
     _currentStyle = _resolveMapStyle();
     PlusPrefsService.mapStyle.addListener(_onMapStylePrefChanged);
+    // Pedir calificación en Play Store a quien ya pedaleó con la app, con
+    // calma: unos segundos después de abrir, no en medio de un recorrido.
+    Future.delayed(const Duration(seconds: 12), () {
+      if (mounted && !_navigating) ReviewPromptService.maybeAsk();
+    });
     _loadDmUnread();
     _subscribeDmBadge();
     _checkLocationPermission();
@@ -5422,6 +5428,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
         ),
       );
     }
+    // Acaba de terminar un recorrido: buen momento para pedir calificación.
+    ReviewPromptService.maybeAsk();
     _closeRoutePlanner();
   }
 
