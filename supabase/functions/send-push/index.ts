@@ -28,7 +28,7 @@ interface Push {
   title: string;
   body: string;
   payload: string; // lo que la app usa para abrir la pantalla correcta
-  channel: "group_chat_messages" | "social_activity";
+  channel: "group_chat_messages" | "social_activity" | "app_news";
   data?: Record<string, string>;
 }
 
@@ -144,6 +144,23 @@ async function buildPush(table: string, op: string, r: Row): Promise<Push | null
         payload: `dm|${sender}|${name}`,
         channel: "social_activity",
         data: { sender_id: sender },
+      };
+    }
+
+    case "app_update": {
+      // Aviso a todos los teléfonos registrados: hay versión nueva en Play.
+      // Se envía a mano con supabase/snippets/aviso_nueva_version.sql.
+      const { data: rows } = await supabase.from("device_tokens").select("user_id");
+      const users = [...new Set((rows ?? []).map((t) => t.user_id as string))];
+      if (users.length === 0) return null;
+      return {
+        to: users,
+        type: "app_update",
+        title: clip(str(r.title).trim(), 60) || "Nueva versión de Pedalea 🚲",
+        body: clip(str(r.body).trim(), 180) ||
+          "Hay mejoras nuevas. Toca para actualizar.",
+        payload: "app_update",
+        channel: "app_news",
       };
     }
 

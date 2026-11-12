@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/push_config.dart';
+import 'app_update_service.dart';
 import 'chat_notifications_service.dart';
 import 'notification_service.dart';
 
@@ -112,6 +113,10 @@ class PushService {
     final notifs = NotificationService.instance;
 
     switch (type) {
+      case 'app_update':
+        // Con la app abierta no hace falta el aviso: se revisa directo.
+        await AppUpdateService.enforceUpdate(force: true);
+        break;
       case 'chat':
         final eventId = d['event_id'] as String? ?? '';
         if (eventId.isEmpty) return;

@@ -9,6 +9,7 @@ import '../pages/public_profile_page.dart';
 import '../pages/dm_thread_page.dart';
 import '../pages/my_bikes_page.dart';
 import '../pages/profile_page.dart';
+import 'app_update_service.dart';
 
 /// Servicio centralizado de notificaciones locales (alertas push).
 ///
@@ -34,6 +35,8 @@ class NotificationService {
   static const String _chatChannelName = 'Mensajes de grupos';
   static const String _socialChannelId = 'social_activity';
   static const String _socialChannelName = 'Momentos y seguidores';
+  static const String _newsChannelId = 'app_news';
+  static const String _newsChannelName = 'Novedades de Pedalea';
   static const String _maintenanceChannelId = 'bike_maintenance';
   static const String _maintenanceChannelName = 'Mantención de tu bici';
 
@@ -66,6 +69,14 @@ class NotificationService {
           _chatChannelName,
           description:
               'Avisa cuando alguien escribe en un grupo del que eres parte',
+          importance: Importance.high,
+        ),
+      );
+      await androidImpl?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _newsChannelId,
+          _newsChannelName,
+          description: 'Avisa cuando hay una versión nueva de la app',
           importance: Importance.high,
         ),
       );
@@ -322,6 +333,9 @@ class NotificationService {
           otherName: parts.sublist(2).join('|'),
         ),
       ));
+    } else if (payload == 'app_update') {
+      // La app ya está abierta: revisa en Play y muestra la actualización.
+      AppUpdateService.enforceUpdate(force: true);
     } else if (payload == 'my_impact') {
       nav.push(MaterialPageRoute(builder: (_) => const ProfilePage()));
     } else if (payload.startsWith('bike|') && parts.length >= 2) {
