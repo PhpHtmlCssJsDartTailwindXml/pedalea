@@ -331,194 +331,142 @@ class _ProfilePageState extends State<ProfilePage> {
     return name[0].toUpperCase();
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // Interfaz: lista limpia, mismo estilo que el menú lateral. Fondo sólido,
+  // filas con íconos de línea, grupos con títulos chicos y sin tarjetas.
+  // ══════════════════════════════════════════════════════════════════════
+  static const _accent = Color(0xFF7CF0BC);
+  static const _bg = Color(0xFF0F1117);
+  static const _gold = Color(0xFFF2C94C);
+  static const _warn = Color(0xFFFFB74D);
+
+  static const _months = [
+    'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+    'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+  ];
+
+  TextStyle _txt(double size,
+          {FontWeight w = FontWeight.w500, Color? c, double? h}) =>
+      TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: size,
+        fontWeight: w,
+        color: c ?? Colors.white,
+        height: h,
+      );
+
+  String get _displayName {
+    final full = (_profile?['full_name'] as String? ?? '').trim();
+    final user = (_profile?['username'] as String? ?? '').trim();
+    if (full.isNotEmpty) return full;
+    if (user.isNotEmpty) return user;
+    return 'Ciclista Pedalea';
+  }
+
+  void _openMyMoments() {
+    final uid = _user?.id;
+    if (uid == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PublicProfilePage(userId: uid)),
+    ).then((_) => _loadSocial());
+  }
+
+  void _cancelEdit() => setState(() {
+        _editing = false;
+        _usernameCtrl.text = _profile?['username'] ?? '';
+        _fullNameCtrl.text = _profile?['full_name'] ?? '';
+        _avatarUrlCtrl.text = _profile?['avatar_url'] ?? '';
+        _communeCtrl.text = _profile?['commune'] ?? '';
+        _emergencyNameCtrl.text = _profile?['emergency_contact_name'] ?? '';
+        _emergencyPhoneCtrl.text = _profile?['emergency_contact_phone'] ?? '';
+      });
+
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161622),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text('Cerrar sesión', style: _txt(18, w: FontWeight.w700)),
+        content: Text('¿Seguro que quieres salir de tu cuenta?',
+            style: _txt(14, w: FontWeight.w400, c: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar', style: _txt(14, c: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Salir',
+                style: _txt(14, w: FontWeight.w700, c: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _supabase.auth.signOut();
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
+      backgroundColor: _bg,
       body: Stack(
         children: [
-          Container(
-        decoration: kPageGradient,
-        child: Column(
-          children: [
-            // AppBar glass
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: glassDecoration(radius: 12),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Mi Perfil',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (!_loading && !_editing)
-                      GestureDetector(
-                        onTap: () => setState(() => _editing = true),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: glassDecoration(
-                            radius: 12,
-                            tint: Colors.greenAccent,
-                            opacity: 0.1,
-                            borderOpacity: 0.2,
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.edit_outlined,
-                                color: Colors.greenAccent,
-                                size: 16,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                'Editar',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.greenAccent,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (_editing)
-                      TextButton(
-                        onPressed: () => setState(() {
-                          _editing = false;
-                          _usernameCtrl.text = _profile?['username'] ?? '';
-                          _fullNameCtrl.text = _profile?['full_name'] ?? '';
-                          _avatarUrlCtrl.text = _profile?['avatar_url'] ?? '';
-                          _communeCtrl.text = _profile?['commune'] ?? '';
-                          _emergencyNameCtrl.text =
-                              _profile?['emergency_contact_name'] ?? '';
-                          _emergencyPhoneCtrl.text =
-                              _profile?['emergency_contact_phone'] ?? '';
-                        }),
-                        child: const Text(
-                          'Cancelar',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white38,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            Expanded(
-              child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.greenAccent,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final isWide = constraints.maxWidth > 600;
-                        return SingleChildScrollView(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isWide
-                                ? constraints.maxWidth * 0.15
-                                : 20,
-                            vertical: 24,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              _buildHero(),
-                              const SizedBox(height: 14),
-                              if (_editing)
-                                _buildEditForm()
-                              else ...[
-                                _buildQuickActions(),
-                                const SizedBox(height: 24),
-                                activitySectionLabel('ACTIVIDAD', _accent),
-                                const SizedBox(height: 10),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: RiderActivityCard(
-                                      data: _activity, accent: _accent),
-                                ),
-                                const SizedBox(height: 12),
-                                _buildStatsRow(),
-                                if (_impact.headline != null) ...[
-                                  const SizedBox(height: 10),
-                                  _buildImpactBanner(),
-                                ],
-                                const SizedBox(height: 24),
-                                _buildBikesSection(),
-                                const SizedBox(height: 24),
-                                _buildMomentsPreview(),
-                                const SizedBox(height: 14),
-                                _buildPlusCard(),
-                                if (_achievements.isNotEmpty) ...[
-                                  const SizedBox(height: 28),
-                                  _buildAchievements(),
-                                ],
-                                const SizedBox(height: 28),
-                                _buildProfileInfo(),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _topBar(),
+                Expanded(
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                              color: _accent, strokeWidth: 2),
+                        )
+                      : LayoutBuilder(
+                          builder: (context, c) {
+                            final side = c.maxWidth > 640
+                                ? (c.maxWidth - 560) / 2
+                                : 0.0;
+                            return ListView(
+                              padding: EdgeInsets.fromLTRB(side, 0, side, 40),
+                              children: [
+                                _header(),
+                                if (_editing)
+                                  _buildEditForm()
+                                else
+                                  ..._sections(),
                               ],
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
           ),
           if (_isOffline)
             Positioned(
-              bottom: 0, left: 0, right: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
               child: SafeArea(
                 top: false,
                 child: Container(
                   color: Colors.orange.shade800.withOpacity(0.95),
                   padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.wifi_off_rounded, color: Colors.white, size: 14),
-                      SizedBox(width: 6),
-                      Text(
-                        'Sin conexión · Mostrando datos en caché',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      const Icon(Icons.wifi_off_rounded,
+                          color: Colors.white, size: 14),
+                      const SizedBox(width: 6),
+                      Text('Sin conexión · Mostrando datos en caché',
+                          style: _txt(11, w: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -529,173 +477,165 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  static const _accent = Color(0xFF7CF0BC);
-  static const _heroMid = Color(0xFF1E5C41);
-
-  /// Tarjeta principal: foto, nombre, Plus, correo y contadores sociales.
-  Widget _buildHero() {
-    final fullName = (_profile?['full_name'] as String? ?? '').trim();
-    final username = (_profile?['username'] as String? ?? '').trim();
-    final isPlus = _profile?['is_plus'] as bool? ?? false;
-    final displayName = fullName.isNotEmpty
-        ? fullName
-        : (username.isNotEmpty ? username : 'Ciclista Pedalea');
-    final uid = _user?.id;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2F8F63), _heroMid, Color(0xFF153F2E)],
-          stops: [0.0, 0.55, 1.0],
-        ),
-        border: Border.all(color: _accent.withOpacity(0.22)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2F8F63).withOpacity(0.28),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+  Widget _topBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Volver',
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
           ),
+          Expanded(
+            child: Text(
+              _editing ? 'Editar perfil' : 'Perfil',
+              style: _txt(17, w: FontWeight.w600),
+            ),
+          ),
+          if (!_loading && !_editing)
+            IconButton(
+              tooltip: 'Editar perfil',
+              icon: const Icon(Icons.edit_outlined, color: Colors.white70),
+              onPressed: () => setState(() => _editing = true),
+            ),
+          if (_editing)
+            TextButton(
+              onPressed: _cancelEdit,
+              child: Text('Cancelar', style: _txt(14, c: Colors.white54)),
+            ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: Stack(
-          children: [
-            // Círculos decorativos (como una rueda).
-            Positioned(
-              right: -40,
-              top: -40,
-              child: Container(
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.07),
-                    width: 16,
-                  ),
+    );
+  }
+
+  // ── Encabezado ─────────────────────────────────────────────────────────
+  Widget _header() {
+    final username = (_profile?['username'] as String? ?? '').trim();
+    final commune = (_profile?['commune'] as String? ?? '').trim();
+    final isPlus = _profile?['is_plus'] as bool? ?? false;
+    final sub = [
+      if (username.isNotEmpty) '@$username',
+      if (commune.isNotEmpty) commune,
+    ].join('  ·  ');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+      child: Column(
+        children: [
+          _buildAvatar(),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _displayName,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _txt(22, w: FontWeight.w700, h: 1.2),
                 ),
               ),
-            ),
-            Positioned(
-              left: -30,
-              bottom: -40,
-              child: Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.04),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 20, 18, 14),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      _buildAvatar(),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                height: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                if (isPlus) _plusChip(),
-                                if (username.isNotEmpty)
-                                  Text(
-                                    '@$username',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: Colors.white.withOpacity(0.7),
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                if (_isGoogleUser) ...[
-                                  const _GoogleIcon(size: 12),
-                                  const SizedBox(width: 5),
-                                ] else ...[
-                                  Icon(Icons.email_outlined,
-                                      color: Colors.white.withOpacity(0.5),
-                                      size: 13),
-                                  const SizedBox(width: 5),
-                                ],
-                                Flexible(
-                                  child: Text(
-                                    _user?.email ?? '—',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: Colors.white.withOpacity(0.55),
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      children: [
-                        _socialStat('$_momentCount', 'Momentos', () {
-                          if (uid != null) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PublicProfilePage(userId: uid),
-                              ),
-                            ).then((_) => _loadSocial());
-                          }
-                        }),
-                        _statDivider(),
-                        _socialStat('$_followers', 'Seguidores', null),
-                        _statDivider(),
-                        _socialStat('$_following', 'Siguiendo', null),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              if (isPlus) ...[const SizedBox(width: 8), _plusChip()],
+            ],
+          ),
+          if (sub.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(sub,
+                textAlign: TextAlign.center,
+                style: _txt(13, w: FontWeight.w400, c: Colors.white54)),
+          ],
+          if (!_editing) ...[
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                _socialStat('$_momentCount', 'Momentos', _openMyMoments),
+                _socialStat('$_followers', 'Seguidores', null),
+                _socialStat('$_following', 'Siguiendo', null),
+              ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    final avatarUrl = _profile?['avatar_url'] as String?;
+    final isPlus = _profile?['is_plus'] as bool? ?? false;
+    return Semantics(
+      button: true,
+      label: 'Cambiar foto de perfil',
+      child: GestureDetector(
+        onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isPlus ? _gold : Colors.white24,
+                  width: 1.6,
+                ),
+              ),
+              child: ClipOval(
+                child: _uploadingAvatar
+                    ? Container(
+                        color: Colors.black54,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                              color: _accent, strokeWidth: 2.5),
+                        ),
+                      )
+                    : (avatarUrl != null && avatarUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: avatarUrl,
+                            fit: BoxFit.cover,
+                            fadeInDuration: Duration.zero,
+                            placeholder: (_, _) => _avatarFallback(),
+                            errorWidget: (_, _, _) => _avatarFallback(),
+                          )
+                        : _avatarFallback()),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _bg, width: 3),
+                ),
+                child: const Icon(Icons.photo_camera_outlined,
+                    color: Colors.black, size: 15),
+              ),
+            ),
+            if (isPlus)
+              const Positioned(
+                top: -2,
+                left: -2,
+                child: PlusMedal(size: 26, ringColor: _bg),
+              ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _avatarFallback() {
+    return Container(
+      color: Colors.white.withOpacity(0.08),
+      child: Center(
+        child: Text(_initials(),
+            style: _txt(32, w: FontWeight.w600, c: Colors.white70)),
       ),
     );
   }
@@ -708,879 +648,579 @@ class _ProfilePageState extends State<ProfilePage> {
                 variant.clamp(0, PlusPrefsService.medalVariants.length - 1)]
             .$2;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [c.withOpacity(0.35), c.withOpacity(0.15)],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: c.withOpacity(0.55)),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: c.withOpacity(0.7)),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.workspace_premium_rounded, color: c, size: 12),
-              const SizedBox(width: 3),
-              Text(
-                'PLUS',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: c,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ],
-          ),
+          child: Text('PLUS',
+              style: _txt(10, w: FontWeight.w700, c: c)
+                  .copyWith(letterSpacing: 0.8)),
         );
       },
     );
   }
 
-  Widget _statDivider() => Container(
-        width: 1,
-        height: 28,
-        color: Colors.white.withOpacity(0.12),
-      );
-
-  Widget _buildAvatar() {
-    final avatarUrl = _profile?['avatar_url'] as String?;
-    final isPlus = _profile?['is_plus'] as bool? ?? false;
-    final ringColor = isPlus ? Colors.amber : _accent;
-    return GestureDetector(
-      onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 84,
-            height: 84,
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: ringColor,
-              boxShadow: [
-                BoxShadow(
-                  color: ringColor.withOpacity(0.4),
-                  blurRadius: 16,
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: _uploadingAvatar
-                  ? Container(
-                      color: Colors.black54,
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          color: Colors.greenAccent,
-                          strokeWidth: 2.5,
-                        ),
-                      ),
-                    )
-                  : (avatarUrl != null && avatarUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: avatarUrl,
-                          fit: BoxFit.cover,
-                          fadeInDuration: Duration.zero,
-                          placeholder: (_, _) => _avatarFallback(),
-                          errorWidget: (_, _, _) => _avatarFallback(),
-                        )
-                      : _avatarFallback()),
-            ),
-          ),
-          // Badge de cámara para indicar que se puede cambiar la foto
-          Positioned(
-            right: -2,
-            bottom: -2,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: _accent,
-                shape: BoxShape.circle,
-                border: Border.all(color: _heroMid, width: 2.5),
-              ),
-              child: const Icon(Icons.photo_camera_rounded,
-                  color: Colors.black, size: 14),
-            ),
-          ),
-          // Medalla Plus con brillo (variante elegida por el ciclista)
-          if (isPlus)
-            const Positioned(
-              top: -4,
-              left: -4,
-              child: PlusMedal(size: 26, ringColor: _heroMid),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _avatarFallback() {
-    return Container(
-      color: const Color(0xFF153F2E),
-      child: Center(
-        child: Text(
-          _initials(),
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: _accent,
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Vista previa de mis últimos momentos (hasta 6).
-  Widget _buildMomentsPreview() {
-    final uid = _user?.id;
-    void openAll() {
-      if (uid == null) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => PublicProfilePage(userId: uid)),
-      ).then((_) => _loadSocial());
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        activitySectionLabel(
-          'MIS MOMENTOS',
-          _accent,
-          trailing: _momentCount > 0 ? '$_momentCount' : null,
-        ),
-        const SizedBox(height: 10),
-        if (_myPosts.isEmpty)
-          Material(
-            color: Colors.white.withOpacity(0.03),
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MomentsPage()),
-              ).then((_) => _loadSocial()),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.07)),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.add_a_photo_rounded,
-                        color: _accent.withOpacity(0.7), size: 28),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Comparte tu primer momento pedaleando',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white.withOpacity(0.6),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else ...[
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 4,
-            crossAxisSpacing: 4,
+  Widget _socialStat(String value, String label, VoidCallback? onTap) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
             children: [
-              for (final p in _myPosts.take(6))
-                GestureDetector(
-                  onTap: openAll,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: p['image_url'] as String,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => Container(color: Colors.white10),
-                      errorWidget: (_, _, _) =>
-                          Container(color: Colors.white10),
-                    ),
-                  ),
-                ),
+              Text(value, style: _txt(19, w: FontWeight.w700, h: 1.1)),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: _txt(12, w: FontWeight.w400, c: Colors.white54)),
             ],
           ),
-          if (_myPosts.length > 6)
-            TextButton(
-              onPressed: openAll,
-              child: Text(
-                'Ver los $_momentCount momentos',
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: _accent,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ],
-      ],
-    );
-  }
-
-  /// Accesos rápidos de la parte social.
-  Widget _buildQuickActions() {
-    final uid = _user?.id;
-    return Row(
-      children: [
-        _quickAction(
-          icon: Icons.grid_view_rounded,
-          label: 'Mis momentos',
-          color: const Color(0xFF69FF47),
-          highlighted: true,
-          onTap: uid == null
-              ? null
-              : () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PublicProfilePage(userId: uid),
-                    ),
-                  ).then((_) => _loadSocial()),
-        ),
-        const SizedBox(width: 10),
-        _quickAction(
-          icon: Icons.auto_awesome_rounded,
-          label: 'Ver feed',
-          color: const Color(0xFF69FF47),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const MomentsPage()),
-          ).then((_) => _loadSocial()),
-        ),
-        const SizedBox(width: 10),
-        _quickAction(
-          icon: _pendingReqs > 0
-              ? Icons.group_add_rounded
-              : Icons.group_add_outlined,
-          label: 'Solicitudes',
-          color: _pendingReqs > 0 ? Colors.amber : Colors.white70,
-          badge: _pendingReqs,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const FollowRequestsPage()),
-          ).then((_) => _loadSocial()),
-        ),
-      ],
-    );
-  }
-
-  Widget _quickAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback? onTap,
-    bool highlighted = false,
-    int badge = 0,
-  }) {
-    return Expanded(
-      child: Material(
-        color: highlighted
-            ? color.withOpacity(0.14)
-            : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: highlighted
-                    ? color.withOpacity(0.35)
-                    : Colors.white.withOpacity(0.08),
-              ),
-            ),
-            child: Column(
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(icon, color: color, size: 24),
-                    if (badge > 0)
-                      Positioned(
-                        right: -10,
-                        top: -6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: Colors.amber,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$badge',
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.black,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: highlighted ? Colors.white : Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
 
-  /// "Tus reportes ayudaron a N ciclistas": cuántas personas distintas
-  /// vieron tus alertas (al abrirlas o al pasar cerca).
-  Widget _buildImpactBanner() {
-    const color = Color(0xFFFFB74D);
-    final week = _impact.week;
-    final alerts = _impact.alerts;
-    final alertsText = alerts == 1
-        ? '1 alerta tuya sirvió'
-        : '$alerts alertas tuyas sirvieron';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: glassDecoration(
-          radius: 20, tint: color, opacity: 0.08, borderOpacity: 0.12),
+  // ── Piezas de la lista ─────────────────────────────────────────────────
+  Widget _group(String text, {String? action, VoidCallback? onAction}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 26, 12, 6),
       child: Row(
         children: [
-          const Text('🙌', style: TextStyle(fontSize: 26)),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _impact.headline!,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  week > 0
-                      ? '$week esta semana · $alertsText'
-                      : 'Vieron tus alertas al pasar cerca o al abrirlas',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white.withOpacity(0.55),
-                    fontSize: 11.5,
-                  ),
-                ),
-              ],
+            child: Text(
+              text,
+              style: _txt(11, w: FontWeight.w600, c: Colors.white38)
+                  .copyWith(letterSpacing: 1.4),
             ),
           ),
+          if (action != null)
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: Text(action,
+                  style: _txt(12.5, w: FontWeight.w600, c: _accent)),
+            ),
         ],
       ),
     );
   }
 
-  /// Mis bicis: la activa con su odómetro y mantenciones pendientes.
-  Widget _buildBikesSection() {
+  Widget _line() => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        child: Container(height: 1, color: Colors.white.withOpacity(0.06)),
+      );
+
+  /// Fila de lista: ícono, título, ayuda opcional y algo a la derecha.
+  Widget _row({
+    required IconData icon,
+    required String label,
+    String? hint,
+    String? value,
+    Color? color,
+    Color? valueColor,
+    int badge = 0,
+    Widget? leading,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
+        child: Row(
+          children: [
+            leading ?? Icon(icon, color: color ?? Colors.white70, size: 22),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: _txt(15, c: color ?? Colors.white)),
+                  if (hint != null)
+                    Text(hint,
+                        style: _txt(11.5,
+                            w: FontWeight.w400, c: Colors.white38, h: 1.3)),
+                ],
+              ),
+            ),
+            if (value != null)
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _txt(14,
+                        w: FontWeight.w400, c: valueColor ?? Colors.white60),
+                  ),
+                ),
+              ),
+            if (badge > 0)
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _accent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(badge > 9 ? '9+' : '$badge',
+                    style: _txt(11, w: FontWeight.w700, c: Colors.black)),
+              ),
+            if (onTap != null && value == null)
+              const Padding(
+                padding: EdgeInsets.only(left: 6),
+                child: Icon(Icons.chevron_right_rounded,
+                    color: Colors.white24, size: 22),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Secciones ──────────────────────────────────────────────────────────
+  List<Widget> _sections() {
+    final isPlusLive = SubscriptionService.instance.isPlus.value;
+    final emergencyName =
+        (_profile?['emergency_contact_name'] as String? ?? '').trim();
+    final emergencyPhone =
+        (_profile?['emergency_contact_phone'] as String? ?? '').trim();
+    final hasEmergency = emergencyName.isNotEmpty && emergencyPhone.isNotEmpty;
+
+    return [
+      _line(),
+      _statsStrip(),
+      if (_impact.headline != null)
+        _row(
+          icon: Icons.volunteer_activism_outlined,
+          color: _accent,
+          label: _impact.headline!,
+          hint: _impact.week > 0
+              ? '${_impact.week} esta semana · vieron tus alertas'
+              : 'Vieron tus alertas al pasar cerca o al abrirlas',
+        ),
+      _line(),
+
+      _group('ACTIVIDAD'),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: RiderActivityCard(data: _activity, accent: _accent),
+      ),
+
+      _group('MIS BICIS',
+          action: BikeService.instance.bikes.value.isEmpty ? null : 'Ver todas',
+          onAction: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyBikesPage()),
+              )),
+      _bikesList(),
+
+      _group('MOMENTOS',
+          action: _myPosts.isEmpty ? null : 'Ver todos',
+          onAction: _openMyMoments),
+      _momentsGrid(),
+
+      if (_achievements.isNotEmpty) ...[
+        _group(
+          'LOGROS · ${_achievements.where((a) => a['unlocked'] == true).length} de ${_achievements.length}',
+          action: 'Ver todos',
+          onAction: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AchievementsPage()),
+          ),
+        ),
+        _achievementsStrip(),
+      ],
+      _line(),
+
+      _group('COMUNIDAD'),
+      _row(
+        icon: Icons.auto_awesome_outlined,
+        label: 'Ver el feed de Momentos',
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MomentsPage()),
+        ).then((_) => _loadSocial()),
+      ),
+      _row(
+        icon: Icons.person_add_alt_outlined,
+        label: 'Solicitudes de seguimiento',
+        badge: _pendingReqs,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const FollowRequestsPage()),
+        ).then((_) => _loadSocial()),
+      ),
+      _line(),
+
+      _group('PEDALEA PLUS'),
+      _row(
+        icon: Icons.workspace_premium_outlined,
+        color: _gold,
+        label: isPlusLive ? 'Pedalea Plus activo' : 'Hazte Pedalea Plus',
+        hint: isPlusLive
+            ? 'Gestiona tu suscripción'
+            : 'Estadísticas avanzadas, eventos ilimitados y más',
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => isPlusLive
+                ? const ManageSubscriptionPage()
+                : const PaywallPage(),
+          ),
+        ),
+      ),
+      _buildMedalPicker(isPlusLive),
+      _line(),
+
+      _group('INFORMACIÓN'),
+      _row(
+          icon: Icons.alternate_email_rounded,
+          label: 'Usuario',
+          value: (_profile?['username'] as String? ?? '').isNotEmpty
+              ? _profile!['username']
+              : '—'),
+      _row(
+          icon: Icons.badge_outlined,
+          label: 'Nombre',
+          value: (_profile?['full_name'] as String? ?? '').isNotEmpty
+              ? _profile!['full_name']
+              : '—'),
+      _row(
+          icon: Icons.location_city_outlined,
+          label: 'Comuna',
+          value: (_profile?['commune'] as String? ?? '').isNotEmpty
+              ? _profile!['commune']
+              : '—'),
+      _row(
+          icon: Icons.calendar_today_outlined,
+          label: 'Miembro desde',
+          value: _memberSince()),
+      _line(),
+
+      _group('CONTACTO DE EMERGENCIA'),
+      if (hasEmergency) ...[
+        _row(
+            icon: Icons.contact_emergency_outlined,
+            label: 'Nombre',
+            value: emergencyName),
+        _row(icon: Icons.phone_outlined, label: 'Teléfono', value: emergencyPhone),
+      ] else
+        _row(
+          icon: Icons.warning_amber_rounded,
+          color: _warn,
+          label: 'Agrega un contacto de emergencia',
+          hint: 'Se le avisa por SMS si la app detecta una caída',
+          onTap: () => setState(() => _editing = true),
+        ),
+      if (hasEmergency)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(64, 0, 24, 4),
+          child: Text('Se le avisa por SMS si la app detecta una caída.',
+              style: _txt(11.5, w: FontWeight.w400, c: Colors.white38)),
+        ),
+      _line(),
+
+      _group('CUENTA'),
+      _row(
+        icon: Icons.mail_outline_rounded,
+        leading: _isGoogleUser ? const _GoogleIcon(size: 20) : null,
+        label: 'Correo',
+        value: _user?.email ?? '—',
+      ),
+      _row(
+        icon: Icons.login_outlined,
+        label: 'Acceso',
+        value: _isGoogleUser ? 'Google' : 'Correo y contraseña',
+      ),
+      _row(
+        icon: Icons.verified_outlined,
+        label: 'Estado',
+        value: _user?.emailConfirmedAt != null ? 'Verificado' : 'Sin verificar',
+        valueColor: _user?.emailConfirmedAt != null ? _accent : _warn,
+      ),
+      _row(
+        icon: Icons.logout_rounded,
+        color: Colors.redAccent.shade100,
+        label: 'Cerrar sesión',
+        onTap: _confirmLogout,
+      ),
+    ];
+  }
+
+  /// Tres cifras en grande: km, CO₂ y nivel de karma.
+  Widget _statsStrip() {
+    final totalKm = (_profile?['total_km'] as num?)?.toDouble() ?? 0.0;
+    final co2Kg = Co2Service.savedKg(totalKm);
+    final level = KarmaService.getLevel(_karma);
+    final kmText = totalKm >= 100
+        ? totalKm.toStringAsFixed(0)
+        : totalKm.toStringAsFixed(1);
+
+    Widget cell(String value, String unit, String label, {VoidCallback? onTap}) {
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: value),
+                    if (unit.isNotEmpty)
+                      TextSpan(
+                          text: ' $unit',
+                          style: _txt(13, w: FontWeight.w500, c: Colors.white54)),
+                  ]),
+                  maxLines: 1,
+                  style: _txt(22, w: FontWeight.w700, h: 1.1),
+                ),
+                const SizedBox(height: 3),
+                Text(label,
+                    style: _txt(11.5, w: FontWeight.w400, c: Colors.white54)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Row(
+        children: [
+          cell(kmText, 'km', 'pedaleados'),
+          cell(Co2Service.format(co2Kg), '', 'CO₂ ahorrado'),
+          cell('${level.emoji} ${level.title}', '', '$_karma karma',
+              onTap: _showKarmaInfo),
+        ],
+      ),
+    );
+  }
+
+  void _showKarmaInfo() {
+    final level = KarmaService.getLevel(_karma);
+    final progress = KarmaService.getLevelProgress(_karma);
+    final idx = KarmaService.levels.indexOf(level);
+    final next = idx < KarmaService.levels.length - 1
+        ? KarmaService.levels[idx + 1]
+        : null;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF161622),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${level.emoji}  ${level.title}',
+                  style: _txt(20, w: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('$_karma karma',
+                  style: _txt(14, w: FontWeight.w400, c: Colors.white60)),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 6,
+                  backgroundColor: Colors.white10,
+                  valueColor: const AlwaysStoppedAnimation(_accent),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                next != null
+                    ? 'Próximo nivel: ${next.emoji} ${next.title} (${next.minKarma} karma)'
+                    : 'Llegaste al nivel máximo',
+                style: _txt(12.5, w: FontWeight.w400, c: Colors.white54),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'El karma sube cuando otros ciclistas votan a favor de tus reportes y baja con los votos en contra.',
+                style: _txt(13, w: FontWeight.w400, c: Colors.white70, h: 1.45),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bikesList() {
     return ValueListenableBuilder<List<Bike>>(
       valueListenable: BikeService.instance.bikes,
       builder: (context, bikes, _) {
-        final active = BikeService.instance.activeBike;
-        final due = active?.dueMaintenance ?? const <Maintenance>[];
-        void openList() => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const MyBikesPage()),
-            );
+        if (bikes.isEmpty) {
+          return _row(
+            icon: Icons.pedal_bike_outlined,
+            color: _accent,
+            label: 'Registra tu bici',
+            hint: 'Sus km y avisos de mantención',
+            onTap: () => showBikeEditor(context),
+          );
+        }
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                _sectionLabel('MIS BICIS'),
-                const Spacer(),
-                if (bikes.isNotEmpty)
-                  TextButton(
-                    onPressed: openList,
-                    child: Text(
-                      bikes.length == 1 ? 'Ver' : 'Ver las ${bikes.length}',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: _accent,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: active == null
-                    ? () => showBikeEditor(context)
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BikeDetailPage(bikeId: active.id),
-                          ),
-                        ),
-                child: Ink(
-                  padding: const EdgeInsets.all(12),
-                  decoration: glassDecoration(
-                    radius: 20,
-                    tint: _accent,
-                    opacity: 0.06,
-                    borderOpacity: 0.12,
-                  ),
-                  child: active == null
-                      ? _bikeEmptyRow()
-                      : _bikeActiveRow(active, due),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _bikeEmptyRow() {
-    return Row(
-      children: [
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: _accent.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Icon(Icons.pedal_bike_rounded, color: _accent),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Registra tu bici',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                'Sus km y avisos de mantención',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white54,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Icon(Icons.add_rounded, color: _accent),
-      ],
-    );
-  }
-
-  Widget _bikeActiveRow(Bike active, List<Maintenance> due) {
-    final odo = active.odometerKm;
-    final odoText = odo >= 100 ? odo.toStringAsFixed(0) : odo.toStringAsFixed(1);
-    final photo = active.photoUrl ?? '';
-    return Row(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: SizedBox(
-            width: 54,
-            height: 54,
-            child: photo.isNotEmpty
-                ? CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover)
-                : Container(
-                    color: _accent.withOpacity(0.12),
-                    alignment: Alignment.center,
-                    child: Text(active.type.emoji,
-                        style: const TextStyle(fontSize: 24)),
-                  ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                active.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                '$odoText km · ${active.type.label}',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white.withOpacity(0.55),
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                due.isEmpty
-                    ? 'Mantención al día'
-                    : '🔧 Toca: ${due.first.kind.label.toLowerCase()}',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: due.isEmpty ? _accent : const Color(0xFFFFB74D),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Icon(Icons.chevron_right_rounded, color: Colors.white38),
-      ],
-    );
-  }
-
-  /// Nivel de karma e impacto ecológico, lado a lado.
-  Widget _buildStatsRow() {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: _buildKarmaCard()),
-          const SizedBox(width: 10),
-          Expanded(child: _buildCo2Card()),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniCard({required Color tint, required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: glassDecoration(
-        radius: 20,
-        tint: tint,
-        opacity: 0.07,
-        borderOpacity: 0.12,
-      ),
-      child: child,
-    );
-  }
-
-  Widget _miniCardHeader(String title, Color color, {Widget? trailing}) {
-    return Row(
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.55),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
-            ),
-          ),
-        ),
-        ?trailing,
-      ],
-    );
-  }
-
-  Widget _buildKarmaCard() {
-    final level = KarmaService.getLevel(_karma);
-    final progress = KarmaService.getLevelProgress(_karma);
-    final levelColor = Color(level.colorValue);
-
-    // Próximo nivel
-    final levelIndex = KarmaService.levels.indexOf(level);
-    final isMax = levelIndex >= KarmaService.levels.length - 1;
-    final nextLevel =
-        isMax ? null : KarmaService.levels[levelIndex + 1];
-
-    return _miniCard(
-      tint: levelColor,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _miniCardHeader(
-            'NIVEL',
-            levelColor,
-            trailing: Tooltip(
-              triggerMode: TooltipTriggerMode.tap,
-              showDuration: const Duration(seconds: 4),
-              message:
-                  'El karma sube con votos positivos en tus reportes y baja con votos negativos.',
-              child: const Icon(Icons.info_outline,
-                  color: Colors.white38, size: 15),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(level.emoji, style: const TextStyle(fontSize: 26)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  level.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: levelColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '$_karma karma',
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.white10,
-              valueColor: AlwaysStoppedAnimation(levelColor),
-              minHeight: 5,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            !isMax && nextLevel != null
-                ? 'Próximo: ${nextLevel.emoji} ${nextLevel.title} (${nextLevel.minKarma} pts)'
-                : 'Nivel máximo alcanzado',
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white38,
-              fontSize: 10.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCo2Card() {
-    final totalKm = (_profile?['total_km'] as num?)?.toDouble() ?? 0.0;
-    final co2Kg   = Co2Service.savedKg(totalKm);
-    final co2Str  = Co2Service.format(co2Kg);
-    final treeStr = Co2Service.treeEquivalent(co2Kg);
-
-    return _miniCard(
-      tint: Colors.lightGreenAccent,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _miniCardHeader('IMPACTO', Colors.lightGreenAccent,
-              trailing: const Text('🌱', style: TextStyle(fontSize: 15))),
-          const SizedBox(height: 10),
-          Text(
-            '${totalKm.toStringAsFixed(1)} km',
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.lightGreenAccent,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              height: 1.1,
-            ),
-          ),
-          Text(
-            'pedaleados',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.45),
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.lightGreenAccent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: Colors.lightGreenAccent.withOpacity(0.25)),
-            ),
-            child: Text(
-              '$co2Str CO₂ ahorrado',
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.lightGreenAccent,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (treeStr.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              treeStr,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white38,
-                fontSize: 10.5,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// Pedalea Plus: estado de la suscripción + selector de medalla, en una
-  /// sola tarjeta.
-  Widget _buildPlusCard() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: SubscriptionService.instance.isPlus,
-      builder: (context, isPlus, _) {
-        final color = isPlus ? Colors.amber : Colors.greenAccent;
-        return Container(
-          decoration: glassDecoration(
-            radius: 20,
-            tint: Colors.amber,
-            opacity: isPlus ? 0.07 : 0.04,
-            borderOpacity: isPlus ? 0.2 : 0.12,
-          ),
-          child: Column(
-            children: [
-              InkWell(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+            for (final b in bikes.take(3))
+              _row(
+                icon: Icons.pedal_bike_outlined,
+                leading: _bikeThumb(b),
+                label: b.name,
+                hint: _bikeHint(b),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => isPlus
-                        ? const ManageSubscriptionPage()
-                        : const PaywallPage(),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.14),
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(color: color.withOpacity(0.25)),
-                        ),
-                        child: Icon(
-                          isPlus
-                              ? Icons.workspace_premium_rounded
-                              : Icons.workspace_premium_outlined,
-                          color: color,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isPlus
-                                  ? 'Pedalea Plus activo'
-                                  : 'Hazte Pedalea Plus',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: isPlus ? Colors.amber : Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              isPlus
-                                  ? 'Toca para gestionar tu suscripción'
-                                  : 'Estadísticas avanzadas, eventos ilimitados y más',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.white.withOpacity(0.5),
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right_rounded,
-                          color: Colors.white38, size: 22),
-                    ],
-                  ),
+                      builder: (_) => BikeDetailPage(bikeId: b.id)),
                 ),
               ),
-              Divider(
-                height: 1,
-                color: Colors.white.withOpacity(0.07),
-                indent: 16,
-                endIndent: 16,
-              ),
-              _buildMedalPicker(isPlus),
-            ],
-          ),
+          ],
         );
       },
     );
   }
 
-  /// Selector de variante de medalla Plus. Siempre visible: si no eres Plus se
-  /// muestra bloqueado (ves las opciones pero no puedes aplicarlas).
+  String _bikeHint(Bike b) {
+    final odo = b.odometerKm;
+    final km = odo >= 100 ? odo.toStringAsFixed(0) : odo.toStringAsFixed(1);
+    final due = b.dueMaintenance;
+    final state = due.isEmpty
+        ? 'mantención al día'
+        : 'toca: ${due.first.kind.label.toLowerCase()}';
+    return '${b.isActive ? 'Activa · ' : ''}$km km · $state';
+  }
+
+  Widget _bikeThumb(Bike b) {
+    final url = b.photoUrl ?? '';
+    return ClipOval(
+      child: SizedBox(
+        width: 26,
+        height: 26,
+        child: url.isNotEmpty
+            ? CachedNetworkImage(imageUrl: url, fit: BoxFit.cover)
+            : Container(
+                color: Colors.white.withOpacity(0.08),
+                alignment: Alignment.center,
+                child: Text(b.type.emoji, style: const TextStyle(fontSize: 13)),
+              ),
+      ),
+    );
+  }
+
+  Widget _momentsGrid() {
+    if (_myPosts.isEmpty) {
+      return _row(
+        icon: Icons.add_a_photo_outlined,
+        color: _accent,
+        label: 'Comparte tu primer momento',
+        hint: 'Una foto de tu ruta para la comunidad',
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MomentsPage()),
+        ).then((_) => _loadSocial()),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 3,
+        crossAxisSpacing: 3,
+        children: [
+          for (final p in _myPosts.take(6))
+            GestureDetector(
+              onTap: _openMyMoments,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: CachedNetworkImage(
+                  imageUrl: p['image_url'] as String,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) => Container(color: Colors.white10),
+                  errorWidget: (_, _, _) => Container(color: Colors.white10),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Logros en una fila deslizable: primero los desbloqueados.
+  Widget _achievementsStrip() {
+    final unlocked = _achievements.where((a) => a['unlocked'] == true);
+    final locked = _achievements.where((a) => a['unlocked'] != true);
+    final items = [...unlocked, ...locked].take(12).toList();
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (_, i) {
+          final a = items[i];
+          final on = a['unlocked'] == true;
+          return GestureDetector(
+            onTap: () => _showAchievementDetail(a, on),
+            child: SizedBox(
+              width: 70,
+              child: Column(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(on ? 0.08 : 0.03),
+                      border: Border.all(
+                        color: on
+                            ? _accent.withOpacity(0.5)
+                            : Colors.white.withOpacity(0.06),
+                      ),
+                    ),
+                    child: Opacity(
+                      opacity: on ? 1 : 0.3,
+                      child: Text(a['icon'] as String? ?? '🏅',
+                          style: const TextStyle(fontSize: 24)),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    a['title'] as String? ?? '',
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _txt(10,
+                        w: FontWeight.w500,
+                        c: on ? Colors.white70 : Colors.white30,
+                        h: 1.15),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Variante de la medalla Plus. Si no es Plus se ve bloqueada.
   Widget _buildMedalPicker(bool isPlus) {
     return ValueListenableBuilder<int>(
       valueListenable: PlusPrefsService.medalVariant,
@@ -1594,289 +1234,106 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             );
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: isPlus ? null : openPaywall,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(64, 2, 20, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isPlus
+                    ? 'Tu medalla: elige el brillo con el que te ven'
+                    : 'Medalla Plus: disponible con la suscripción',
+                style: _txt(12, w: FontWeight.w400, c: Colors.white54),
+              ),
+              const SizedBox(height: 10),
+              Opacity(
+                opacity: isPlus ? 1 : 0.4,
+                child: Wrap(
+                  spacing: 14,
+                  runSpacing: 10,
                   children: [
-                    const Text(
-                      'Tu medalla',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (!isPlus) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Row(
+                    for (int i = 0;
+                        i < PlusPrefsService.medalVariants.length;
+                        i++)
+                      GestureDetector(
+                        onTap: isPlus
+                            ? () => PlusPrefsService.setMedalVariant(i)
+                            : openPaywall,
+                        child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.lock_outline_rounded,
-                                size: 10, color: Colors.amber),
-                            SizedBox(width: 3),
-                            Text('PLUS',
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: Colors.amber,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800)),
+                            Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: (isPlus && sel == i)
+                                      ? Colors.white
+                                      : Colors.transparent,
+                                  width: 1.6,
+                                ),
+                              ),
+                              child: PlusMedal(
+                                  size: 30, variant: i, ringColor: _bg),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              PlusPrefsService.medalVariants[i].$1,
+                              style: _txt(10,
+                                  w: FontWeight.w500,
+                                  c: (isPlus && sel == i)
+                                      ? Colors.white
+                                      : Colors.white38),
+                            ),
                           ],
                         ),
                       ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  isPlus
-                      ? 'Elige el brillo con el que te ven en el perfil y el chat'
-                      : 'Vuelve a Pedalea Plus para lucir tu medalla',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Opacity(
-                  opacity: isPlus ? 1 : 0.45,
-                  child: Wrap(
-                    spacing: 16,
-                    runSpacing: 12,
-                    children: [
-                      for (int i = 0;
-                          i < PlusPrefsService.medalVariants.length;
-                          i++)
-                        GestureDetector(
-                          onTap: isPlus
-                              ? () => PlusPrefsService.setMedalVariant(i)
-                              : openPaywall,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: (isPlus && sel == i)
-                                        ? Colors.white
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: PlusMedal(
-                                  size: 32,
-                                  variant: i,
-                                  ringColor: const Color(0xFF16161F),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                PlusPrefsService.medalVariants[i].$1,
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: (isPlus && sel == i)
-                                      ? Colors.white
-                                      : Colors.white.withOpacity(0.45),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _socialStat(String value, String label, VoidCallback? onTap) {
-    return Expanded(
-      child: InkWell(
+  // ── Edición ────────────────────────────────────────────────────────────
+  InputDecoration _input(String label, IconData icon,
+      {String? helper, String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      helperText: helper,
+      labelStyle: _txt(13.5, w: FontWeight.w400, c: Colors.white54),
+      hintStyle: _txt(14, w: FontWeight.w400, c: Colors.white24),
+      helperStyle: _txt(11.5, w: FontWeight.w400, c: Colors.white38),
+      prefixIcon: Icon(icon, color: Colors.white54, size: 20),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.05),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+      border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            children: [
-              Text(value,
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      height: 1.1)),
-              const SizedBox(height: 2),
-              Text(label,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 11)),
-            ],
-          ),
-        ),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: _accent, width: 1.3),
       ),
     );
   }
 
-  Widget _buildProfileInfo() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _sectionLabel('INFORMACIÓN'),
-        const SizedBox(height: 10),
-        Container(
-          decoration: glassDecoration(radius: 18),
-          child: Column(children: [
-            _infoRow(Icons.person_outline, 'Usuario',
-                _profile?['username'] ?? '—'),
-            _divider(),
-            _infoRow(Icons.badge_outlined, 'Nombre completo',
-                _profile?['full_name'] ?? '—'),
-            _divider(),
-            _infoRow(
-              Icons.location_city_outlined,
-              'Comuna',
-              (_profile?['commune'] as String? ?? '').isNotEmpty
-                  ? _profile!['commune']
-                  : '—',
-              valueColor: (_profile?['commune'] as String? ?? '').isNotEmpty
-                  ? Colors.amberAccent
-                  : null,
-            ),
-            _divider(),
-            _infoRow(
-              Icons.calendar_today_outlined,
-              'Miembro desde',
-              _memberSince(),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 28),
-        _sectionLabel('CONTACTO DE EMERGENCIA'),
-        const SizedBox(height: 10),
-        Container(
-          decoration: glassDecoration(
-            radius: 18,
-            tint: Colors.redAccent,
-            opacity: 0.05,
-            borderOpacity: 0.14,
-          ),
-          child: Column(children: [
-            _infoRow(
-              Icons.person_pin_circle_outlined,
-              'Nombre',
-              (_profile?['emergency_contact_name'] as String? ?? '')
-                      .isNotEmpty
-                  ? _profile!['emergency_contact_name']
-                  : 'No configurado',
-              valueColor:
-                  (_profile?['emergency_contact_name'] as String? ?? '')
-                          .isNotEmpty
-                      ? Colors.white
-                      : Colors.orange,
-            ),
-            _divider(),
-            _infoRow(
-              Icons.phone_outlined,
-              'Teléfono',
-              (_profile?['emergency_contact_phone'] as String? ?? '')
-                      .isNotEmpty
-                  ? _profile!['emergency_contact_phone']
-                  : 'No configurado',
-              valueColor:
-                  (_profile?['emergency_contact_phone'] as String? ?? '')
-                          .isNotEmpty
-                      ? Colors.white
-                      : Colors.orange,
-            ),
-          ]),
-        ),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            'Se avisará a esta persona por SMS si se detecta una caída.',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.35),
-              fontSize: 11,
-            ),
-          ),
-        ),
-        const SizedBox(height: 28),
-        _sectionLabel('CUENTA'),
-        const SizedBox(height: 10),
-        Container(
-          decoration: glassDecoration(radius: 18),
-          child: Column(children: [
-            _infoRow(Icons.email_outlined, 'Correo', _user?.email ?? '—'),
-            _divider(),
-            _infoRow(
-              Icons.login_outlined,
-              'Proveedor',
-              _isGoogleUser ? 'Google' : 'Email / contraseña',
-              valueColor: _isGoogleUser ? Colors.lightBlue : null,
-            ),
-            _divider(),
-            _infoRow(
-              Icons.verified_user_outlined,
-              'Estado',
-              _user?.emailConfirmedAt != null ? 'Verificado' : 'Sin verificar',
-              valueColor: _user?.emailConfirmedAt != null
-                  ? Colors.greenAccent
-                  : Colors.orange,
-            ),
-          ]),
-        ),
-        const SizedBox(height: 32),
-        OutlinedButton.icon(
-          onPressed: () async {
-            await _supabase.auth.signOut();
-            if (mounted) {
-              Navigator.pushNamedAndRemoveUntil(
-                  context, '/', (route) => false);
-            }
-          },
-          icon: const Icon(Icons.logout, size: 17),
-          label: const Text(
-            'Cerrar sesión',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.redAccent,
-            side: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
-            backgroundColor: Colors.redAccent.withOpacity(0.06),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-        ),
-      ],
+  Widget _field(TextEditingController c, String label, IconData icon,
+      {String? helper, String? hint, TextInputType? keyboard}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: TextField(
+        controller: c,
+        keyboardType: keyboard,
+        cursorColor: _accent,
+        style: _txt(15, w: FontWeight.w400),
+        decoration: _input(label, icon, helper: helper, hint: hint),
+      ),
     );
   }
 
@@ -1884,241 +1341,55 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _sectionLabel('EDITAR PERFIL'),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _usernameCtrl,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white,
-            fontSize: 15,
-          ),
-          decoration: glassInput('Nombre de usuario', Icons.person_outline),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _fullNameCtrl,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white,
-            fontSize: 15,
-          ),
-          decoration: glassInput('Nombre completo', Icons.badge_outlined),
-        ),
-        const SizedBox(height: 14),
-        const Text(
-          'Para cambiar tu foto, toca tu avatar arriba y elígela de la galería.',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white38,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _communeCtrl,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white,
-            fontSize: 15,
-          ),
-          decoration: glassInput(
-            'Mi comuna (opcional)',
-            Icons.location_city_outlined,
-            helper: 'Ej: Providencia, Ñuñoa, Las Condes...',
-            accentColor: Colors.amberAccent,
-          ),
-        ),
-        const SizedBox(height: 20),
-        _sectionLabel('CONTACTO DE EMERGENCIA'),
-        const SizedBox(height: 6),
-        const Text(
-          'Se le avisará por SMS si la app detecta una caída.',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white38,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _emergencyNameCtrl,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white,
-            fontSize: 15,
-          ),
-          decoration: glassInput(
-            'Nombre del contacto',
-            Icons.person_pin_circle_outlined,
-            accentColor: Colors.redAccent,
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _emergencyPhoneCtrl,
-          keyboardType: TextInputType.phone,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white,
-            fontSize: 15,
-          ),
-          decoration: glassInput(
-            'Teléfono (ej: +56912345678)',
-            Icons.phone_outlined,
-            accentColor: Colors.redAccent,
-          ),
-        ),
-        const SizedBox(height: 28),
-        SizedBox(
-          height: 52,
-          child: ElevatedButton(
-            onPressed: _saving ? null : _saveProfile,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.greenAccent,
-              foregroundColor: Colors.black,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              textStyle: const TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-            child: _saving
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                        color: Colors.black, strokeWidth: 2),
-                  )
-                : const Text('Guardar cambios'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAchievements() {
-    final unlocked = _achievements.where((a) => a['unlocked'] == true).toList();
-    final locked = _achievements.where((a) => a['unlocked'] != true).toList();
-    final unlockedCount = unlocked.length;
-    final total = _achievements.length;
-
-    // Vista previa: primero los desbloqueados (para celebrar el progreso),
-    // completando con bloqueados hasta un máximo de 6 — el resto se ve
-    // completo en "Ver más".
-    final preview = [...unlocked, ...locked].take(6).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            _sectionLabel('LOGROS'),
-            const Spacer(),
-            Text(
-              '$unlockedCount / $total',
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white38,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        // Barra de progreso
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: total > 0 ? unlockedCount / total : 0,
-            backgroundColor: Colors.white10,
-            valueColor: const AlwaysStoppedAnimation(Colors.greenAccent),
-            minHeight: 4,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: preview.map((a) => _badgeTile(a, a['unlocked'] == true)).toList(),
-        ),
-        if (total > preview.length) ...[
-          const SizedBox(height: 14),
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AchievementsPage()),
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: glassDecoration(radius: 14, tint: Colors.greenAccent, opacity: 0.06),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'Ver todos los logros',
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.chevron_right, color: Colors.greenAccent, size: 18),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _badgeTile(Map<String, dynamic> achievement, bool unlocked) {
-    final icon = achievement['icon'] as String? ?? '🏅';
-    final title = achievement['title'] as String? ?? '';
-
-    return GestureDetector(
-      onTap: () => _showAchievementDetail(achievement, unlocked),
-      child: Container(
-        width: 80,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: glassDecoration(
-          radius: 16,
-          tint: unlocked ? Colors.greenAccent : Colors.white,
-          opacity: unlocked ? 0.08 : 0.03,
-          borderOpacity: unlocked ? 0.2 : 0.07,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ColorFiltered(
-              colorFilter: unlocked
-                  ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
-                  : const ColorFilter.matrix([
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0,      0,      0,      0.3, 0,
-                    ]),
-              child: Text(icon, style: const TextStyle(fontSize: 28)),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              title,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: unlocked ? Colors.white : Colors.white24,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+          child: Text('Toca tu foto para cambiarla.',
               textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+              style: _txt(12, w: FontWeight.w400, c: Colors.white38)),
         ),
-      ),
+        _group('TUS DATOS'),
+        _field(_usernameCtrl, 'Nombre de usuario', Icons.alternate_email_rounded),
+        _field(_fullNameCtrl, 'Nombre completo', Icons.badge_outlined),
+        _field(_communeCtrl, 'Comuna (opcional)', Icons.location_city_outlined,
+            hint: 'Ej: Maipú, Providencia, Ñuñoa'),
+        _group('CONTACTO DE EMERGENCIA'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          child: Text(
+            'Se le avisa por SMS con tu ubicación si la app detecta una caída.',
+            style: _txt(12, w: FontWeight.w400, c: Colors.white38),
+          ),
+        ),
+        _field(_emergencyNameCtrl, 'Nombre del contacto',
+            Icons.contact_emergency_outlined),
+        _field(_emergencyPhoneCtrl, 'Teléfono', Icons.phone_outlined,
+            hint: '+56912345678', keyboard: TextInputType.phone),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: _saving ? null : _saveProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accent,
+                foregroundColor: Colors.black,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                          color: Colors.black, strokeWidth: 2),
+                    )
+                  : Text('Guardar cambios',
+                      style: _txt(15, w: FontWeight.w700, c: Colors.black)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2127,170 +1398,57 @@ class _ProfilePageState extends State<ProfilePage> {
     final title = achievement['title'] as String? ?? '';
     final description = achievement['description'] as String? ?? '';
     final unlockedAt = achievement['unlocked_at'] as String?;
-
     String dateStr = '';
     if (unlockedAt != null) {
       final dt = DateTime.tryParse(unlockedAt)?.toLocal();
       if (dt != null) {
-        const months = [
-          'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-          'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
-        ];
-        dateStr = '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+        dateStr = '${dt.day} ${_months[dt.month - 1]} ${dt.year}';
       }
     }
-
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(24),
-        decoration: glassDecoration(
-          radius: 24,
-          tint: unlocked ? Colors.greenAccent : Colors.white,
-          opacity: unlocked ? 0.1 : 0.05,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(icon, style: const TextStyle(fontSize: 52)),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: unlocked ? Colors.white : Colors.white38,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
+      backgroundColor: const Color(0xFF161622),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Opacity(
+                opacity: unlocked ? 1 : 0.35,
+                child: Text(icon, style: const TextStyle(fontSize: 52)),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white60,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            if (unlocked && dateStr.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.greenAccent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.greenAccent.withOpacity(0.2)),
-                ),
-                child: Text(
-                  'Desbloqueado el $dateStr',
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.greenAccent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+              const SizedBox(height: 12),
+              Text(title,
+                  textAlign: TextAlign.center,
+                  style: _txt(20,
+                      w: FontWeight.w700,
+                      c: unlocked ? Colors.white : Colors.white54)),
+              const SizedBox(height: 6),
+              Text(description,
+                  textAlign: TextAlign.center,
+                  style: _txt(14, w: FontWeight.w400, c: Colors.white60)),
+              const SizedBox(height: 14),
+              Text(
+                unlocked
+                    ? (dateStr.isNotEmpty
+                        ? 'Desbloqueado el $dateStr'
+                        : 'Desbloqueado')
+                    : 'Aún no desbloqueado',
+                style: _txt(12.5,
+                    w: FontWeight.w600,
+                    c: unlocked ? _accent : Colors.white30),
               ),
             ],
-            if (!unlocked) ...[
-              const SizedBox(height: 16),
-              const Text(
-                'Aún no desbloqueado',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white24,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
   }
-
-  Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(left: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 3,
-              height: 12,
-              decoration: BoxDecoration(
-                color: _accent,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              text,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white.withOpacity(0.55),
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ],
-        ),
-      );
-
-  Widget _infoRow(IconData icon, String label, String value,
-      {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: _accent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: _accent, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white38,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          Flexible(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: valueColor ?? Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _divider() => Divider(
-        height: 1,
-        color: Colors.white.withOpacity(0.06),
-        indent: 58,
-        endIndent: 14,
-      );
 }
 
 class _GoogleIcon extends StatelessWidget {
