@@ -38,9 +38,14 @@ class _PlusUnlockedPageState extends State<PlusUnlockedPage> {
       body: 'Crea todas las salidas grupales que quieras, sin el tope de 2 del plan gratis.',
     ),
     _UnlockSlide(
-      icon: Icons.bar_chart_rounded,
-      title: 'Estadísticas avanzadas',
-      body: 'Accede a tu histórico completo y gráficos detallados de tu progreso.',
+      icon: Icons.all_inclusive_rounded,
+      title: 'Sin límites',
+      body: 'Planifica todas las rutas, publica todos los momentos que quieras y registra todas tus bicis.',
+    ),
+    _UnlockSlide(
+      icon: Icons.local_fire_department_outlined,
+      title: 'Mapa de calor y mapas premium',
+      body: 'Activa tu mapa de calor y los estilos satélite, exterior y minimalista desde el menú lateral.',
     ),
     _UnlockSlide(
       icon: Icons.military_tech_rounded,

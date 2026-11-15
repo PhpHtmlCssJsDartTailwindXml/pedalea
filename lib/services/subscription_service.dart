@@ -124,10 +124,15 @@ class SubscriptionService {
           .select('product_id, purchase_token, purchased_at, expires_at')
           .eq('user_id', uid)
           .eq('is_active', true)
-          .order('purchased_at', ascending: false)
-          .limit(1);
+          .order('purchased_at', ascending: false);
       if (rows.isEmpty) return null;
-      final row = rows.first;
+      // Si hay una compra real de Google Play, se muestra esa antes que un
+      // Plus de prueba del dueño.
+      bool isTest(Map r) {
+        final t = r['purchase_token'] as String? ?? '';
+        return t.startsWith('simulated_') || t.startsWith('owner_test_');
+      }
+      final row = rows.firstWhere((r) => !isTest(r), orElse: () => rows.first);
       final purchasedAt = DateTime.tryParse(row['purchased_at'] as String? ?? '') ?? DateTime.now();
       final expiresAt = row['expires_at'] != null
           ? DateTime.tryParse(row['expires_at'] as String)
@@ -229,21 +234,42 @@ class SubscriptionService {
     try {
       final rows = await Supabase.instance.client
           .from('subscriptions')
-          .select('is_active, expires_at')
+          .select('is_active, expires_at, purchase_token')
           .eq('user_id', uid)
           .eq('is_active', true);
       final now = DateTime.now();
-      final active = rows.any((r) {
-        final expiresAt = r['expires_at'] as String?;
-        if (expiresAt == null) return true;
-        final dt = DateTime.tryParse(expiresAt);
-        return dt == null || dt.isAfter(now);
-      });
+      bool notExpired(Map r) {
+        final dt = DateTime.tryParse(r['expires_at'] as String? ?? '');
+        return r['expires_at'] == null || dt == null || dt.isAfter(now);
+      }
+
+      final active = rows.any(notExpired);
       isPlus.value = active;
+
+      // `expires_at` es el fin del periodo pagado que vio el servidor. Cuando
+      // Google renueva la suscripción, esa fecha queda vieja: se vuelve a
+      // verificar la compra con Google (restorePurchases → verify-play-purchase)
+      // para no quitarle Plus a quien sí está pagando. Una vez por sesión.
+      final hasExpiredRealSub = rows.any((r) =>
+          !notExpired(r) &&
+          !(r['purchase_token'] as String? ?? '').startsWith('owner_test_') &&
+          !(r['purchase_token'] as String? ?? '').startsWith('simulated_'));
+      if (!active && hasExpiredRealSub && !_renewalChecked && _purchaseSub != null) {
+        _renewalChecked = true;
+        unawaited(_iap.restorePurchases());
+      }
+
+      // Corrige profiles.is_plus en el servidor (medalla, límites) si quedó
+      // pegado de una suscripción ya vencida.
+      unawaited(Supabase.instance.client
+          .rpc('sync_my_plus')
+          .then((_) {}, onError: (_) {}));
     } catch (e) {
       debugPrint('SubscriptionService refreshPlusStatus error: $e');
     }
   }
+
+  bool _renewalChecked = false;
 
   void dispose() {
     _purchaseSub?.cancel();

@@ -8,6 +8,13 @@ import 'notification_service.dart';
 class EventsService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  /// Columnas legibles de `events`. `password_hash` ya no se puede leer desde
+  /// la app (la contraseña se valida en el servidor con `join_event`).
+  static const eventColumns =
+      'id, user_id, created_by, title, description, event_date, location_name, '
+      'latitude, longitude, max_participants, participants_count, '
+      'participants_ids, is_active, created_at, is_private';
+
   /// Nunca guardamos la contraseña en texto plano — solo el hash.
   String hashPassword(String password) =>
       sha256.convert(utf8.encode(password)).toString();
@@ -20,7 +27,7 @@ class EventsService {
       final now = DateTime.now().toUtc().toIso8601String();
       final response = await _supabase
           .from('events')
-          .select()
+          .select(eventColumns)
           .gte('event_date', now)
           .eq('is_active', true)
           .order('event_date', ascending: true);
@@ -40,7 +47,7 @@ class EventsService {
 
       final response = await _supabase
           .from('events')
-          .select()
+          .select(eventColumns)
           .eq('user_id', userId)
           .order('event_date', ascending: false);
 
@@ -112,7 +119,7 @@ class EventsService {
       final response = await _supabase
           .from('events')
           .insert(eventData)
-          .select()
+          .select(eventColumns)
           .single();
 
       // El creador queda unido automáticamente; programa su recordatorio.
@@ -136,63 +143,35 @@ class EventsService {
   // guardado — si no se entrega o no coincide, retorna 'wrong_password'.
   Future<String> joinEvent(String eventId, {String? password}) async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return 'error';
+      if (_supabase.auth.currentUser == null) return 'error';
 
-      // Obtener evento actual
-      final response = await _supabase
-          .from('events')
-          .select()
-          .eq('id', eventId);
+      // Toda la validación (Plus, contraseña, cupo) ocurre en el servidor.
+      final res = await _supabase.rpc('join_event', params: {
+        'p_event_id': eventId,
+        'p_password_hash': (password != null && password.isNotEmpty)
+            ? hashPassword(password)
+            : null,
+      });
+      final result = res is String ? res : 'error';
 
-      if (response.isEmpty) return 'error';
-
-      final event = response.first;
-      final participantsIds = List<String>.from(
-        event['participants_ids'] ?? [],
-      );
-
-      // Si ya está unido, retornar false
-      if (participantsIds.contains(userId)) {
-        return 'already_joined';
-      }
-
-      final isPrivate = event['is_private'] == true;
-      if (isPrivate && event['user_id'] != userId) {
-        final storedHash = event['password_hash'] as String?;
-        final providedHash = password != null ? hashPassword(password) : null;
-        if (storedHash == null || providedHash != storedHash) {
-          return 'wrong_password';
+      if (result == 'ok') {
+        final rows = await _supabase
+            .from('events')
+            .select('title, event_date')
+            .eq('id', eventId);
+        final event = rows.isNotEmpty ? rows.first : null;
+        final eventDate =
+            DateTime.tryParse(event?['event_date'] as String? ?? '');
+        if (eventDate != null) {
+          NotificationService.instance.scheduleEventReminder(
+            eventId: eventId,
+            title: event?['title'] as String? ?? 'Evento',
+            eventDate: eventDate,
+          );
         }
       }
 
-      // Verificar límite de participantes
-      if (event['max_participants'] != null &&
-          participantsIds.length >= event['max_participants']) {
-        return 'full';
-      }
-
-      // Agregar usuario
-      participantsIds.add(userId);
-
-      await _supabase
-          .from('events')
-          .update({
-            'participants_ids': participantsIds,
-            'participants_count': participantsIds.length,
-          })
-          .eq('id', eventId);
-
-      final eventDate = DateTime.tryParse(event['event_date'] as String? ?? '');
-      if (eventDate != null) {
-        NotificationService.instance.scheduleEventReminder(
-          eventId: eventId,
-          title: event['title'] as String? ?? 'Evento',
-          eventDate: eventDate,
-        );
-      }
-
-      return 'ok';
+      return result;
     } catch (e) {
       debugPrint('Error uniéndose al evento: $e');
       return 'error';
@@ -202,37 +181,13 @@ class EventsService {
   // Salir de un evento
   Future<bool> leaveEvent(String eventId) async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return false;
+      if (_supabase.auth.currentUser == null) return false;
 
-      final response = await _supabase
-          .from('events')
-          .select()
-          .eq('id', eventId);
-
-      if (response.isEmpty) return false;
-
-      final event = response.first;
-      final participantsIds = List<String>.from(
-        event['participants_ids'] ?? [],
-      );
-
-      if (!participantsIds.contains(userId)) {
-        return false;
-      }
-
-      participantsIds.remove(userId);
-
-      await _supabase
-          .from('events')
-          .update({
-            'participants_ids': participantsIds,
-            'participants_count': participantsIds.length,
-          })
-          .eq('id', eventId);
+      final res = await _supabase
+          .rpc('leave_event', params: {'p_event_id': eventId});
+      if (res != true) return false;
 
       NotificationService.instance.cancelEventReminder(eventId);
-
       return true;
     } catch (e) {
       debugPrint('Error saliendo del evento: $e');

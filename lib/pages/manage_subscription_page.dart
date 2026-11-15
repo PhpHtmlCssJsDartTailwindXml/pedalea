@@ -69,7 +69,7 @@ class _ManageSubscriptionPageState extends State<ManageSubscriptionPage> {
           style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
         ),
         content: const Text(
-          'Perderás el acceso a las funciones Plus de inmediato (esta es una suscripción de prueba).',
+          'Perderás el acceso a las funciones Plus de inmediato.',
           style: TextStyle(fontFamily: 'Poppins', color: Colors.white60),
         ),
         actions: [
@@ -162,23 +162,6 @@ class _ManageSubscriptionPageState extends State<ManageSubscriptionPage> {
                                           fontSize: 20, fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                      if (_info!.isSimulated) ...[
-                                        const SizedBox(height: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.08),
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          child: const Text(
-                                            'SIMULADA (modo de prueba)',
-                                            style: TextStyle(
-                                              fontFamily: 'Poppins', color: Colors.white54,
-                                              fontSize: 10, fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
                                     ],
                                   ),
                                 ),
@@ -191,7 +174,7 @@ class _ManageSubscriptionPageState extends State<ManageSubscriptionPage> {
                                     Divider(height: 1, color: Colors.white.withOpacity(0.06), indent: 46, endIndent: 16),
                                     _infoRow(
                                       Icons.event_repeat_outlined,
-                                      _info!.isSimulated ? 'Vencería el' : 'Próximo cobro',
+                                      _info!.isSimulated ? 'Vigente hasta el' : 'Próximo cobro',
                                       _info!.expiresAt != null ? _formatDate(_info!.expiresAt!) : '—',
                                     ),
                                   ]),

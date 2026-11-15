@@ -72,6 +72,16 @@ class _EventsPageState extends State<EventsPage> {
       case 'full':
         _showSnack('El evento ya no tiene cupo', isError: true);
         break;
+      case 'plus_required':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const PaywallPage(
+              reason: 'Unirte a eventos privados es una función de Pedalea Plus.',
+            ),
+          ),
+        );
+        break;
       default:
         _showSnack('No se pudo unir al evento', isError: true);
     }

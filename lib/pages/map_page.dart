@@ -3512,6 +3512,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Contraseña incorrecta')),
               );
+            } else if (result == 'full' && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('El evento ya no tiene cupo')),
+              );
             }
           }
 
