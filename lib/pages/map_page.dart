@@ -5,6 +5,7 @@ import '../services/review_prompt_service.dart';
 import '../services/bike_service.dart';
 import '../services/alert_impact_service.dart';
 import 'my_bikes_page.dart';
+import 'achievements_page.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx show Layer;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -65,6 +66,7 @@ import '../core/route_observer.dart';
 import '../core/confirm_word_dialog.dart';
 import '../widgets/event_photo_gallery.dart';
 import 'paywall_page.dart';
+import 'manage_subscription_page.dart';
 import '../pages/auth_page.dart';
 import '../pages/events_page.dart';
 import '../pages/create_event_page.dart';
@@ -617,7 +619,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: const EdgeInsets.fromLTRB(24, 4, 20, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -5981,318 +5983,165 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
-  // ── Piezas del menú lateral ─────────────────────────────────────────────
+  // ── Menú lateral ────────────────────────────────────────────────────────
+  //
+  // Lista limpia, estilo apps modernas: íconos de línea, mucho aire, grupos
+  // con títulos chicos y sin tarjetas. Todo a la vista, sin desplegables.
   static const _drawerAccent = Color(0xFF7CF0BC);
+  static const _drawerBg = Color(0xFF0F1117);
+  static const _drawerGold = Color(0xFFF2C94C);
 
-  /// Secciones del menú que están desplegadas (por título).
-  final Set<String> _drawerOpenSections = {};
+  /// Enciende o apaga el modo ciclista (conteo de km).
+  void _setModoActivo(bool value) {
+    if (value) {
+      // Empieza una sesión nueva: limpia el trazado anterior.
+      setState(() {
+        _modoActivo = true;
+        _sessionKm = 0;
+        _routePoints.clear();
+        _sessionStartAt = DateTime.now();
+      });
+    } else {
+      setState(() => _modoActivo = false);
+      _presenceService.clearMyLocation();
+      _maybeOfferRouteShare();
+    }
+  }
 
-  /// Sección del menú: tarjeta que se ilumina con el acento al desplegarse.
-  Widget _drawerSection({
-    required IconData icon,
-    required String title,
-    required String hint,
-    required List<Widget> children,
-  }) {
-    final open = _drawerOpenSections.contains(title);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 5, 14, 5),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: open
-                ? [
-                    _drawerAccent.withOpacity(0.11),
-                    Colors.white.withOpacity(0.03),
-                  ]
-                : [
-                    Colors.white.withOpacity(0.05),
-                    Colors.white.withOpacity(0.02),
-                  ],
+  /// Cierra el menú y abre una pantalla.
+  void _drawerGo(Widget page, {VoidCallback? then}) {
+    Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page))
+        .then((_) => then?.call());
+  }
+
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161622),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text(
+          'Cerrar sesión',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
           ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: open
-                ? _drawerAccent.withOpacity(0.30)
-                : Colors.white.withOpacity(0.06),
-          ),
-          boxShadow: open
-              ? [
-                  BoxShadow(
-                    color: _drawerAccent.withOpacity(0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : const [],
         ),
-        child: ExpansionTile(
-          key: PageStorageKey('drawer_section_$title'),
-          initiallyExpanded: open,
-          onExpansionChanged: (v) => setState(() {
-            v
-                ? _drawerOpenSections.add(title)
-                : _drawerOpenSections.remove(title);
-          }),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          collapsedShape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          backgroundColor: Colors.transparent,
-          collapsedBackgroundColor: Colors.transparent,
-          tilePadding: const EdgeInsets.only(left: 12, right: 12),
-          childrenPadding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
-          leading: AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: open
-                    ? const [_drawerAccent, Color(0xFF2F8F63)]
-                    : [
-                        _drawerAccent.withOpacity(0.22),
-                        _drawerAccent.withOpacity(0.06),
-                      ],
-              ),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: _drawerAccent.withOpacity(open ? 0.0 : 0.18),
-              ),
-              boxShadow: open
-                  ? [
-                      BoxShadow(
-                        color: _drawerAccent.withOpacity(0.35),
-                        blurRadius: 12,
-                      ),
-                    ]
-                  : const [],
-            ),
-            child: Icon(
-              icon,
-              color: open ? const Color(0xFF12121C) : _drawerAccent,
-              size: 22,
+        content: const Text(
+          '¿Seguro que quieres salir de tu cuenta?',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white54),
             ),
           ),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontSize: 15.5,
-              fontWeight: FontWeight.w700,
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Salir',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          subtitle: Text(
-            hint,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.42),
-              fontSize: 11.5,
-            ),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Cuántas opciones hay dentro.
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: open
-                      ? _drawerAccent.withOpacity(0.16)
-                      : Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${children.length}',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: open ? _drawerAccent : Colors.white54,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              AnimatedRotation(
-                turns: open ? 0.5 : 0,
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                child: Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: open ? _drawerAccent : Colors.white38,
-                ),
-              ),
-            ],
-          ),
-          children: children,
+        ],
+      ),
+    );
+    if (ok == true) await _logout();
+  }
+
+  /// Título chico de un grupo del menú.
+  Widget _drawerGroup(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 6),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          color: Colors.white.withOpacity(0.38),
+          fontSize: 11,
+          letterSpacing: 1.4,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 
-  /// Acceso rápido del menú: mosaico con icono grande y etiqueta.
-  Widget _drawerQuickAction({
+  Widget _drawerDivider() => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+        child: Container(height: 1, color: Colors.white.withOpacity(0.06)),
+      );
+
+  /// Fila que abre una pantalla o hace una acción.
+  Widget _drawerRow({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    String? hint,
+    int badge = 0,
+    Color? color,
+    Widget? trailing,
   }) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            Navigator.pop(context);
-            onTap();
-          },
-          child: Ink(
-            padding: const EdgeInsets.fromLTRB(4, 12, 4, 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: Colors.white.withOpacity(0.9), size: 23),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Fila de accesos rápidos bajo el perfil.
-  Widget _drawerQuickActions() {
-    void go(Widget page) => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => page),
-        );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-      child: Row(
-        children: [
-          _drawerQuickAction(
-            icon: Icons.auto_awesome_rounded,
-            label: 'Momentos',
-            onTap: () => go(const MomentsPage()),
-          ),
-          const SizedBox(width: 8),
-          _drawerQuickAction(
-            icon: Icons.forum_rounded,
-            label: 'Mensajes',
-            onTap: () => go(const MessagesPage()),
-          ),
-          const SizedBox(width: 8),
-          _drawerQuickAction(
-            icon: Icons.bar_chart_rounded,
-            label: 'Stats',
-            onTap: () => go(const StatsPage()),
-          ),
-          const SizedBox(width: 8),
-          _drawerQuickAction(
-            icon: Icons.emoji_events_rounded,
-            label: 'Ranking',
-            onTap: () => go(const RiderRankingPage()),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _drawerItemIcon(IconData icon, Color color) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color.withOpacity(0.22), color.withOpacity(0.07)],
-        ),
-        shape: BoxShape.circle,
-        border: Border.all(color: color.withOpacity(0.22)),
-      ),
-      child: Icon(icon, color: color, size: 19),
-    );
-  }
-
-  Widget _drawerItemTexts(String title, String subtitle) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 1),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.48),
-              fontSize: 11.5,
-              height: 1.3,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Fila que navega a otra pantalla (o ejecuta una acción).
-  Widget _drawerNavItem({
-    required IconData icon,
-    Color color = _drawerAccent,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
+    final c = color ?? Colors.white;
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
         child: Row(
           children: [
-            _drawerItemIcon(icon, color),
-            const SizedBox(width: 12),
-            _drawerItemTexts(title, subtitle),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.arrow_outward_rounded,
-              color: color.withOpacity(0.75),
-              size: 17,
+            Icon(icon, color: color ?? Colors.white70, size: 22),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: c,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (hint != null)
+                    Text(
+                      hint,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.4),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                ],
+              ),
             ),
-            const SizedBox(width: 4),
+            if (badge > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _drawerAccent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badge > 9 ? '9+' : '$badge',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.black,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ?trailing,
           ],
         ),
       ),
@@ -6300,46 +6149,70 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   /// Fila con interruptor. Tocar cualquier parte de la fila lo cambia.
-  Widget _drawerSwitchItem({
+  Widget _drawerToggle({
     required IconData icon,
-    bool loading = false,
-    required Color color,
-    required String title,
-    required String subtitle,
+    required String label,
     required bool value,
     required ValueChanged<bool> onChanged,
+    String? hint,
+    bool locked = false,
+    bool loading = false,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
       onTap: () => onChanged(!value),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 7, 4, 7),
+        padding: const EdgeInsets.fromLTRB(24, 6, 12, 6),
         child: Row(
           children: [
             loading
-                ? Container(
-                    width: 38,
-                    height: 38,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.13),
-                      shape: BoxShape.circle,
-                    ),
-                    child: CircularProgressIndicator(
-                      color: color,
-                      strokeWidth: 2,
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: Padding(
+                      padding: EdgeInsets.all(2),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: _drawerAccent),
                     ),
                   )
-                : _drawerItemIcon(icon, color),
-            const SizedBox(width: 12),
-            _drawerItemTexts(title, subtitle),
+                : Icon(
+                    locked ? Icons.lock_outline_rounded : icon,
+                    color: value && !locked ? _drawerAccent : Colors.white70,
+                    size: 22,
+                  ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (hint != null)
+                    Text(
+                      hint,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.4),
+                        fontSize: 11.5,
+                        height: 1.3,
+                      ),
+                    ),
+                ],
+              ),
+            ),
             Transform.scale(
               scale: 0.82,
               child: Switch(
-                value: value,
+                value: value && !locked,
                 onChanged: onChanged,
-                activeThumbColor: color,
-                activeTrackColor: color.withOpacity(0.32),
+                activeThumbColor: Colors.black,
+                activeTrackColor: _drawerAccent,
                 inactiveThumbColor: Colors.white54,
                 inactiveTrackColor: Colors.white.withOpacity(0.08),
                 trackOutlineColor:
@@ -6352,434 +6225,238 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
-  /// Botón cuadrado/alargado del pie del menú (cerrar sesión, ajustes).
-  Widget _drawerFooterButton({
-    required Color color,
-    required VoidCallback onTap,
-    required Widget child,
-    double? width,
-  }) {
-    return Material(
-      color: color.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          width: width,
-          height: 46,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withOpacity(0.22)),
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-
   Widget _buildDrawer() {
     final isPlus = SubscriptionService.instance.isPlus.value;
+    final screenW = MediaQuery.of(context).size.width;
+    final km = _sessionKm >= 10
+        ? _sessionKm.toStringAsFixed(0)
+        : _sessionKm.toStringAsFixed(1);
+
     return Drawer(
-      backgroundColor: const Color(0xFF12121C),
+      width: dmath.min(screenW * 0.86, 340),
+      backgroundColor: _drawerBg,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(right: Radius.circular(28)),
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
       ),
-      child: Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: const Color(0xFF12121C),
-          borderRadius:
-              const BorderRadius.horizontal(right: Radius.circular(28)),
-          // Brillo suave del acento en la esquina superior.
-          gradient: RadialGradient(
-            center: const Alignment(-1.0, -1.0),
-            radius: 1.1,
-            colors: [
-              _drawerAccent.withOpacity(0.13),
-              _drawerAccent.withOpacity(0.0),
-            ],
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          _DrawerProfileHeader(),
+
+          // Lo más usado: el conteo de km.
+          _drawerToggle(
+            icon: Icons.directions_bike_rounded,
+            label: 'Modo ciclista',
+            hint: _modoActivo
+                ? 'Contando tus km · $km km esta salida'
+                : 'Actívalo para contar tus km',
+            value: _modoActivo,
+            onChanged: _setModoActivo,
           ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  _DrawerProfileHeader(),
-                  _drawerQuickActions(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 6),
-                    child: Text(
-                      'EXPLORAR',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white.withOpacity(0.35),
-                        fontSize: 10.5,
-                        letterSpacing: 1.8,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+          _drawerDivider(),
+
+          _drawerGroup('EXPLORAR'),
+          _drawerRow(
+            icon: Icons.alt_route_outlined,
+            label: 'Planificar ruta',
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _routePlannerOpen = true);
+              _loadFavorites();
+            },
+          ),
+          _drawerRow(
+            icon: Icons.auto_awesome_outlined,
+            label: 'Momentos',
+            onTap: () => _drawerGo(const MomentsPage()),
+          ),
+          _drawerRow(
+            icon: Icons.chat_bubble_outline_rounded,
+            label: 'Mensajes',
+            badge: _dmUnread,
+            onTap: () => _drawerGo(const MessagesPage(), then: _loadDmUnread),
+          ),
+          _drawerRow(
+            icon: Icons.event_outlined,
+            label: 'Eventos',
+            onTap: () => _drawerGo(const EventsPage(),
+                then: _checkAchievementsAndNotify),
+          ),
+          _drawerRow(
+            icon: Icons.add_location_alt_outlined,
+            label: 'Crear evento',
+            onTap: () => _drawerGo(const CreateEventPage(),
+                then: _checkAchievementsAndNotify),
+          ),
+          _drawerRow(
+            icon: Icons.report_gmailerrorred_outlined,
+            label: 'Reportar un problema',
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Mantén presionado el mapa en el lugar del problema para crear una alerta',
                   ),
-                  _drawerSection(
-                    icon: Icons.monitor_heart_rounded,
-                    title: "Actividad",
-                    hint: "Estadísticas, rutas y seguimiento",
-                    children: [
-                      _drawerNavItem(
-                        icon: Icons.bar_chart_rounded,
-                        title: "Mis estadísticas",
-                        subtitle: "Km de hoy, semana y racha",
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const StatsPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      _drawerNavItem(
-                        icon: Icons.route,
-                        color: Colors.lightBlueAccent,
-                        title: "Planificar ruta",
-                        subtitle: "Multiparada con CO₂ estimado",
-                        onTap: () {
-                          Navigator.pop(context);
-                          setState(() => _routePlannerOpen = true);
-                          _loadFavorites();
-                        },
-                      ),
-                      _drawerSwitchItem(
-                        icon: Icons.directions_bike_rounded,
-                        color: Colors.greenAccent,
-                        title: "Modo activo",
-                        subtitle: "Cuenta tus km mientras pedaleas",
-                        value: _modoActivo,
-                        onChanged: (value) {
-                          if (value) {
-                            // Empieza una sesión nueva: limpia el trazado anterior.
-                            setState(() {
-                              _modoActivo = value;
-                              _sessionKm = 0;
-                              _routePoints.clear();
-                              _sessionStartAt = DateTime.now();
-                            });
-                          } else {
-                            setState(() => _modoActivo = value);
-                            _presenceService.clearMyLocation();
-                            _maybeOfferRouteShare();
-                          }
-                        },
-                      ),
-                      _drawerSwitchItem(
-                        icon: _shareLiveLocation
-                            ? Icons.share_location_rounded
-                            : Icons.location_off_outlined,
-                        color: Colors.greenAccent,
-                        title: "Compartir mi ubicación en vivo",
-                        subtitle: "Apagado por defecto. Si lo activas, solo te ven "
-                            "en el mapa quienes te siguen mutuamente (nunca "
-                            "toda la app) y con ~30 s de retraso.",
-                        value: _shareLiveLocation,
-                        onChanged: _toggleShareLocation,
-                      ),
-                      _drawerSwitchItem(
-                        icon: Icons.gps_fixed,
-                        color: Colors.greenAccent,
-                        title: "Contar km en segundo plano",
-                        subtitle:
-                            "Suma tus km aunque no tengas la app abierta (usa más batería)",
-                        value: _bgTrackingEnabled,
-                        onChanged: _toggleBgTracking,
-                      ),
-                    ],
-                  ),
-                  _drawerSection(
-                    icon: Icons.groups_rounded,
-                    title: "Comunidad",
-                    hint: "Momentos, mensajes, rankings y eventos",
-                    children: [
-                      _drawerNavItem(
-                        icon: Icons.auto_awesome_rounded,
-                        color: const Color(0xFF69FF47),
-                        title: "Momentos",
-                        subtitle: "Comparte tus mejores fotos pedaleando",
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const MomentsPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      _drawerNavItem(
-                        icon: Icons.forum_rounded,
-                        color: const Color(0xFF4FC3F7),
-                        title: "Mensajes",
-                        subtitle: "Chat con ciclistas que sigues mutuamente",
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const MessagesPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      _drawerNavItem(
-                        icon: Icons.leaderboard,
-                        color: Colors.amberAccent,
-                        title: "Ranking local",
-                        subtitle: "Top comunas y ciclistas",
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const RankingPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      _drawerNavItem(
-                        icon: Icons.emoji_events_rounded,
-                        color: Colors.amberAccent,
-                        title: "Ranking de ciclistas",
-                        subtitle: "Km del día, semana y velocidad máx.",
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const RiderRankingPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      _drawerNavItem(
-                        icon: Icons.event,
-                        title: "Próximos eventos",
-                        subtitle: "Encuentra ciclistas cerca",
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const EventsPage(),
-                            ),
-                          ).then((_) => _checkAchievementsAndNotify());
-                        },
-                      ),
-                      _drawerNavItem(
-                        icon: Icons.add_location,
-                        title: "Crear evento",
-                        subtitle: "Organiza una salida",
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CreateEventPage(),
-                            ),
-                          ).then((_) => _checkAchievementsAndNotify());
-                        },
-                      ),
-                    ],
-                  ),
-                  _drawerSection(
-                    icon: Icons.notifications_rounded,
-                    title: "Alertas",
-                    hint: "Reporta problemas en la vía",
-                    children: [
-                      _drawerNavItem(
-                        icon: Icons.add_alert,
-                        color: Colors.redAccent,
-                        title: "Reportar problema",
-                        subtitle:
-                            "Mantén presionado el mapa donde ocurre el problema",
-                        onTap: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                '💡 Mantén presionado el mapa en el lugar del problema para crear una alerta',
-                              ),
-                              backgroundColor: Colors.blue,
-                              duration: Duration(seconds: 3),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  _drawerSection(
-                    icon: Icons.map_rounded,
-                    title: "Mapa",
-                    hint: "Estilo, capas y puntos de interés",
-                    children: [
-                      _drawerSwitchItem(
-                        icon: Icons.dark_mode_rounded,
-                        color: Colors.blueAccent,
-                        title: "Modo oscuro automático",
-                        subtitle: _autoDarkMode
-                            ? "Noche 7pm–7am, día 7am–7pm"
-                            : "Siempre modo noche",
-                        value: _autoDarkMode,
-                        onChanged: (val) {
-                          setState(() {
-                            _autoDarkMode = val;
-                            _currentStyle = _resolveMapStyle();
-                          });
-                          _styleIsLoaded = false;
-                          mapboxMap?.loadStyleURI(_currentStyle);
-                        },
-                      ),
-                      _mapStylePicker(),
-                      _drawerSwitchItem(
-                        icon: isPlus
-                            ? Icons.local_fire_department_rounded
-                            : Icons.lock_outline_rounded,
-                        color: const Color(0xFFFF6D00),
-                        title: "Mi mapa de calor",
-                        subtitle: isPlus
-                            ? "Dónde has pedaleado más (Plus)"
-                            : "Función de Pedalea Plus",
-                        value: _showHeatmap,
-                        onChanged: (_) => _toggleHeatmap(),
-                      ),
-                      if (isPlus && _showHeatmap)
-                        _drawerNavItem(
-                          icon: Icons.delete_sweep_rounded,
-                          color: const Color(0xFFFF6D00),
-                          title: "Borrar mi mapa de calor",
-                          subtitle: "Empieza de cero si ves zonas que no son tuyas",
-                          onTap: () {
-                            Navigator.pop(context);
-                            _confirmClearHeatmap();
-                          },
-                        ),
-                      _drawerSwitchItem(
-                        icon: Icons.local_parking,
-                        loading: _bikeParkingsLoading,
-                        color: const Color(0xFF00BCD4),
-                        title: "Estacionamientos de bici",
-                        subtitle: "Biciparkings de OpenStreetMap",
-                        value: _showBikeParkings,
-                        onChanged: (_) => _toggleBikeParkings(),
-                      ),
-                      _drawerSwitchItem(
-                        icon: Icons.train,
-                        color: const Color(0xFF7C3AED),
-                        title: "BiciMetro",
-                        subtitle: "Estaciones Metro que permiten bici",
-                        value: _showBicimetro,
-                        onChanged: (_) => _toggleBicimetro(),
-                      ),
-                      _drawerSwitchItem(
-                        icon: Icons.pedal_bike,
-                        loading: _bikeServicesLoading,
-                        color: const Color(0xFF22C55E),
-                        title: "Inflado, talleres y agua",
-                        subtitle: "Aire, talleres, gasolineras y puntos de agua",
-                        value: _showBikeServices,
-                        onChanged: (_) => _toggleBikeServices(),
-                      ),
-                      _drawerSwitchItem(
-                        icon: Icons.event_available,
-                        color: const Color(0xFF7CB342),
-                        title: "CicloRecreoVía",
-                        subtitle: "Calles cerradas para ciclistas los domingos",
-                        value: _showCicloRecreo,
-                        onChanged: (_) => _toggleCicloRecreo(),
-                      ),
-                    ],
-                  ),
-                  _drawerSection(
-                    icon: Icons.shield_rounded,
-                    title: "Seguridad",
-                    hint: "Caídas y alertas cercanas",
-                    children: [
-                      _drawerSwitchItem(
-                        icon: Icons.health_and_safety,
-                        color: Colors.redAccent,
-                        title: "Detección de caídas",
-                        subtitle:
-                            "Llama a emergencias si detecta una caída brusca",
-                        value: _fallDetectionEnabled,
-                        onChanged: _setFallDetectionEnabled,
-                      ),
-                      _drawerSwitchItem(
-                        icon: Icons.notifications_active,
-                        color: Colors.orangeAccent,
-                        title: "Alertas de proximidad",
-                        subtitle:
-                            "Notifica al acercarte a un incidente reportado",
-                        value: _proximityAlertsEnabled,
-                        onChanged: (val) {
-                          setState(() => _proximityAlertsEnabled = val);
-                          _proximityService.reset();
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.only(top: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.white.withOpacity(0.06)),
+                  duration: Duration(seconds: 3),
                 ),
-              ),
-              child: Column(
-                children: [
-                  const _DrawerPlusBanner(),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _LogoutInlineButton(onConfirm: _logout),
-                        ),
-                        const SizedBox(width: 10),
-                        Tooltip(
-                          message: 'Configuración',
-                          child: _drawerFooterButton(
-                            color: Colors.white,
-                            width: 46,
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const SettingsPage(),
-                                ),
-                              );
-                            },
-                            child: const Icon(
-                              Icons.settings_rounded,
-                              color: Colors.white70,
-                              size: 21,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _drawerFooter(),
-                ],
-              ),
+              );
+            },
+          ),
+
+          _drawerGroup('TU ACTIVIDAD'),
+          _drawerRow(
+            icon: Icons.pedal_bike_outlined,
+            label: 'Mis bicis',
+            onTap: () => _drawerGo(const MyBikesPage()),
+          ),
+          _drawerRow(
+            icon: Icons.insights_outlined,
+            label: 'Estadísticas',
+            onTap: () => _drawerGo(const StatsPage()),
+          ),
+          _drawerRow(
+            icon: Icons.leaderboard_outlined,
+            label: 'Ranking de comunas',
+            onTap: () => _drawerGo(const RankingPage()),
+          ),
+          _drawerRow(
+            icon: Icons.emoji_events_outlined,
+            label: 'Ranking de ciclistas',
+            onTap: () => _drawerGo(const RiderRankingPage()),
+          ),
+          _drawerRow(
+            icon: Icons.military_tech_outlined,
+            label: 'Logros',
+            onTap: () => _drawerGo(const AchievementsPage()),
+          ),
+          _drawerDivider(),
+
+          _drawerGroup('MAPA'),
+          _mapStylePicker(),
+          _drawerToggle(
+            icon: Icons.dark_mode_outlined,
+            label: 'Modo noche automático',
+            hint: _autoDarkMode ? 'Noche de 7 pm a 7 am' : 'Siempre de noche',
+            value: _autoDarkMode,
+            onChanged: (val) {
+              setState(() {
+                _autoDarkMode = val;
+                _currentStyle = _resolveMapStyle();
+              });
+              _styleIsLoaded = false;
+              mapboxMap?.loadStyleURI(_currentStyle);
+            },
+          ),
+          _drawerToggle(
+            icon: Icons.local_parking_outlined,
+            label: 'Estacionamientos',
+            value: _showBikeParkings,
+            loading: _bikeParkingsLoading,
+            onChanged: (_) => _toggleBikeParkings(),
+          ),
+          _drawerToggle(
+            icon: Icons.subway_outlined,
+            label: 'BiciMetro',
+            hint: 'Estaciones que permiten subir la bici',
+            value: _showBicimetro,
+            onChanged: (_) => _toggleBicimetro(),
+          ),
+          _drawerToggle(
+            icon: Icons.build_outlined,
+            label: 'Talleres, aire y agua',
+            value: _showBikeServices,
+            loading: _bikeServicesLoading,
+            onChanged: (_) => _toggleBikeServices(),
+          ),
+          _drawerToggle(
+            icon: Icons.wb_sunny_outlined,
+            label: 'CicloRecreoVía',
+            hint: 'Calles cerradas los domingos',
+            value: _showCicloRecreo,
+            onChanged: (_) => _toggleCicloRecreo(),
+          ),
+          _drawerToggle(
+            icon: Icons.local_fire_department_outlined,
+            label: 'Mi mapa de calor',
+            hint: isPlus ? 'Dónde has pedaleado más' : 'Pedalea Plus',
+            value: _showHeatmap,
+            locked: !isPlus,
+            onChanged: (_) => _toggleHeatmap(),
+          ),
+          if (isPlus && _showHeatmap)
+            _drawerRow(
+              icon: Icons.delete_sweep_outlined,
+              label: 'Borrar mi mapa de calor',
+              color: Colors.white60,
+              onTap: () {
+                Navigator.pop(context);
+                _confirmClearHeatmap();
+              },
             ),
-          ],
-        ),
+          _drawerDivider(),
+
+          _drawerGroup('SEGURIDAD Y PRIVACIDAD'),
+          _drawerToggle(
+            icon: Icons.health_and_safety_outlined,
+            label: 'Detección de caídas',
+            hint: 'Llama a emergencias si detecta un golpe fuerte',
+            value: _fallDetectionEnabled,
+            onChanged: _setFallDetectionEnabled,
+          ),
+          _drawerToggle(
+            icon: Icons.notifications_active_outlined,
+            label: 'Alertas de proximidad',
+            hint: 'Avisa al acercarte a un incidente',
+            value: _proximityAlertsEnabled,
+            onChanged: (val) {
+              setState(() => _proximityAlertsEnabled = val);
+              _proximityService.reset();
+            },
+          ),
+          _drawerToggle(
+            icon: Icons.share_location_outlined,
+            label: 'Ubicación en vivo',
+            hint: 'Solo te ven seguidores mutuos, con ~30 s de retraso',
+            value: _shareLiveLocation,
+            onChanged: _toggleShareLocation,
+          ),
+          _drawerToggle(
+            icon: Icons.gps_fixed_outlined,
+            label: 'Km en segundo plano',
+            hint: 'Cuenta con la app cerrada (usa más batería)',
+            value: _bgTrackingEnabled,
+            onChanged: _toggleBgTracking,
+          ),
+          _drawerDivider(),
+
+          _drawerGroup('CUENTA'),
+          _drawerRow(
+            icon: Icons.workspace_premium_outlined,
+            label: isPlus ? 'Tu suscripción Plus' : 'Hazte Pedalea Plus',
+            hint: isPlus ? 'Gracias por apoyar Pedalea' : 'Más funciones, sin límites',
+            color: _drawerGold,
+            onTap: () => _drawerGo(
+              isPlus
+                  ? const ManageSubscriptionPage()
+                  : const PaywallPage(
+                      reason: 'Desbloquea funciones exclusivas con Pedalea Plus.',
+                    ),
+            ),
+          ),
+          _drawerRow(
+            icon: Icons.settings_outlined,
+            label: 'Configuración',
+            onTap: () => _drawerGo(const SettingsPage()),
+          ),
+          _drawerRow(
+            icon: Icons.logout_rounded,
+            label: 'Cerrar sesión',
+            color: Colors.redAccent.shade100,
+            onTap: _confirmLogout,
+          ),
+          _drawerFooter(),
+        ],
       ),
     );
   }
@@ -10384,7 +10061,8 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
     final username = (_profile?['username'] as String? ?? '').trim();
     final isPlus = _profile?['is_plus'] as bool? ?? false;
     const goldColor = Color(0xFFF2C94C);
-    final ringColor = isPlus ? goldColor : const Color(0xFF7CF0BC);
+    const accent = Color(0xFF7CF0BC);
+    final topInset = MediaQuery.of(context).padding.top;
 
     Future<void> openProfile() async {
       Navigator.pop(context);
@@ -10396,227 +10074,92 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
       _load();
     }
 
-    const accent = Color(0xFF7CF0BC);
-    final topInset = MediaQuery.of(context).padding.top;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, topInset + 22, 12, 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: openProfile,
-          borderRadius: BorderRadius.circular(24),
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF2F8F63), Color(0xFF1E5C41), Color(0xFF153F2E)],
-                stops: [0.0, 0.55, 1.0],
-              ),
-              border: Border.all(color: accent.withOpacity(0.22)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2F8F63).withOpacity(0.25),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
+    // Encabezado sobrio: foto, nombre y "Ver perfil". Sin tarjeta.
+    return InkWell(
+      onTap: openProfile,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(24, topInset + 28, 20, 20),
+        child: Row(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isPlus ? goldColor : Colors.white24,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: avatarUrl != null && avatarUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: avatarUrl,
+                            fit: BoxFit.cover,
+                            fadeInDuration: Duration.zero,
+                            placeholder: (_, _) => _headerFallback(),
+                            errorWidget: (_, _, _) => _headerFallback(),
+                          )
+                        : _headerFallback(),
+                  ),
                 ),
+                if (isPlus)
+                  const Positioned(
+                    bottom: -2,
+                    right: -2,
+                    child: PlusMedal(size: 18, ringColor: Color(0xFF0F1117)),
+                  ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Círculos decorativos (como una rueda) en la esquina.
-                  Positioned(
-                    right: -34,
-                    top: -34,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.07),
-                          width: 14,
-                        ),
-                      ),
+                  Text(
+                    _displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
                     ),
                   ),
-                  Positioned(
-                    right: 18,
-                    bottom: -26,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
-                    child: Row(
+                  const SizedBox(height: 2),
+                  Text.rich(
+                    TextSpan(
                       children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 58,
-                              height: 58,
-                              padding: const EdgeInsets.all(2.5),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: ringColor,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: ringColor.withOpacity(0.35),
-                                    blurRadius: 12,
-                                  ),
-                                ],
-                              ),
-                              child: ClipOval(
-                                child: avatarUrl != null && avatarUrl.isNotEmpty
-                                    ? CachedNetworkImage(
-                                        imageUrl: avatarUrl,
-                                        fit: BoxFit.cover,
-                                        fadeInDuration: Duration.zero,
-                                        placeholder: (_, _) => _headerFallback(),
-                                        errorWidget: (_, _, _) =>
-                                            _headerFallback(),
-                                      )
-                                    : _headerFallback(),
-                              ),
+                        if (username.isNotEmpty)
+                          TextSpan(
+                            text: '@$username  ·  ',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.45),
                             ),
-                            if (isPlus)
-                              const Positioned(
-                                bottom: -3,
-                                right: -3,
-                                child: PlusMedal(
-                                    size: 22, ringColor: Color(0xFF1E5C41)),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '¡Hola! 👋',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.white.withOpacity(0.7),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              Text(
-                                _displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.white,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.25,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Row(
-                                children: [
-                                  if (isPlus) ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 7,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            goldColor.withOpacity(0.35),
-                                            goldColor.withOpacity(0.15),
-                                          ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: goldColor.withOpacity(0.55),
-                                        ),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.workspace_premium_rounded,
-                                            color: goldColor,
-                                            size: 11,
-                                          ),
-                                          SizedBox(width: 3),
-                                          Text(
-                                            'PLUS',
-                                            style: TextStyle(
-                                              fontFamily: 'Poppins',
-                                              color: goldColor,
-                                              fontSize: 9.5,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: 0.6,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (username.isNotEmpty)
-                                      const SizedBox(width: 6),
-                                  ],
-                                  if (username.isNotEmpty)
-                                    Flexible(
-                                      child: Text(
-                                        '@$username',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: Colors.white.withOpacity(0.65),
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Tooltip(
-                          message: 'Ver perfil',
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.14),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.22),
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.arrow_forward_rounded,
-                              color: Colors.white,
-                              size: 17,
-                            ),
+                        const TextSpan(
+                          text: 'Ver perfil',
+                          style: TextStyle(
+                            color: accent,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5),
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -10624,15 +10167,15 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
 
   Widget _headerFallback() {
     return Container(
-      color: Colors.greenAccent.withOpacity(0.12),
+      color: Colors.white.withOpacity(0.08),
       child: Center(
         child: Text(
           _initials,
           style: const TextStyle(
             fontFamily: 'Poppins',
-            color: Colors.greenAccent,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
+            color: Colors.white70,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
