@@ -13,7 +13,7 @@ import 'follow_requests_page.dart';
 import 'paywall_page.dart';
 
 /// Feed de "Momentos": el diario en fotos de la comunidad. Todos lo ven;
-/// reaccionar y comentar solo entre quienes se siguen mutuamente. Plan gratis:
+/// cualquier ciclista puede reaccionar y comentar. Plan gratis:
 /// 2 momentos al día; Plus: ilimitado.
 class MomentsPage extends StatefulWidget {
   const MomentsPage({super.key});
@@ -107,12 +107,8 @@ class _MomentsPageState extends State<MomentsPage> {
     });
   }
 
-  /// Reaccionar/comentar: en tus propios momentos, o con follow mutuo.
-  bool _canInteract(Map<String, dynamic> post) {
-    final authorId =
-        (post['author'] as Map?)?['id'] as String? ?? post['user_id'] as String;
-    return authorId == _myId || _mutual.contains(authorId);
-  }
+  /// Cualquier ciclista con sesión puede reaccionar y comentar.
+  bool _canInteract(Map<String, dynamic> post) => _myId != null;
 
   void _openAuthor(String authorId) {
     Navigator.push(
@@ -127,7 +123,7 @@ class _MomentsPageState extends State<MomentsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text(
-          'Reaccionar y comentar solo entre quienes se siguen mutuamente.',
+          'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.',
           style: TextStyle(fontFamily: 'Poppins'),
         ),
         action: SnackBarAction(

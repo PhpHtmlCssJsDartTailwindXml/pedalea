@@ -235,12 +235,14 @@ class PodiumEntry {
   final String unit;
   final Widget avatar;
   final bool isMe;
+  final VoidCallback? onTap; // abre el perfil del ciclista
   const PodiumEntry({
     required this.name,
     required this.value,
     required this.unit,
     required this.avatar,
     this.isMe = false,
+    this.onTap,
   });
 }
 
@@ -253,7 +255,10 @@ class Podium extends StatelessWidget {
     final c = podiumColor(rank);
     final avatarSize = rank == 1 ? 74.0 : 60.0;
     return Expanded(
-      child: Column(
+      child: GestureDetector(
+       behavior: HitTestBehavior.opaque,
+       onTap: e.onTap,
+       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (rank == 1)
@@ -375,6 +380,7 @@ class Podium extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -403,6 +409,7 @@ class LeaderRow extends StatelessWidget {
   final bool isMe;
   final Color accent;
   final Color? valueColor;
+  final VoidCallback? onTap; // abre el perfil del ciclista
   const LeaderRow({
     super.key,
     required this.rank,
@@ -415,12 +422,21 @@ class LeaderRow extends StatelessWidget {
     this.subtitle,
     this.isMe = false,
     this.valueColor,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final rc = podiumColor(rank);
     final top3 = rank <= 3;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: _body(rc, top3),
+    );
+  }
+
+  Widget _body(Color rc, bool top3) {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
       decoration: BoxDecoration(

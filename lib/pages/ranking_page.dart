@@ -4,6 +4,7 @@ import '../core/glass.dart';
 import '../services/cache_service.dart';
 import '../services/karma_service.dart';
 import '../widgets/leaderboard.dart';
+import 'public_profile_page.dart';
 
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
@@ -224,6 +225,13 @@ class _RankingPageState extends State<RankingPage>
           ? '@${c['username']}'
           : (c['user_name'] as String? ?? 'Usuario');
 
+  void _openProfile(Map<String, dynamic> c) {
+    final id = c['user_id'] as String?;
+    if (id == null) return;
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => PublicProfilePage(userId: id)));
+  }
+
   Widget _buildCyclistsTab() {
     if (_loadingCyclists) return _loader();
 
@@ -287,6 +295,7 @@ class _RankingPageState extends State<RankingPage>
                         '${KarmaService.getLevel(_karma(list[i])).emoji} pts',
                     avatar: RankAvatar(name: _name(list[i])),
                     isMe: i == myIndex,
+                    onTap: () => _openProfile(list[i]),
                   ),
               ],
             ),
@@ -316,6 +325,7 @@ class _RankingPageState extends State<RankingPage>
                     isMe: offset + i == myIndex,
                     accent: _accent,
                     valueColor: Color(level.colorValue),
+                    onTap: () => _openProfile(c),
                   ),
                 );
               }),

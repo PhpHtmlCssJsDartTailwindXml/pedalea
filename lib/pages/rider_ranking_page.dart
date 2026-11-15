@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/glass.dart';
 import '../services/ride_stats_sync_service.dart';
 import '../widgets/leaderboard.dart';
+import 'public_profile_page.dart';
 
 /// Ranking de ciclistas: km del día, km de la semana y velocidad máxima.
 /// Se alimenta de la tabla `ride_stats` de Supabase (RPC `ride_ranking`).
@@ -112,6 +113,11 @@ class _BoardState extends State<_Board>
 
   String _fmt(double v) => v.toStringAsFixed(1);
 
+  void _openProfile(String userId) {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => PublicProfilePage(userId: userId)));
+  }
+
   Widget _avatar(RankingEntry e) => RankAvatar(name: e.username, url: e.avatarUrl);
 
   /// Texto competitivo: cuánto falta para pasar al de arriba o la ventaja.
@@ -219,6 +225,7 @@ class _BoardState extends State<_Board>
                         unit: unit,
                         avatar: _avatar(e),
                         isMe: e.isMe,
+                        onTap: () => _openProfile(e.userId),
                       ),
                   ],
                 ),
@@ -243,6 +250,7 @@ class _BoardState extends State<_Board>
                       progress: rest[i].value / leader,
                       isMe: rest[i].isMe,
                       accent: _accent,
+                      onTap: () => _openProfile(rest[i].userId),
                     ),
                   ),
               ],

@@ -2,9 +2,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/social_service.dart';
+import '../pages/public_profile_page.dart';
 
 /// Hoja inferior con los comentarios de un momento y sus respuestas.
-/// Comentar/responder solo si hay follow mutuo (o es tu propio momento).
+/// Comentar y responder: cualquier ciclista con sesión.
 Future<void> showCommentsSheet(
   BuildContext context, {
   required Map<String, dynamic> post,
@@ -218,6 +219,12 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     );
   }
 
+  void _openProfile(String? userId) {
+    if (userId == null || userId.isEmpty) return;
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => PublicProfilePage(userId: userId)));
+  }
+
   Widget _tile(Map<String, dynamic> c, {required bool isReply}) {
     final author = (c['author'] as Map?)?.cast<String, dynamic>() ?? const {};
     final name = _nameOf(author);
@@ -233,30 +240,36 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: r,
-            backgroundColor: Colors.white12,
-            backgroundImage:
-                avatar.isNotEmpty ? CachedNetworkImageProvider(avatar) : null,
-            child: avatar.isEmpty
-                ? Text(name.substring(0, 1).toUpperCase(),
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: isReply ? 10 : 12))
-                : null,
+          GestureDetector(
+            onTap: () => _openProfile(c['user_id'] as String?),
+            child: CircleAvatar(
+              radius: r,
+              backgroundColor: Colors.white12,
+              backgroundImage:
+                  avatar.isNotEmpty ? CachedNetworkImageProvider(avatar) : null,
+              child: avatar.isEmpty
+                  ? Text(name.substring(0, 1).toUpperCase(),
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: isReply ? 10 : 12))
+                  : null,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: isReply ? 11.5 : 12.5)),
+                GestureDetector(
+                  onTap: () => _openProfile(c['user_id'] as String?),
+                  child: Text(name,
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: isReply ? 11.5 : 12.5)),
+                ),
                 const SizedBox(height: 2),
                 Text.rich(
                   TextSpan(children: [
@@ -317,7 +330,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
             16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
         color: Colors.white.withOpacity(0.03),
         child: Text(
-          'Solo puedes comentar si tú y esta persona se siguen mutuamente.',
+          'Inicia sesión para comentar.',
           textAlign: TextAlign.center,
           style: TextStyle(
               fontFamily: 'Poppins',

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/plus_medal.dart';
 import '../services/plus_prefs_service.dart';
 import '../services/chat_notifications_service.dart';
+import 'public_profile_page.dart';
 
 class EventChatPage extends StatefulWidget {
   final String eventId;
@@ -1139,8 +1140,32 @@ class _ParticipantInfoDialogState extends State<_ParticipantInfoDialog> {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => PublicProfilePage(userId: widget.userId)),
+                  );
+                },
+                icon: const Icon(Icons.person_rounded, size: 16, color: Color(0xFF7CF0BC)),
+                label: const Text(
+                  'Ver perfil',
+                  style: TextStyle(fontFamily: 'Poppins', color: Color(0xFF7CF0BC), fontSize: 12.5, fontWeight: FontWeight.w600),
+                ),
+                style: TextButton.styleFrom(
+                  backgroundColor: const Color(0xFF7CF0BC).withOpacity(0.08),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
             if (!_isSelf) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(

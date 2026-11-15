@@ -300,9 +300,6 @@ Deno.serve(async (req) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");
-  if (!saRaw) return json({ skipped: "fcm_not_configured" });
-
   let input: { table?: string; op?: string; record?: Row };
   try {
     input = await req.json();
@@ -314,6 +311,25 @@ Deno.serve(async (req) => {
   try {
     const push = await buildPush(input.table, input.op ?? "INSERT", input.record);
     if (!push || push.to.length === 0) return json({ sent: 0 });
+
+    // Centro de notificaciones: se guarda una copia para verla en la app
+    // aunque el push no llegue o se descarte. Los mensajes de chat y directos
+    // tienen su propio contador de no leídos, por eso no se guardan aquí.
+    if (push.type !== "chat" && push.type !== "dm") {
+      const { error: insErr } = await supabase.from("notifications").insert(
+        push.to.map((uid) => ({
+          user_id: uid,
+          type: push.type,
+          title: push.title,
+          body: push.body,
+          payload: push.payload,
+        })),
+      );
+      if (insErr) console.error("notifications insert:", insErr.message);
+    }
+
+    const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");
+    if (!saRaw) return json({ skipped: "fcm_not_configured" });
 
     const { data: rows } = await supabase
       .from("device_tokens")

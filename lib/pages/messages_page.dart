@@ -7,6 +7,7 @@ import '../core/time_format.dart';
 import '../services/dm_service.dart';
 import '../widgets/plus_medal.dart';
 import 'dm_thread_page.dart';
+import 'public_profile_page.dart';
 
 const _kAccent = Color(0xFF69FF47);
 
@@ -331,7 +332,14 @@ class _MessagesPageState extends State<MessagesPage> {
                         width: 2,
                       ),
                     ),
-                    child: CircleAvatar(
+                    child: GestureDetector(
+                     onTap: () => Navigator.push(
+                       context,
+                       MaterialPageRoute(
+                           builder: (_) => PublicProfilePage(
+                               userId: other['id'] as String)),
+                     ),
+                     child: CircleAvatar(
                       radius: 25,
                       backgroundColor: Colors.white12,
                       backgroundImage: avatar.isNotEmpty
@@ -344,6 +352,7 @@ class _MessagesPageState extends State<MessagesPage> {
                                   color: Colors.white,
                                   fontSize: 17))
                           : null,
+                     ),
                     ),
                   ),
                   if (isPlus)

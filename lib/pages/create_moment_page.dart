@@ -605,8 +605,8 @@ class _CreateMomentPageState extends State<CreateMomentPage> {
           const SizedBox(width: 11),
           Expanded(
             child: Text(
-              'Cualquier ciclista podrá ver tu momento. Solo quienes se sigan '
-              'mutuamente contigo podrán reaccionar o comentar.',
+              'Cualquier ciclista podrá ver tu momento, darle me gusta y '
+              'comentarlo.',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 color: Colors.white.withOpacity(0.6),

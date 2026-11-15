@@ -35,8 +35,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   bool get _isMe => _me == widget.userId;
   bool get _mutual => _rel.outgoing == 'accepted' && _rel.incoming == 'accepted';
 
-  /// Puede reaccionar y comentar: en sus propios momentos, o con follow mutuo.
-  bool get _canInteract => _isMe || _mutual;
+  /// Cualquier ciclista con sesión puede reaccionar y comentar.
+  bool get _canInteract => _me.isNotEmpty;
 
   @override
   void initState() {

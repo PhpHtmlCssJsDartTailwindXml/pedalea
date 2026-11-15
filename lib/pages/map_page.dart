@@ -72,6 +72,9 @@ import '../pages/events_page.dart';
 import '../pages/create_event_page.dart';
 import '../pages/event_chat_page.dart';
 import '../pages/profile_page.dart';
+import '../pages/public_profile_page.dart';
+import '../pages/notifications_page.dart';
+import '../services/inbox_service.dart';
 import '../pages/ranking_page.dart';
 import '../pages/rider_ranking_page.dart';
 import '../pages/route_planner_page.dart';
@@ -409,6 +412,63 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   // ── Mi mapa de calor personal (capa Plus sobre el mapa) ─────────────
+  // ── Preferencias de capas del mapa ───────────────────────────────────
+  // Lo que el ciclista encienda o apague en la sección «Mapa» del menú se
+  // recuerda entre sesiones (antes volvía siempre a los valores por defecto).
+  static const _kLayerParkings = 'layer_parkings';
+  static const _kLayerBicimetro = 'layer_bicimetro';
+  static const _kLayerServices = 'layer_services';
+  static const _kLayerCicloRecreo = 'layer_ciclorecreo';
+  static const _kLayerHeatmap = 'layer_heatmap';
+  bool _heatmapPrefOn = false;
+
+  Future<void> _saveLayerPref(String key, bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+    } catch (_) {}
+  }
+
+  Future<void> _loadLayerPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      final parkings = prefs.getBool(_kLayerParkings) ?? _showBikeParkings;
+      final bicimetro = prefs.getBool(_kLayerBicimetro) ?? _showBicimetro;
+      final services = prefs.getBool(_kLayerServices) ?? _showBikeServices;
+      final ciclo = prefs.getBool(_kLayerCicloRecreo) ?? _showCicloRecreo;
+      _heatmapPrefOn = prefs.getBool(_kLayerHeatmap) ?? false;
+      setState(() {
+        _showBikeParkings = parkings;
+        _showBicimetro = bicimetro;
+        _showBikeServices = services;
+        _showCicloRecreo = ciclo;
+      });
+      // Si el mapa ya estaba dibujado con los valores por defecto, se ajusta
+      // (si aún no carga, el estilo usará estos valores al terminar).
+      if (mapboxMap != null && _styleIsLoaded) {
+        _updateBikeParkingsLayer();
+        _updateBicimetroLayer();
+        _updateBikeServicesLayer();
+        _updateCicloRecreoLayer();
+      }
+      _maybeRestoreHeatmap();
+    } catch (e) {
+      debugPrint('No se pudieron cargar las capas guardadas: $e');
+    }
+  }
+
+  /// El mapa de calor es Plus: se restaura solo cuando la suscripción está
+  /// confirmada (puede llegar unos segundos después de abrir la app).
+  Future<void> _maybeRestoreHeatmap() async {
+    if (!mounted || !_heatmapPrefOn || _showHeatmap) return;
+    if (!SubscriptionService.instance.isPlus.value) return;
+    await RideHeatService.init();
+    if (!mounted) return;
+    setState(() => _showHeatmap = true);
+    _updateHeatmapLayer();
+  }
+
   Future<void> _toggleHeatmap() async {
     if (!SubscriptionService.instance.isPlus.value) {
       Navigator.pop(context);
@@ -424,6 +484,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
     final turningOn = !_showHeatmap;
     setState(() => _showHeatmap = turningOn);
+    _saveLayerPref(_kLayerHeatmap, turningOn);
     if (turningOn) {
       await RideHeatService.init();
       if (RideHeatService.cellCount == 0 && mounted) {
@@ -875,6 +936,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
     _currentStyle = _resolveMapStyle();
     PlusPrefsService.mapStyle.addListener(_onMapStylePrefChanged);
+    SubscriptionService.instance.isPlus.addListener(_maybeRestoreHeatmap);
+    _loadLayerPrefs();
     BikeService.instance.load();
     // Pedir calificación en Play Store a quien ya pedaleó con la app, con
     // calma: unos segundos después de abrir, no en medio de un recorrido.
@@ -1051,6 +1114,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
     RideHeatService.flushNow();
     PlusPrefsService.mapStyle.removeListener(_onMapStylePrefChanged);
+    SubscriptionService.instance.isPlus.removeListener(_maybeRestoreHeatmap);
     _positionStreamSubscription?.cancel();
     _layersTipTimer?.cancel();
     _helpTipHideTimer?.cancel();
@@ -3012,7 +3076,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
         chips: [
           _sheetChip(Icons.schedule_rounded,
               _formatDate(DateTime.parse(alert['created_at']))),
-          _sheetChip(Icons.person_rounded, '${alert['user_name']}'),
+          GestureDetector(
+            onTap: () => _openUserProfile(alert['user_id']?.toString()),
+            child: _sheetChip(Icons.person_rounded, '${alert['user_name']}'),
+          ),
         ],
         hero: (photoUrl != null && photoUrl.isNotEmpty)
             ? Padding(
@@ -3571,6 +3638,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
               if (event['is_private'] == true)
                 _sheetChip(Icons.lock_rounded, 'Privado',
                     color: Colors.amber),
+              if (!isCreator && event['user_id'] != null)
+                GestureDetector(
+                  onTap: () => _openUserProfile(event['user_id']?.toString()),
+                  child: _sheetChip(Icons.person_rounded, 'Ver organizador'),
+                ),
             ],
             body: [
               if (location.isNotEmpty)
@@ -6085,6 +6157,55 @@ class _MapPageState extends State<MapPage> with RouteAware {
       );
 
   /// Fila que abre una pantalla o hace una acción.
+  /// Campana del menú: abre el centro de notificaciones y muestra cuántos
+  /// avisos quedan sin leer (por si el push se descartó o no se vio).
+  Widget _drawerBell() {
+    return ValueListenableBuilder<int>(
+      valueListenable: InboxService.instance.unread,
+      builder: (context, n, _) => IconButton(
+        tooltip: 'Notificaciones',
+        onPressed: () => _drawerGo(const NotificationsPage(),
+            then: InboxService.instance.refreshUnread),
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(
+              n > 0
+                  ? Icons.notifications_rounded
+                  : Icons.notifications_none_rounded,
+              color: Colors.white.withOpacity(n > 0 ? 0.95 : 0.7),
+              size: 26,
+            ),
+            if (n > 0)
+              Positioned(
+                right: -6,
+                top: -5,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  constraints: const BoxConstraints(minWidth: 18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF4D5E),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _drawerBg, width: 1.5),
+                  ),
+                  child: Text(
+                    n > 99 ? '99+' : '$n',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _drawerRow({
     required IconData icon,
     required String label,
@@ -6245,7 +6366,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          _DrawerProfileHeader(),
+          Stack(
+            children: [
+              _DrawerProfileHeader(),
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 18,
+                right: 10,
+                child: _drawerBell(),
+              ),
+            ],
+          ),
 
           // Lo más usado: el conteo de km.
           _drawerToggle(
@@ -6474,6 +6604,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       extendBodyBehindAppBar: true,
       onDrawerChanged: (opened) {
         setState(() => _drawerOpen = opened);
+        if (opened) InboxService.instance.refreshUnread();
         // Al cerrar el menú, refresca el mapa de calor con lo pedaleado.
         if (!opened && _showHeatmap) _updateHeatmapLayer();
       },
@@ -7486,8 +7617,24 @@ class _MapPageState extends State<MapPage> with RouteAware {
           if (speed > 1)
             _sheetChip(
                 Icons.speed_rounded, '${speed.toStringAsFixed(0)} km/h'),
+          GestureDetector(
+            onTap: () {
+              Navigator.pop(ctx);
+              _openUserProfile(props['user_id']?.toString());
+            },
+            child: _sheetChip(Icons.person_rounded, 'Ver perfil', color: color),
+          ),
         ],
       ),
+    );
+  }
+
+  /// Abre el perfil público de otro ciclista (o el propio).
+  void _openUserProfile(String? userId) {
+    if (userId == null || userId.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PublicProfilePage(userId: userId)),
     );
   }
 
@@ -7641,6 +7788,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   void _toggleBikeParkings() async {
     final newVal = !_showBikeParkings;
     setState(() => _showBikeParkings = newVal);
+    _saveLayerPref(_kLayerParkings, newVal);
     if (newVal && _bikeParkings.isEmpty) {
       await _loadBikeParkings();
     }
@@ -7781,6 +7929,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   void _toggleBicimetro() async {
     setState(() => _showBicimetro = !_showBicimetro);
+    _saveLayerPref(_kLayerBicimetro, _showBicimetro);
     await _updateBicimetroLayer();
   }
 
@@ -8120,6 +8269,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   void _toggleBikeServices() async {
     final newVal = !_showBikeServices;
     setState(() => _showBikeServices = newVal);
+    _saveLayerPref(_kLayerServices, newVal);
     if (newVal && _bikeServices.isEmpty) {
       await _loadBikeServices();
       if (mounted) {
@@ -8290,6 +8440,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   void _toggleCicloRecreo() async {
     setState(() => _showCicloRecreo = !_showCicloRecreo);
+    _saveLayerPref(_kLayerCicloRecreo, _showCicloRecreo);
     await _updateCicloRecreoLayer();
   }
 

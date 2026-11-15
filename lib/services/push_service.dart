@@ -7,6 +7,7 @@ import '../core/push_config.dart';
 import 'app_update_service.dart';
 import 'chat_notifications_service.dart';
 import 'notification_service.dart';
+import 'inbox_service.dart';
 
 /// Notificaciones push reales (FCM): llegan aunque la app esté cerrada.
 ///
@@ -110,6 +111,8 @@ class PushService {
     final title = d['title'] as String? ?? m.notification?.title ?? 'Pedalea';
     final body = d['body'] as String? ?? m.notification?.body ?? '';
     final payload = d['payload'] as String? ?? '';
+    // Llegó un aviso: actualiza el contador de la campana del menú.
+    if (type != 'chat' && type != 'dm') InboxService.instance.refreshUnread();
     final notifs = NotificationService.instance;
 
     switch (type) {
