@@ -1,3 +1,4 @@
+import 'verified_badge.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -263,7 +264,10 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               children: [
                 GestureDetector(
                   onTap: () => _openProfile(c['user_id'] as String?),
-                  child: Text(name,
+                  child: NameWithBadge(
+                      name: name,
+                      userId: c['user_id'],
+                      badgeSize: isReply ? 12 : 14,
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           color: Colors.white,

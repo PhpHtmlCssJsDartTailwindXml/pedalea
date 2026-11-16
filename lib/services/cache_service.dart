@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Caché persistente en disco para alertas, eventos y ciclovías.
 /// Las alertas y eventos expiran a los 30 min; las ciclovías no expiran.
@@ -19,7 +20,34 @@ class CacheService {
   static const _maxAge        = Duration(minutes: 30);
   static const _achievementsMaxAge = Duration(minutes: 15);
 
+  // Dueño de la caché de perfil y logros: al cambiar de cuenta en el mismo
+  // teléfono no se deben mostrar los datos ni los logros de la otra cuenta.
+  static const _keyProfileOwner = 'cache_profile_owner_v1';
+  static const _keyAchievementsOwner = 'cache_achievements_owner_v1';
+
   static SharedPreferences? _prefs;
+
+  static String? get _uid {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _ownedByCurrentUser(String ownerKey) {
+    final uid = _uid;
+    return uid != null && _prefs?.getString(ownerKey) == uid;
+  }
+
+  static Future<void> _setOwner(String ownerKey) async {
+    final uid = _uid;
+    if (uid == null) {
+      await _prefs?.remove(ownerKey);
+    } else {
+      await _prefs?.setString(ownerKey, uid);
+    }
+  }
 
   static Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -98,12 +126,14 @@ class CacheService {
   static Future<void> saveProfile(Map<String, dynamic> profile) async {
     try {
       await _prefs?.setString(_keyProfile, jsonEncode(profile));
+      await _setOwner(_keyProfileOwner);
     } catch (e) {
       debugPrint('CacheService: error guardando perfil: $e');
     }
   }
 
   static Map<String, dynamic>? loadProfile() {
+    if (!_ownedByCurrentUser(_keyProfileOwner)) return null;
     try {
       final raw = _prefs?.getString(_keyProfile);
       if (raw == null) return null;
@@ -120,10 +150,12 @@ class CacheService {
 
   static Future<void> saveAchievements(List<Map<String, dynamic>> achievements) async {
     await _writeList(_keyAchievements, achievements);
+    await _setOwner(_keyAchievementsOwner);
     await _prefs?.setString(_keyAchievementsTs, DateTime.now().toIso8601String());
   }
 
   static List<Map<String, dynamic>>? loadAchievements({bool ignoreExpiry = false}) {
+    if (!_ownedByCurrentUser(_keyAchievementsOwner)) return null;
     if (!ignoreExpiry && _isExpired(_prefs?.getString(_keyAchievementsTs), _achievementsMaxAge)) {
       return null;
     }

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/glass.dart';
 import '../services/achievements_service.dart';
+import '../services/emergency_contact_service.dart';
 import 'achievements_page.dart';
 import '../services/karma_service.dart';
 import '../services/co2_service.dart';
@@ -302,6 +303,10 @@ class _ProfilePageState extends State<ProfilePage> {
         'emergency_contact_name': _emergencyNameCtrl.text.trim(),
         'emergency_contact_phone': _emergencyPhoneCtrl.text.trim(),
       });
+      EmergencyContactService.setLocal(
+        _emergencyNameCtrl.text,
+        _emergencyPhoneCtrl.text,
+      );
       await _loadProfile();
       if (mounted) {
         setState(() => _editing = false);

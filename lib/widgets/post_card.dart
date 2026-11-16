@@ -1,3 +1,4 @@
+import 'verified_badge.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../services/social_service.dart';
@@ -237,10 +238,10 @@ class _PostCardState extends State<PostCard>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _authorName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        NameWithBadge(
+                          name: _authorName,
+                          userId: _author['id'] ?? widget.post['user_id'],
+                          badgeSize: 15,
                           style: const TextStyle(
                             fontFamily: 'Poppins',
                             color: Colors.white,

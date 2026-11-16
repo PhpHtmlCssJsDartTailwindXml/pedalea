@@ -1,3 +1,4 @@
+import '../widgets/verified_badge.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -431,10 +432,10 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                            NameWithBadge(
+                              name: name,
+                              userId: widget.userId,
+                              badgeSize: 20,
                               style: const TextStyle(
                                 fontFamily: 'Poppins',
                                 color: Colors.white,
