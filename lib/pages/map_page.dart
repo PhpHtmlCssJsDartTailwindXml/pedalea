@@ -76,6 +76,7 @@ import '../pages/public_profile_page.dart';
 import '../pages/notifications_page.dart';
 import '../services/inbox_service.dart';
 import '../services/emergency_contact_service.dart';
+import '../services/fall_log_service.dart';
 import '../pages/ranking_page.dart';
 import '../pages/rider_ranking_page.dart';
 import '../pages/route_planner_page.dart';
@@ -1214,9 +1215,21 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
+  /// Arranca el detector de caídas. Los golpes que el detector descarta
+  /// (baches, teléfono soltado) se registran de forma anónima para ajustar.
+  void _startFallService() {
+    _fallService.start(
+      _onFallDetected,
+      onEvidence: (ev) {
+        if (!ev.confirmed) FallLogService.log(ev, 'descartada');
+      },
+    );
+  }
+
   void _onFallDetected() {
     if (!mounted || _fallDialogOpen) return;
     _fallDialogOpen = true;
+    final evidence = _fallService.lastEvidence;
     HapticFeedback.heavyImpact(); // vibración para llamar la atención
     NotificationService.instance.showEmergencyAlert(
       title: '⚠️ Posible caída detectada',
@@ -1226,10 +1239,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
       context: context,
       barrierDismissible: false,
       builder: (_) => _FallCountdownDialog(
+        evidence: evidence,
         onCall: (number) async {
           final uri = Uri(scheme: 'tel', path: number);
           if (await canLaunchUrl(uri)) await launchUrl(uri);
           _notifyEmergencyContactOfFall();
+        },
+        onOutcome: (outcome) {
+          if (evidence != null) FallLogService.log(evidence, outcome);
         },
         onDisableTapped: () {
           Navigator.of(context).pop();
@@ -1274,7 +1291,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Future<void> _loadFallDetectionPref() async {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) {
-      if (_fallDetectionEnabled) _fallService.start(_onFallDetected);
+      if (_fallDetectionEnabled) _startFallService();
       return;
     }
     try {
@@ -1289,7 +1306,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     } catch (_) {
       // Sin conexión: se queda con el valor por defecto (activado).
     } finally {
-      if (_fallDetectionEnabled) _fallService.start(_onFallDetected);
+      if (_fallDetectionEnabled) _startFallService();
     }
   }
 
@@ -1324,7 +1341,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Future<void> _setFallDetectionEnabled(bool val) async {
     setState(() => _fallDetectionEnabled = val);
     if (val) {
-      _fallService.start(_onFallDetected);
+      _startFallService();
     } else {
       _fallService.stop();
     }
@@ -1366,7 +1383,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _lastSuddenStopTrigger = now;
       _maxRecentSpeedAt =
           null; // reinicia para no re-disparar con el mismo evento
-      _onFallDetected();
+      // Ya no alerta por sí sola: el detector confirma mirando si el
+      // teléfono cambió de posición o giró (frenar en un semáforo no basta).
+      _fallService.reportSuddenStop();
     }
   }
 
@@ -1578,6 +1597,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
           // Detección de modo pasajero (auto/micro/metro) según la velocidad.
           _maybeHandlePassengerMode(shownSpeedKmh);
 
+          // Detector de caídas: necesita la velocidad de CADA fix (también
+          // al detenerse, que el filtro de distancia de abajo descartaría)
+          // para saber si ibas pedaleando y si te detuviste tras un golpe.
+          if (_fallDetectionEnabled && _modoActivo && !_isPassenger) {
+            // Velocidad del velocímetro: si el teléfono no entrega la del
+            // GPS, se estima con distancia/tiempo (y filtra saltos del sensor).
+            _fallService.reportSpeed(shownSpeedKmh);
+            _checkSuddenDeceleration(shownSpeedKmh, DateTime.now());
+          }
+
           // Filtro de distancia: todo lo que sigue (caídas, km, cámara,
           // presencia…) solo corre cuando te moviste lo suficiente desde el
           // último fix aceptado, igual que antes con el filtro del GPS.
@@ -1592,13 +1621,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             if (moved < _gpsMinMoveM) return;
           }
 
-          final curSpeedKmh = position.speed < 0 ? 0.0 : position.speed * 3.6;
 
-          // Detección de choque por frenada imposible (solo pedaleando de verdad,
-          // no en modo pasajero, donde frenar fuerte en auto/micro es normal).
-          if (_fallDetectionEnabled && _modoActivo && !_isPassenger) {
-            _checkSuddenDeceleration(curSpeedKmh, DateTime.now());
-          }
 
           // Tracking de km — cuenta los desplazamientos reales del usuario.
           // NO exige el campo `speed` del GPS (en muchos Android llega en 0 y
@@ -1789,7 +1812,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   void _exitPassengerMode({bool auto = false}) {
-    if (_fallDetectionEnabled) _fallService.start(_onFallDetected);
+    if (_fallDetectionEnabled) _startFallService();
     setState(() {
       _isPassenger = false;
       _lowSpeedSince = null;
@@ -11598,9 +11621,17 @@ class _EmergencyTile extends StatelessWidget {
 class _FallCountdownDialog extends StatefulWidget {
   final Future<void> Function(String number) onCall;
   final VoidCallback onDisableTapped;
+
+  /// Qué midió el detector (para explicar por qué apareció la alerta).
+  final FallEvidence? evidence;
+
+  /// Cómo terminó: estoy_bien · llamo · llamada_automatica · desactivo.
+  final void Function(String outcome) onOutcome;
   const _FallCountdownDialog({
     required this.onCall,
     required this.onDisableTapped,
+    required this.onOutcome,
+    this.evidence,
   });
 
   @override
@@ -11608,9 +11639,35 @@ class _FallCountdownDialog extends StatefulWidget {
 }
 
 class _FallCountdownDialogState extends State<_FallCountdownDialog> {
-  static const int _start = 15;
+  // 30 s: tiempo suficiente para reaccionar si el teléfono quedó lejos o en
+  // la mochila, sin dejar sola a una persona inconsciente.
+  static const int _start = 30;
   int _remaining = _start;
   Timer? _timer;
+  bool _reported = false;
+
+  void _report(String outcome) {
+    if (_reported) return;
+    _reported = true;
+    widget.onOutcome(outcome);
+  }
+
+  /// Explica en simple qué se detectó, para que la alerta no parezca al azar.
+  String get _why {
+    final ev = widget.evidence;
+    if (ev == null) return 'Detectamos un movimiento brusco y que te detuviste.';
+    final before = ev.speedBeforeKmh;
+    final speed = before != null && before > 0
+        ? ' a ${before.round()} km/h'
+        : '';
+    switch (ev.trigger) {
+      case FallTrigger.suddenStop:
+        return 'Ibas$speed, frenaste de golpe y el teléfono cambió de posición.';
+      case FallTrigger.impact:
+      case FallTrigger.hardImpact:
+        return 'Ibas$speed, hubo un golpe fuerte y luego te detuviste.';
+    }
+  }
 
   @override
   void initState() {
@@ -11618,8 +11675,11 @@ class _FallCountdownDialogState extends State<_FallCountdownDialog> {
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       setState(() => _remaining--);
+      // Vibra cada 5 s para llamar la atención aunque no mires la pantalla.
+      if (_remaining > 0 && _remaining % 5 == 0) HapticFeedback.heavyImpact();
       if (_remaining <= 0) {
         t.cancel();
+        _report('llamada_automatica');
         _callEmergency();
       }
     });
@@ -11692,6 +11752,16 @@ class _FallCountdownDialogState extends State<_FallCountdownDialog> {
               ),
             ),
             const SizedBox(height: 8),
+            Text(
+              _why,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 13.5,
+              ),
+            ),
+            const SizedBox(height: 6),
             const Text(
               'Llamaremos a Carabineros (133) automáticamente si no respondes.',
               textAlign: TextAlign.center,
@@ -11707,6 +11777,7 @@ class _FallCountdownDialogState extends State<_FallCountdownDialog> {
               child: ElevatedButton(
                 onPressed: () {
                   _timer?.cancel();
+                  _report('estoy_bien');
                   Navigator.of(context).pop();
                 },
                 style: ElevatedButton.styleFrom(
@@ -11731,6 +11802,7 @@ class _FallCountdownDialogState extends State<_FallCountdownDialog> {
               child: OutlinedButton(
                 onPressed: () {
                   _timer?.cancel();
+                  _report('llamo');
                   _callEmergency();
                 },
                 style: OutlinedButton.styleFrom(
@@ -11753,6 +11825,7 @@ class _FallCountdownDialogState extends State<_FallCountdownDialog> {
             TextButton(
               onPressed: () {
                 _timer?.cancel();
+                _report('desactivo');
                 widget.onDisableTapped();
               },
               style: TextButton.styleFrom(
