@@ -298,12 +298,9 @@ class _ProfilePageState extends State<ProfilePage> {
         'commune': _communeCtrl.text.trim().isEmpty
             ? null
             : _communeCtrl.text.trim(),
-        'emergency_contact_name': _emergencyNameCtrl.text.trim().isEmpty
-            ? null
-            : _emergencyNameCtrl.text.trim(),
-        'emergency_contact_phone': _emergencyPhoneCtrl.text.trim().isEmpty
-            ? null
-            : _emergencyPhoneCtrl.text.trim(),
+        // El servidor mueve el contacto a una tabla privada. Texto vacío = borrar.
+        'emergency_contact_name': _emergencyNameCtrl.text.trim(),
+        'emergency_contact_phone': _emergencyPhoneCtrl.text.trim(),
       });
       await _loadProfile();
       if (mounted) {
