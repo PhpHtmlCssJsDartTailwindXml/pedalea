@@ -9949,10 +9949,12 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
           color: _bg,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           // Un brillo del color del tipo arriba: llamativo pero limpio.
+          // Colores sólidos (mezclados sobre el fondo) para que el mapa no
+          // se transparente detrás del formulario.
           gradient: RadialGradient(
             center: const Alignment(0, -1.4),
             radius: 1.1,
-            colors: [accent.withOpacity(0.28), _bg],
+            colors: [Color.alphaBlend(accent.withOpacity(0.28), _bg), _bg],
           ),
           border: Border(top: BorderSide(color: accent.withOpacity(0.5), width: 1.5)),
         ),
