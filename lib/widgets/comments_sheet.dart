@@ -247,7 +247,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               radius: r,
               backgroundColor: Colors.white12,
               backgroundImage:
-                  avatar.isNotEmpty ? CachedNetworkImageProvider(avatar) : null,
+                  avatar.isNotEmpty ? ResizeImage(CachedNetworkImageProvider(avatar), width: 256) : null,
               child: avatar.isEmpty
                   ? Text(name.substring(0, 1).toUpperCase(),
                       style: TextStyle(

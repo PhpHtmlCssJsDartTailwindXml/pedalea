@@ -207,7 +207,7 @@ class _PostCardState extends State<PostCard>
                           radius: 19,
                           backgroundColor: const Color(0xFF161622),
                           backgroundImage: avatarUrl.isNotEmpty
-                              ? CachedNetworkImageProvider(avatarUrl)
+                              ? ResizeImage(CachedNetworkImageProvider(avatarUrl), width: 256)
                               : null,
                           child: avatarUrl.isEmpty
                               ? Text(
@@ -440,6 +440,9 @@ class _PostCardState extends State<PostCard>
               children: [
                 CachedNetworkImage(
                   imageUrl: widget.post['image_url'] as String,
+                  // Se decodifica al ancho de pantalla, no al de la foto
+                  // original (menos memoria y scroll más fluido).
+                  memCacheWidth: 1080,
                   width: double.infinity,
                   fit: BoxFit.cover,
                   placeholder: (_, _) => Container(

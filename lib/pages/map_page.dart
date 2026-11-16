@@ -7,7 +7,7 @@ import '../services/alert_impact_service.dart';
 import 'my_bikes_page.dart';
 import 'achievements_page.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx show Layer;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart' show compute, defaultTargetPlatform, TargetPlatform;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -7433,6 +7433,30 @@ class _MapPageState extends State<MapPage> with RouteAware {
     ];
   }
 
+  Future<void> _addCicloviasFromGeoJson(StyleManager style, String geo) async {
+    _cicloviasGeoJson = geo;
+    if (await style.styleSourceExists("ciclovias-source")) {
+      await style.removeStyleSource("ciclovias-source");
+    }
+    for (final lyr in const [
+      "ciclovias-glow-layer",
+      "ciclovias-halo-layer",
+      "ciclovias-main-layer",
+      "ciclovias-center-layer",
+    ]) {
+      if (await style.styleLayerExists(lyr)) await style.removeStyleLayer(lyr);
+    }
+    await style.addSource(GeoJsonSource(id: "ciclovias-source", data: geo));
+    for (final l in _cicloviaLayers()) {
+      await _addLayerBelowPuck(style, l);
+    }
+    _cicloviasAdded = true;
+    if (_currentAlerts.isNotEmpty) await _updateAlertsLayer(_currentAlerts);
+    if (_currentEvents.isNotEmpty) {
+      await _updateEventsLayer(_visibleEventPinsForMap(_currentEvents));
+    }
+  }
+
   Future<void> _addCicloviasLayer() async {
     if (_cicloviasAdded || mapboxMap == null) return;
     try {
@@ -7475,7 +7499,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
         debugPrint("⚠️ No se recibieron datos de ciclovías");
         return;
       }
-      final jsonData = jsonDecode(data);
+      // El archivo incluido ya es GeoJSON: se usa tal cual, sin
+      // decodificar y volver a codificar 3,6 MB en el hilo de la pantalla.
+      if (data.startsWith('{"type":"FeatureCollection"')) {
+        await _addCicloviasFromGeoJson(style, data);
+        return;
+      }
+      // Otro formato (respaldo): se decodifica fuera del hilo de la pantalla.
+      final jsonData = await compute(jsonDecode, data);
       debugPrint("📦 JSON parseado correctamente");
       List features = [];
       if (jsonData.containsKey('elements')) {
@@ -7763,7 +7794,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
         final raw = await rootBundle.loadString(
           'assets/data/bike_parkings_chile.json',
         );
-        final decoded = jsonDecode(raw);
+        // Se decodifica fuera del hilo de la pantalla (evita tirones).
+        final decoded = await compute(jsonDecode, raw);
         elements = (decoded is Map ? decoded['elements'] : decoded) as List?;
         debugPrint('🅿️ Parkings empacados: ${elements?.length ?? 0}');
       } catch (e) {
@@ -8266,7 +8298,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       final raw = await rootBundle.loadString(
         'assets/data/bike_services_chile.json',
       );
-      final list = (jsonDecode(raw) as List);
+      final list = (await compute(jsonDecode, raw) as List);
       return list.map<Map<String, dynamic>>((e) {
         final m = e as Map<String, dynamic>;
         return {

@@ -48,31 +48,29 @@ void main() {
   });
 
   group('CacheService ciclovías', () {
-    test('guarda y recupera el GeoJSON crudo', () async {
-      const geo = '{"type":"FeatureCollection","features":[]}';
-      await CacheService.saveCiclovias(geo);
-      expect(CacheService.loadCiclovias(), geo);
+    test('ya no se guardan en preferencias (vienen incluidas en la app)', () async {
+      await CacheService.saveCiclovias('{"type":"FeatureCollection","features":[]}');
+      expect(CacheService.loadCiclovias(), isNull);
     });
 
-    test('sin datos devuelve null', () {
-      expect(CacheService.loadCiclovias(), isNull);
+    test('init borra la copia antigua de 3,6 MB', () async {
+      SharedPreferences.setMockInitialValues({'cache_ciclovias_v2': '{"x":1}'});
+      await CacheService.init();
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('cache_ciclovias_v2'), isFalse);
     });
   });
 
   group('CacheService.clearAll', () {
-    test('borra alertas y eventos pero conserva ciclovías', () async {
+    test('borra alertas y eventos', () async {
       await CacheService.saveAlerts(sampleAlerts);
       await CacheService.saveEvents([
         {'id': 'e1'},
       ]);
-      await CacheService.saveCiclovias('{"x":1}');
-
       await CacheService.clearAll();
 
       expect(CacheService.loadAlerts(ignoreExpiry: true), isNull);
       expect(CacheService.loadEvents(ignoreExpiry: true), isNull);
-      // clearAll NO borra ciclovías (no expiran).
-      expect(CacheService.loadCiclovias(), '{"x":1}');
     });
   });
 }

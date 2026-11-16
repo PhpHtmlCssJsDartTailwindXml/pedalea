@@ -1176,6 +1176,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 borderRadius: BorderRadius.circular(6),
                 child: CachedNetworkImage(
                   imageUrl: p['image_url'] as String,
+                  memCacheWidth: 400, // miniatura de la grilla
                   fit: BoxFit.cover,
                   placeholder: (_, _) => Container(color: Colors.white10),
                   errorWidget: (_, _, _) => Container(color: Colors.white10),

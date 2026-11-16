@@ -404,7 +404,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                             child: CircleAvatar(
                               backgroundColor: const Color(0xFF153F2E),
                               backgroundImage: avatar.isNotEmpty
-                                  ? CachedNetworkImageProvider(avatar)
+                                  ? ResizeImage(CachedNetworkImageProvider(avatar), width: 256)
                                   : null,
                               child: avatar.isEmpty
                                   ? Text(name.substring(0, 1).toUpperCase(),
@@ -707,6 +707,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
               borderRadius: BorderRadius.circular(12),
               child: CachedNetworkImage(
                 imageUrl: p['image_url'] as String,
+                memCacheWidth: 400, // miniatura de la grilla
                 fit: BoxFit.cover,
                 placeholder: (_, _) => Container(color: Colors.white10),
                 errorWidget: (_, _, _) => Container(color: Colors.white10),

@@ -218,6 +218,7 @@ class RankAvatar extends StatelessWidget {
         child: (url != null && url!.isNotEmpty)
             ? CachedNetworkImage(
                 imageUrl: url!,
+                memCacheWidth: (size * 3).round(), // avatar pequeño
                 fit: BoxFit.cover,
                 fadeInDuration: Duration.zero,
                 placeholder: (_, _) => fallback(),

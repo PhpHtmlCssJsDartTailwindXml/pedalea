@@ -26,12 +26,16 @@ Future<void> main() async {
     anonKey: 'sb_publishable_2Zn9aWBMJW3Yll2x8gTfdQ_aA5TbDqW',
   );
 
-  await CacheService.init();
-  await ConnectivityService.init();
-  await NotificationService.instance.init();
-  await RideStatsService.init();
-  await StatsPrefsService.init();
-  await RideHeatService.init();
+  // Estos servicios no dependen entre sí: se preparan al mismo tiempo en vez
+  // de uno tras otro (la app abre antes).
+  await Future.wait([
+    CacheService.init(),
+    ConnectivityService.init(),
+    NotificationService.instance.init(),
+    RideStatsService.init(),
+    StatsPrefsService.init(),
+    RideHeatService.init(),
+  ]);
   unawaited(PlusPrefsService.init()); // personalización Plus desde profiles
   unawaited(SubscriptionService.instance.init());
   unawaited(PushService.instance.init()); // push real (FCM), si está configurado

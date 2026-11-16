@@ -51,6 +51,12 @@ class CacheService {
 
   static Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    // Las ciclovías (3,6 MB) ya vienen incluidas en la app. Guardarlas además
+    // en las preferencias obligaba a leerlas enteras en CADA arranque, aunque
+    // no se usaran. Se borra la copia antigua (una sola vez).
+    for (final k in const ['cache_ciclovias_v1', _keyCiclovias]) {
+      if (_prefs!.containsKey(k)) await _prefs!.remove(k);
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -110,15 +116,10 @@ class CacheService {
 
   // ── Ciclovías (sin expiración) ─────────────────────────────────────────────
 
-  static Future<void> saveCiclovias(String geoJson) async {
-    try {
-      await _prefs?.setString(_keyCiclovias, geoJson);
-    } catch (e) {
-      debugPrint('CacheService: error guardando ciclovías: $e');
-    }
-  }
+  /// Ya no se guardan: se leen del archivo incluido en la app (ver init).
+  static Future<void> saveCiclovias(String geoJson) async {}
 
-  static String? loadCiclovias() => _prefs?.getString(_keyCiclovias);
+  static String? loadCiclovias() => null;
 
   // ── Perfil del usuario (sin expiración — mejor mostrar datos viejos que
   // nada cuando no hay internet) ──────────────────────────────────────────

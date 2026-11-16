@@ -507,7 +507,7 @@ class _MomentsPageState extends State<MomentsPage> {
                   radius: 21,
                   backgroundColor: const Color(0xFF161622),
                   backgroundImage: _myAvatar.isNotEmpty
-                      ? CachedNetworkImageProvider(_myAvatar)
+                      ? ResizeImage(CachedNetworkImageProvider(_myAvatar), width: 256)
                       : null,
                   child: _myAvatar.isEmpty
                       ? const Icon(

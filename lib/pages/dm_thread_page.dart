@@ -875,7 +875,7 @@ class _DmThreadPageState extends State<DmThreadPage> {
                     radius: 19,
                     backgroundColor: Colors.white12,
                     backgroundImage: hasAvatar
-                        ? CachedNetworkImageProvider(widget.otherAvatar!)
+                        ? ResizeImage(CachedNetworkImageProvider(widget.otherAvatar!), width: 256)
                         : null,
                     child: hasAvatar
                         ? null

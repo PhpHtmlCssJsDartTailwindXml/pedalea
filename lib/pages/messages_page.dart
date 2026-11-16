@@ -343,7 +343,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       radius: 25,
                       backgroundColor: Colors.white12,
                       backgroundImage: avatar.isNotEmpty
-                          ? CachedNetworkImageProvider(avatar)
+                          ? ResizeImage(CachedNetworkImageProvider(avatar), width: 256)
                           : null,
                       child: avatar.isEmpty
                           ? Text(name.substring(0, 1).toUpperCase(),
