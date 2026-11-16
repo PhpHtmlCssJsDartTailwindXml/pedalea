@@ -3968,12 +3968,53 @@ class _MapPageState extends State<MapPage> with RouteAware {
         ),
         if (!_isPassenger) ...[
           const SizedBox(width: 8),
-          Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            alignment: Alignment.center,
-            decoration: _dayNightBox(radius: 19),
-            child: WeatherPill(isDayMode: _isDayMode),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.center,
+                decoration: _dayNightBox(radius: 19),
+                child: WeatherPill(isDayMode: _isDayMode),
+              ),
+              // Recordatorio pequeño: se oculta tras abrir el detalle 3 veces.
+              Positioned(
+                top: 42,
+                left: -30,
+                right: -30,
+                child: IgnorePointer(
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: WeatherPill.showHint,
+                    builder: (_, show, _) => AnimatedOpacity(
+                      duration: const Duration(milliseconds: 300),
+                      opacity: show ? 1 : 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.55),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'Toca para ver el clima',
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 9.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 8),
           _buildCicloviaLegend(),
@@ -11163,33 +11204,37 @@ class _PanicButtonState extends State<_PanicButton>
           ),
           Tooltip(
             message: 'Emergencia',
-            child: Material(
-              color: Colors.transparent,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  _showEmergencyMenu(context);
-                },
-                child: Ink(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFC62828),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.18),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+            // El círculo y su sombra se dibujan con un Container normal: como
+            // Ink dentro de Material, la sombra quedaba recortada en un
+            // cuadrado (se notaba sobre el mapa claro).
+            child: Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFC62828),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.18),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
+                ],
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    _showEmergencyMenu(context);
+                  },
                   child: const Center(
                     child: Text(
                       'SOS',

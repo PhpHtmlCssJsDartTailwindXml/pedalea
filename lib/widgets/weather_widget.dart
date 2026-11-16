@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/weather_service.dart';
 import '../core/glass.dart';
 
@@ -7,96 +8,151 @@ class WeatherPill extends StatefulWidget {
   final bool isDayMode;
   const WeatherPill({super.key, this.isDayMode = false});
 
+  /// Si se muestra el recordatorio «Toca para ver el clima» bajo el botón.
+  /// Se oculta solo después de que la persona abrió el detalle varias veces.
+  static final ValueNotifier<bool> showHint = ValueNotifier(false);
+  static const _kHintOpens = 'weather_detail_opens';
+  static const _hintUntilOpens = 3;
+
+  static Future<void> initHint() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      showHint.value = (p.getInt(_kHintOpens) ?? 0) < _hintUntilOpens;
+    } catch (_) {}
+  }
+
+  static Future<void> _countOpen() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final n = (p.getInt(_kHintOpens) ?? 0) + 1;
+      await p.setInt(_kHintOpens, n);
+      if (n >= _hintUntilOpens) showHint.value = false;
+    } catch (_) {}
+  }
+
   @override
   State<WeatherPill> createState() => _WeatherPillState();
 }
 
 class _WeatherPillState extends State<WeatherPill> {
   final _service = WeatherService();
-  WeatherData? _data;
-  bool _loading = true;
+
+  /// Datos actuales (se mantienen mientras se actualiza, para no dejar la
+  /// ficha en blanco) y si hay una carga en curso.
+  final _data = ValueNotifier<WeatherData?>(null);
+  final _busy = ValueNotifier<bool>(true);
 
   @override
   void initState() {
     super.initState();
+    WeatherPill.initHint();
+    _data.addListener(_rebuild);
+    _busy.addListener(_rebuild);
     _load();
   }
 
-  Future<void> _load() async {
-    if (mounted) setState(() => _loading = true);
-
-    // Reintenta varias veces: al arrancar la app el permiso/fix de GPS puede
-    // no estar listo todavía, y antes el clima quedaba en error para siempre.
-    for (var attempt = 0; attempt < 4; attempt++) {
-      try {
-        geo.Position? pos = await geo.Geolocator.getLastKnownPosition();
-        pos ??= await geo.Geolocator.getCurrentPosition(
-          desiredAccuracy: geo.LocationAccuracy.medium,
-        ).timeout(const Duration(seconds: 8));
-
-        final data = await _service.fetch(pos.latitude, pos.longitude);
-        if (data != null) {
-          if (mounted) setState(() { _data = data; _loading = false; });
-          return;
-        }
-      } catch (e) {
-        debugPrint('WeatherPill intento $attempt falló: $e');
-      }
-      // Espera antes de reintentar (da tiempo a que el GPS tenga fix).
-      await Future.delayed(const Duration(seconds: 2));
-    }
-
-    if (mounted) setState(() => _loading = false);
+  void _rebuild() {
+    if (mounted) setState(() {});
   }
 
-  void _showDetail() {
-    final d = _data;
-    if (d == null) return;
+  @override
+  void dispose() {
+    _data.removeListener(_rebuild);
+    _busy.removeListener(_rebuild);
+    super.dispose();
+  }
 
+  Future<void> _load({bool force = false}) async {
+    if (_busy.value && _data.value != null && !force) return;
+    _busy.value = true;
+    try {
+      // Reintenta: al arrancar la app el permiso/fix de GPS puede no estar
+      // listo todavía. Se usa primero la última posición conocida (instantánea).
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          geo.Position? pos = await geo.Geolocator.getLastKnownPosition();
+          pos ??= await geo.Geolocator.getCurrentPosition(
+            desiredAccuracy: geo.LocationAccuracy.medium,
+          ).timeout(const Duration(seconds: 8));
+
+          final data = await _service.fetch(
+            pos.latitude,
+            pos.longitude,
+            force: force,
+          );
+          if (data != null) {
+            if (mounted) _data.value = data;
+            return;
+          }
+        } catch (e) {
+          debugPrint('WeatherPill intento $attempt falló: $e');
+        }
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    } finally {
+      if (mounted) _busy.value = false;
+    }
+  }
+
+  void _openSheet() {
+    WeatherPill._countOpen();
+    // Sin datos (falló o aún no carga): se abre igual y se reintenta; la
+    // ficha muestra el clima apenas llegue.
+    if (_data.value == null && !_busy.value) _load();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _WeatherSheet(data: d, onRefresh: () async {
-        Navigator.pop(context);
-        setState(() { _loading = true; _data = null; });
-        await _load();
-      }),
+      builder: (_) => ValueListenableBuilder<WeatherData?>(
+        valueListenable: _data,
+        builder: (_, data, _) => ValueListenableBuilder<bool>(
+          valueListenable: _busy,
+          builder: (_, busy, _) {
+            if (data == null) {
+              return _WeatherPlaceholder(
+                busy: busy,
+                onRetry: () => _load(force: true),
+              );
+            }
+            return _WeatherSheet(
+              data: data,
+              refreshing: busy,
+              onRefresh: () => _load(force: true),
+            );
+          },
+        ),
+      ),
     );
   }
 
   bool get _isDayMode => widget.isDayMode;
   Color get _textColor => _isDayMode ? const Color(0xFF1A1A2E) : Colors.white;
   Color get _subtextColor => _isDayMode ? const Color(0xFF555577) : Colors.white60;
-  BoxDecoration _pillDecoration() => _isDayMode
-      ? BoxDecoration(
-          color: Colors.white.withOpacity(0.0), // ya está dentro de la top bar
-          borderRadius: BorderRadius.circular(20),
-        )
-      : glassDecoration(radius: 20, opacity: 0.08, borderOpacity: 0.15);
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return SizedBox(
-        width: 14, height: 14,
-        child: CircularProgressIndicator(
-          color: _isDayMode ? const Color(0xFF00A86B) : Colors.white54,
-          strokeWidth: 1.5,
-        ),
-      );
-    }
+    final d = _data.value;
 
-    if (_data == null) {
+    if (d == null) {
       return GestureDetector(
-        onTap: () { setState(() => _loading = true); _load(); },
-        child: const Text('🌡️', style: TextStyle(fontSize: 14)),
+        behavior: HitTestBehavior.opaque,
+        onTap: _openSheet,
+        child: _busy.value
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  color: _isDayMode ? const Color(0xFF00A86B) : Colors.white54,
+                  strokeWidth: 1.5,
+                ),
+              )
+            : const Text('🌡️', style: TextStyle(fontSize: 14)),
       );
     }
 
-    final d = _data!;
     return GestureDetector(
-      onTap: _showDetail,
+      behavior: HitTestBehavior.opaque,
+      onTap: _openSheet,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -129,11 +185,93 @@ class _WeatherPillState extends State<WeatherPill> {
   }
 }
 
+/// Fondo de la ficha del clima: sólido, para que se lea igual sobre el mapa
+/// claro (antes era casi transparente con letras blancas).
+BoxDecoration _sheetBox() => BoxDecoration(
+  color: const Color(0xFF141A2C),
+  borderRadius: BorderRadius.circular(28),
+  border: Border.all(color: Colors.white.withOpacity(0.12)),
+  boxShadow: [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.4),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
+    ),
+  ],
+);
+
+/// Ficha mientras todavía no hay datos: cargando, o error con reintento.
+class _WeatherPlaceholder extends StatelessWidget {
+  final bool busy;
+  final VoidCallback onRetry;
+  const _WeatherPlaceholder({required this.busy, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+      decoration: _sheetBox(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (busy) ...[
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white70),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Consultando el clima de tu zona…',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
+            ),
+          ] else ...[
+            const Text('🌡️', style: TextStyle(fontSize: 36)),
+            const SizedBox(height: 10),
+            const Text(
+              'No pudimos obtener el clima',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Revisa tu conexión y que la ubicación esté activada.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white54, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Reintentar'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white24),
+                textStyle: const TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _WeatherSheet extends StatelessWidget {
   final WeatherData data;
   final VoidCallback onRefresh;
+  final bool refreshing;
 
-  const _WeatherSheet({required this.data, required this.onRefresh});
+  const _WeatherSheet({
+    required this.data,
+    required this.onRefresh,
+    this.refreshing = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +279,7 @@ class _WeatherSheet extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      decoration: glassDecoration(radius: 28, opacity: 0.14, borderOpacity: 0.2),
+      decoration: _sheetBox(),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
         child: Column(
@@ -189,11 +327,21 @@ class _WeatherSheet extends StatelessWidget {
                   ),
                 ),
                 GestureDetector(
-                  onTap: onRefresh,
+                  onTap: refreshing ? null : onRefresh,
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: glassDecoration(radius: 12, opacity: 0.08),
-                    child: const Icon(Icons.refresh, color: Colors.white54, size: 18),
+                    // Se actualiza sin cerrar la ficha.
+                    child: refreshing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white54,
+                            ),
+                          )
+                        : const Icon(Icons.refresh, color: Colors.white54, size: 18),
                   ),
                 ),
               ],

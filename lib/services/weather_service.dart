@@ -217,9 +217,35 @@ class WeatherService {
 
   WeatherData? get cached => _cached;
 
-  Future<WeatherData?> fetch(double lat, double lng) async {
+  /// Nombre del barrio o comuna (Nominatim). Vacío si falla.
+  Future<String> _reverseGeocode(double lat, double lng) async {
+    try {
+      final geoUri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=$lat&lon=$lng&format=json&accept-language=es&zoom=14',
+      );
+      final geoRes = await http.get(geoUri, headers: {
+        'User-Agent': 'pedalea/1.0',
+      }).timeout(const Duration(seconds: 5));
+      if (geoRes.statusCode != 200) return '';
+      final geoJson = json.decode(geoRes.body) as Map<String, dynamic>;
+      final address = geoJson['address'] as Map<String, dynamic>?;
+      return (address?['suburb'] as String? ??
+              address?['neighbourhood'] as String? ??
+              address?['city_district'] as String? ??
+              address?['city'] as String? ??
+              address?['town'] as String? ??
+              address?['municipality'] as String? ??
+              '')
+          .trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<WeatherData?> fetch(double lat, double lng, {bool force = false}) async {
     // Devolver cache si es válido y la posición no cambió mucho
-    if (_cached != null && _lastFetch != null && _lastLat != null && _lastLng != null) {
+    if (!force && _cached != null && _lastFetch != null && _lastLat != null && _lastLng != null) {
       final elapsed = DateTime.now().difference(_lastFetch!);
       final sameLoc =
           (lat - _lastLat!).abs() < 0.02 && (lng - _lastLng!).abs() < 0.02;
@@ -235,6 +261,9 @@ class WeatherService {
         '&wind_speed_unit=kmh&timezone=auto',
       );
 
+      // El nombre del barrio se pide al mismo tiempo que el clima (antes
+      // se esperaba uno y luego el otro).
+      final geoFuture = _reverseGeocode(lat, lng);
       final weatherRes =
           await http.get(weatherUri).timeout(const Duration(seconds: 8));
       if (weatherRes.statusCode != 200) return _cached;
@@ -242,30 +271,7 @@ class WeatherService {
       final weatherJson = json.decode(weatherRes.body) as Map<String, dynamic>;
       final current = weatherJson['current'] as Map<String, dynamic>;
 
-      // Geocodificación inversa con Nominatim
-      String cityName = '';
-      try {
-        final geoUri = Uri.parse(
-          'https://nominatim.openstreetmap.org/reverse'
-          '?lat=$lat&lon=$lng&format=json&accept-language=es&zoom=14',
-        );
-        final geoRes = await http.get(geoUri, headers: {
-          'User-Agent': 'pedalea/1.0',
-        }).timeout(const Duration(seconds: 5));
-
-        if (geoRes.statusCode == 200) {
-          final geoJson = json.decode(geoRes.body) as Map<String, dynamic>;
-          final address = geoJson['address'] as Map<String, dynamic>?;
-          cityName = (address?['suburb'] as String? ??
-                      address?['neighbourhood'] as String? ??
-                      address?['city_district'] as String? ??
-                      address?['city'] as String? ??
-                      address?['town'] as String? ??
-                      address?['municipality'] as String? ??
-                      '')
-              .trim();
-        }
-      } catch (_) {}
+      final cityName = await geoFuture;
 
       // Parseo null-safe: si la API omite algún campo, no se cae todo el clima.
       double num2d(dynamic v) => (v as num?)?.toDouble() ?? 0;
