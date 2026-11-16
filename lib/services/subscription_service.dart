@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// IDs de producto que deben existir EXACTOS en Play Console
@@ -21,12 +22,14 @@ class SubscriptionInfo {
   final bool isSimulated;
   /// Plus regalado por el equipo (token gift_…): no se cobra ni se renueva.
   final bool isGift;
+  final String purchaseToken;
   const SubscriptionInfo({
     required this.productId,
     required this.purchasedAt,
     required this.expiresAt,
     required this.isSimulated,
     this.isGift = false,
+    this.purchaseToken = '',
   });
 
   bool get isYearly => productId == SubscriptionProductIds.yearly;
@@ -116,6 +119,35 @@ class SubscriptionService {
     await refreshPlusStatus();
   }
 
+  /// Plus de regalo activo que el usuario todavía no ha visto anunciado.
+  /// Devuelve su fecha de término y lo marca como visto (aparece una vez).
+  Future<DateTime?> takeUnseenGift() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return null;
+    try {
+      final rows = await Supabase.instance.client
+          .from('subscriptions')
+          .select('purchase_token, expires_at')
+          .eq('user_id', uid)
+          .eq('is_active', true)
+          .like('purchase_token', 'gift_%');
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      for (final r in rows) {
+        final token = r['purchase_token'] as String? ?? '';
+        final until = DateTime.tryParse(r['expires_at'] as String? ?? '');
+        if (token.isEmpty || until == null || until.isBefore(now)) continue;
+        final key = 'gift_seen_$token';
+        if (prefs.getBool(key) == true) continue;
+        await prefs.setBool(key, true);
+        return until;
+      }
+    } catch (e) {
+      debugPrint('SubscriptionService takeUnseenGift error: $e');
+    }
+    return null;
+  }
+
   /// Trae los datos de la suscripción activa actual (real o simulada) para
   /// mostrar en la pantalla de "Gestionar suscripción".
   Future<SubscriptionInfo?> getMySubscriptionInfo() async {
@@ -150,6 +182,7 @@ class SubscriptionService {
         isSimulated: token.startsWith('simulated_') ||
             token.startsWith('owner_test_'),
         isGift: token.startsWith('gift_'),
+        purchaseToken: token,
       );
     } catch (e) {
       debugPrint('SubscriptionService getMySubscriptionInfo error: $e');

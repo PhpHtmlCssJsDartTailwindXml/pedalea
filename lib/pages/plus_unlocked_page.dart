@@ -1,16 +1,14 @@
-import 'dart:io';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 const _kNavy = Color(0xFF12213F);
 
 /// Se muestra justo después de que la compra (real o simulada) se confirma:
 /// un mini-tutorial de lo que el usuario acaba de desbloquear con Plus.
 class PlusUnlockedPage extends StatefulWidget {
-  const PlusUnlockedPage({super.key});
+  const PlusUnlockedPage({super.key, this.giftUntil});
+
+  /// Si es un Plus de regalo, hasta cuándo dura (cambia la bienvenida).
+  final DateTime? giftUntil;
 
   @override
   State<PlusUnlockedPage> createState() => _PlusUnlockedPageState();
@@ -20,7 +18,7 @@ class _PlusUnlockedPageState extends State<PlusUnlockedPage> {
   final _controller = PageController();
   int _page = 0;
 
-  static const _slides = [
+  static const _baseSlides = [
     _UnlockSlide(
       icon: Icons.workspace_premium_rounded,
       title: '¡Bienvenido a Pedalea Plus!',
@@ -54,8 +52,49 @@ class _PlusUnlockedPageState extends State<PlusUnlockedPage> {
     ),
   ];
 
-  // +1 por la pantalla final de "compartir en redes".
-  int get _totalPages => _slides.length + 1;
+  static const _months = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+    'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ];
+
+  /// Última pantalla: agradecimiento y lo que viene (en vez de compartir).
+  _UnlockSlide get _closingSlide => widget.giftUntil == null
+      ? const _UnlockSlide(
+          icon: Icons.favorite_rounded,
+          title: 'Gracias por apoyar Pedalea 💚',
+          body:
+              'Tu Plus nos ayuda a seguir creciendo. Vamos a seguir sumando '
+              'funciones nuevas para quienes son Plus, pensadas para que '
+              'pedalees mejor y más seguro.',
+        )
+      : const _UnlockSlide(
+          icon: Icons.favorite_rounded,
+          title: 'Esperamos que lo disfrutes 💚',
+          body:
+              'Vamos a seguir sumando funciones nuevas para quienes son Plus. '
+              'Si te gusta, cuando termine tu regalo puedes seguir con Plus '
+              'y apoyar a Pedalea.',
+        );
+
+  /// Con regalo, la primera pantalla lo anuncia; el resto es igual.
+  List<_UnlockSlide> get _slides {
+    final until = widget.giftUntil;
+    if (until == null) return [..._baseSlides, _closingSlide];
+    final d = until.toLocal();
+    return [
+      _UnlockSlide(
+        icon: Icons.card_giftcard_rounded,
+        title: '¡Te regalamos Pedalea Plus! 🎁',
+        body:
+            'El equipo de Pedalea te regala Plus hasta el ${d.day} de ${_months[d.month - 1]}. '
+            'No tiene cobro ni se renueva solo. Esto es lo que desbloqueaste.',
+      ),
+      ..._baseSlides.skip(1),
+      _closingSlide,
+    ];
+  }
+
+  int get _totalPages => _slides.length;
   bool get _isLast => _page == _totalPages - 1;
 
   @override
@@ -76,10 +115,7 @@ class _PlusUnlockedPageState extends State<PlusUnlockedPage> {
                 controller: _controller,
                 itemCount: _totalPages,
                 onPageChanged: (i) => setState(() => _page = i),
-                itemBuilder: (context, i) {
-                  if (i == _slides.length) return const _ShareSlideView();
-                  return _SlideView(slide: _slides[i]);
-                },
+                itemBuilder: (context, i) => _SlideView(slide: _slides[i]),
               ),
             ),
             Row(
@@ -186,149 +222,6 @@ class _SlideView extends StatelessWidget {
               color: Colors.white.withOpacity(0.6),
               fontSize: 15,
               height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Última pantalla: tarjeta lista para compartir en redes anunciando que
-/// el usuario ahora es Pedalea Plus.
-class _ShareSlideView extends StatefulWidget {
-  const _ShareSlideView();
-
-  @override
-  State<_ShareSlideView> createState() => _ShareSlideViewState();
-}
-
-class _ShareSlideViewState extends State<_ShareSlideView> {
-  final GlobalKey _cardKey = GlobalKey();
-  bool _sharing = false;
-
-  Future<void> _share() async {
-    if (_sharing) return;
-    setState(() => _sharing = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await Future.delayed(const Duration(milliseconds: 60));
-      final boundary =
-          _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception('No se pudo generar la imagen');
-      final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/pedalea_plus_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(byteData.buffer.asUint8List());
-
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: '🚴 Ahora soy Pedalea Plus. Dale un plus a tu pedalear 💚',
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('No se pudo compartir: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _sharing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          RepaintBoundary(
-            key: _cardKey,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF2A2000), _kNavy],
-                ),
-                border: Border.all(color: Colors.amber.withOpacity(0.3)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 56),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Ahora soy',
-                    style: TextStyle(
-                      fontFamily: 'Poppins', color: Colors.white70, fontSize: 14,
-                    ),
-                  ),
-                  const Text(
-                    'Pedalea Plus',
-                    style: TextStyle(
-                      fontFamily: 'Poppins', color: Colors.white,
-                      fontSize: 26, fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Dale un plus a tu pedalear 🚴💚',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.amber.withOpacity(0.9),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-          const Text(
-            '¡Cuéntale a tus amigos!',
-            style: TextStyle(
-              fontFamily: 'Poppins', color: Colors.white,
-              fontSize: 18, fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Comparte que ahora eres Plus en tus redes',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _sharing ? null : _share,
-              icon: _sharing
-                  ? const SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber),
-                    )
-                  : const Icon(Icons.share_rounded, color: Colors.amber, size: 18),
-              label: const Text('Compartir en redes'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.amber,
-                side: const BorderSide(color: Colors.amber),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
-              ),
             ),
           ),
         ],

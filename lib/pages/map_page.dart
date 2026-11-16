@@ -6,6 +6,7 @@ import '../services/bike_service.dart';
 import '../services/alert_impact_service.dart';
 import 'my_bikes_page.dart';
 import 'achievements_page.dart';
+import 'plus_unlocked_page.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx show Layer;
 import 'package:flutter/foundation.dart' show compute, defaultTargetPlatform, TargetPlatform;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -491,6 +492,25 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
+  bool _giftCheckRunning = false;
+
+  /// Si el equipo le regaló Plus y aún no lo había visto, muestra la
+  /// bienvenida de regalo (una sola vez por regalo).
+  Future<void> _maybeShowGiftWelcome() async {
+    if (!mounted || _giftCheckRunning) return;
+    if (!SubscriptionService.instance.isPlus.value) return;
+    _giftCheckRunning = true;
+    try {
+      final until = await SubscriptionService.instance.takeUnseenGift();
+      if (until == null || !mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => PlusUnlockedPage(giftUntil: until)),
+      );
+    } finally {
+      _giftCheckRunning = false;
+    }
+  }
+
   /// El mapa de calor es Plus: se restaura solo cuando la suscripción está
   /// confirmada (puede llegar unos segundos después de abrir la app).
   Future<void> _maybeRestoreHeatmap() async {
@@ -970,6 +990,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _currentStyle = _resolveMapStyle();
     PlusPrefsService.mapStyle.addListener(_onMapStylePrefChanged);
     SubscriptionService.instance.isPlus.addListener(_maybeRestoreHeatmap);
+    // Plus de regalo: bienvenida especial la primera vez que se detecta.
+    SubscriptionService.instance.isPlus.addListener(_maybeShowGiftWelcome);
+    Future.delayed(const Duration(seconds: 3), _maybeShowGiftWelcome);
     _loadLayerPrefs();
     BikeService.instance.load();
     // Pedir calificación en Play Store a quien ya pedaleó con la app, con
@@ -1148,6 +1171,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     RideHeatService.flushNow();
     PlusPrefsService.mapStyle.removeListener(_onMapStylePrefChanged);
     SubscriptionService.instance.isPlus.removeListener(_maybeRestoreHeatmap);
+    SubscriptionService.instance.isPlus.removeListener(_maybeShowGiftWelcome);
     _positionStreamSubscription?.cancel();
     _layersTipTimer?.cancel();
     _helpTipHideTimer?.cancel();
