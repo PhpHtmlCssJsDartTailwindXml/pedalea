@@ -1225,12 +1225,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('emergency_contact_phone')
-          .eq('id', uid)
-          .maybeSingle();
-      final phone = data?['emergency_contact_phone'] as String?;
+      // El contacto de emergencia solo lo puede leer su dueño (función privada).
+      final data = await Supabase.instance.client.rpc('my_private_profile');
+      final phone =
+          (data is Map ? data['emergency_contact_phone'] : null) as String?;
       if (phone == null || phone.isEmpty) return;
       final pos = _lastPosition;
       final locationText = pos != null
@@ -10898,11 +10896,10 @@ class _PanicButtonState extends State<_PanicButton>
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('emergency_contact_name, emergency_contact_phone')
-          .eq('id', uid)
-          .maybeSingle();
+      // El contacto de emergencia solo lo puede leer su dueño (función
+      // privada del servidor); los demás usuarios ya no lo ven.
+      final res = await Supabase.instance.client.rpc('my_private_profile');
+      final data = res is Map ? res : null;
       if (!mounted) return;
       setState(() {
         _emergencyContactName = data?['emergency_contact_name'] as String?;

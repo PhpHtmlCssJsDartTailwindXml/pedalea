@@ -34,6 +34,13 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
+/// Columnas públicas del perfil (el contacto de emergencia se pide con la
+/// función privada my_private_profile).
+const _kProfileColumns =
+    'id, username, full_name, avatar_url, commune, total_km, created_at, '
+    'fall_detection_enabled, is_plus, plus_badge_variant, stats_accent_index, '
+    'map_style';
+
 class _ProfilePageState extends State<ProfilePage> {
   final _supabase = Supabase.instance.client;
   final _usernameCtrl = TextEditingController();
@@ -154,11 +161,24 @@ class _ProfilePageState extends State<ProfilePage> {
       // consultas en serie contra Supabase, así que se cargan aparte en
       // segundo plano en vez de bloquear el spinner inicial.
       final results = await Future.wait<dynamic>([
-        _supabase.from('profiles').select().eq('id', userId).maybeSingle(),
+        _supabase
+            .from('profiles')
+            .select(_kProfileColumns)
+            .eq('id', userId)
+            .maybeSingle(),
         _karmaService.getMyKarma(),
+        _supabase.rpc('my_private_profile'),
       ]);
-      final data = results[0] as Map<String, dynamic>?;
+      final base = results[0] as Map<String, dynamic>?;
       final karma = results[1] as int;
+      final private = results[2];
+      // El contacto de emergencia se lee aparte: solo lo ve su dueño.
+      final data = base == null
+          ? null
+          : <String, dynamic>{
+              ...base,
+              if (private is Map) ...Map<String, dynamic>.from(private),
+            };
 
       if (data != null) await CacheService.saveProfile(data);
 

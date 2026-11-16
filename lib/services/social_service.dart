@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Backend de "Momentos": seguir (con aprobación), feed de fotos, likes y
-/// comentarios. Like y comentario solo entre usuarios con follow mutuo
-/// aceptado (lo obliga la RLS; aquí solo se refleja en la UI).
+/// comentarios. Like y comentario abiertos a cualquier ciclista con sesión,
+/// salvo bloqueo entre ambos (lo obliga la RLS con not_blocked).
 class SocialService {
   SocialService._();
   static final SocialService instance = SocialService._();

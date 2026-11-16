@@ -113,181 +113,34 @@ class AlertsService {
     }
   }
 
-  // Votar positivo
-  Future<bool> voteUp(String alertId) async {
+  /// Registra el voto en el servidor (vote_alert). La función solo cambia los
+  /// contadores de votos: la app ya no edita la alerta completa.
+  /// Devuelve true si el voto cambió.
+  Future<bool> _vote(String alertId, String action) async {
+    if (_supabase.auth.currentUser == null) return false;
     try {
-      debugPrint('👍 Votando positivo a alerta: $alertId');
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        debugPrint('❌ Usuario no autenticado');
-        return false;
-      }
-
-      final alert = await _supabase
-          .from('bike_alerts')
-          .select()
-          .eq('id', alertId)
-          .single();
-
-      final votersUp = List<String>.from(alert['voters_up'] ?? []);
-      final votersDown = List<String>.from(alert['voters_down'] ?? []);
-
-      if (votersDown.contains(userId)) {
-        votersDown.remove(userId);
-        debugPrint('🔄 Voto negativo removido');
-      }
-
-      if (!votersUp.contains(userId)) {
-        votersUp.add(userId);
-        debugPrint('✅ Voto positivo agregado');
-      } else {
-        debugPrint('⚠️ Usuario ya había votado positivo');
-        return false;
-      }
-
-      await _supabase
-          .from('bike_alerts')
-          .update({
-            'voters_up': votersUp,
-            'voters_down': votersDown,
-            'votes_up': votersUp.length,
-            'votes_down': votersDown.length,
-          })
-          .eq('id', alertId);
-
-      debugPrint('✅ Voto positivo registrado');
-      return true;
+      final res = await _supabase.rpc('vote_alert', params: {
+        'p_alert': alertId,
+        'p_action': action,
+      });
+      return res is Map && res['changed'] == true;
     } catch (e) {
-      debugPrint('❌ Error votando up: $e');
+      debugPrint('❌ Error votando ($action): $e');
       return false;
     }
   }
+
+  // Votar positivo
+  Future<bool> voteUp(String alertId) => _vote(alertId, 'up');
 
   // Votar negativo
-  Future<bool> voteDown(String alertId) async {
-    try {
-      debugPrint('👎 Votando negativo a alerta: $alertId');
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        debugPrint('❌ Usuario no autenticado');
-        return false;
-      }
-
-      final alert = await _supabase
-          .from('bike_alerts')
-          .select()
-          .eq('id', alertId)
-          .single();
-
-      final votersUp = List<String>.from(alert['voters_up'] ?? []);
-      final votersDown = List<String>.from(alert['voters_down'] ?? []);
-
-      if (votersUp.contains(userId)) {
-        votersUp.remove(userId);
-        debugPrint('🔄 Voto positivo removido');
-      }
-
-      if (!votersDown.contains(userId)) {
-        votersDown.add(userId);
-        debugPrint('✅ Voto negativo agregado');
-      } else {
-        debugPrint('⚠️ Usuario ya había votado negativo');
-        return false;
-      }
-
-      await _supabase
-          .from('bike_alerts')
-          .update({
-            'voters_up': votersUp,
-            'voters_down': votersDown,
-            'votes_up': votersUp.length,
-            'votes_down': votersDown.length,
-          })
-          .eq('id', alertId);
-
-      debugPrint('✅ Voto negativo registrado');
-      return true;
-    } catch (e) {
-      debugPrint('❌ Error votando down: $e');
-      return false;
-    }
-  }
+  Future<bool> voteDown(String alertId) => _vote(alertId, 'down');
 
   // Quitar voto positivo
-  Future<bool> removeVoteUp(String alertId) async {
-    try {
-      debugPrint('🗑️ Removiendo voto positivo de alerta: $alertId');
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        debugPrint('❌ Usuario no autenticado');
-        return false;
-      }
-
-      final alert = await _supabase
-          .from('bike_alerts')
-          .select()
-          .eq('id', alertId)
-          .single();
-
-      final votersUp = List<String>.from(alert['voters_up'] ?? []);
-
-      if (votersUp.contains(userId)) {
-        votersUp.remove(userId);
-        debugPrint('✅ Voto positivo removido');
-      } else {
-        debugPrint('⚠️ Usuario no tenía voto positivo');
-        return false;
-      }
-
-      await _supabase
-          .from('bike_alerts')
-          .update({'voters_up': votersUp, 'votes_up': votersUp.length})
-          .eq('id', alertId);
-
-      return true;
-    } catch (e) {
-      debugPrint('❌ Error removiendo voto up: $e');
-      return false;
-    }
-  }
+  Future<bool> removeVoteUp(String alertId) => _vote(alertId, 'remove_up');
 
   // Quitar voto negativo
-  Future<bool> removeVoteDown(String alertId) async {
-    try {
-      debugPrint('🗑️ Removiendo voto negativo de alerta: $alertId');
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        debugPrint('❌ Usuario no autenticado');
-        return false;
-      }
-
-      final alert = await _supabase
-          .from('bike_alerts')
-          .select()
-          .eq('id', alertId)
-          .single();
-
-      final votersDown = List<String>.from(alert['voters_down'] ?? []);
-
-      if (votersDown.contains(userId)) {
-        votersDown.remove(userId);
-        debugPrint('✅ Voto negativo removido');
-      } else {
-        debugPrint('⚠️ Usuario no tenía voto negativo');
-        return false;
-      }
-
-      await _supabase
-          .from('bike_alerts')
-          .update({'voters_down': votersDown, 'votes_down': votersDown.length})
-          .eq('id', alertId);
-
-      return true;
-    } catch (e) {
-      debugPrint('❌ Error removiendo voto down: $e');
-      return false;
-    }
-  }
+  Future<bool> removeVoteDown(String alertId) => _vote(alertId, 'remove_down');
 
   // Eliminar alerta (solo creador)
   Future<bool> deleteAlert(String alertId) async {
