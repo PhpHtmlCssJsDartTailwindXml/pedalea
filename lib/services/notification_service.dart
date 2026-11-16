@@ -324,6 +324,12 @@ class NotificationService {
           eventTitle: parts.sublist(2).join('|'),
         ),
       ));
+    } else if (payload.startsWith('follow_req|') && parts.length >= 2) {
+      // Solicitud de seguimiento: al perfil de quien la envió, para ver quién
+      // es antes de aceptar y poder seguirlo de vuelta.
+      nav.push(MaterialPageRoute(
+        builder: (_) => PublicProfilePage(userId: parts[1]),
+      ));
     } else if (payload == 'follow_req') {
       nav.push(MaterialPageRoute(builder: (_) => const FollowRequestsPage()));
     } else if (payload.startsWith('dm|') && parts.length >= 3) {

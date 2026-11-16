@@ -19,11 +19,14 @@ class SubscriptionInfo {
   final DateTime purchasedAt;
   final DateTime? expiresAt;
   final bool isSimulated;
+  /// Plus regalado por el equipo (token gift_…): no se cobra ni se renueva.
+  final bool isGift;
   const SubscriptionInfo({
     required this.productId,
     required this.purchasedAt,
     required this.expiresAt,
     required this.isSimulated,
+    this.isGift = false,
   });
 
   bool get isYearly => productId == SubscriptionProductIds.yearly;
@@ -130,7 +133,9 @@ class SubscriptionService {
       // Plus de prueba del dueño.
       bool isTest(Map r) {
         final t = r['purchase_token'] as String? ?? '';
-        return t.startsWith('simulated_') || t.startsWith('owner_test_');
+        return t.startsWith('simulated_') ||
+            t.startsWith('owner_test_') ||
+            t.startsWith('gift_');
       }
       final row = rows.firstWhere((r) => !isTest(r), orElse: () => rows.first);
       final purchasedAt = DateTime.tryParse(row['purchased_at'] as String? ?? '') ?? DateTime.now();
@@ -144,6 +149,7 @@ class SubscriptionService {
         expiresAt: expiresAt,
         isSimulated: token.startsWith('simulated_') ||
             token.startsWith('owner_test_'),
+        isGift: token.startsWith('gift_'),
       );
     } catch (e) {
       debugPrint('SubscriptionService getMySubscriptionInfo error: $e');
@@ -253,7 +259,8 @@ class SubscriptionService {
       final hasExpiredRealSub = rows.any((r) =>
           !notExpired(r) &&
           !(r['purchase_token'] as String? ?? '').startsWith('owner_test_') &&
-          !(r['purchase_token'] as String? ?? '').startsWith('simulated_'));
+          !(r['purchase_token'] as String? ?? '').startsWith('simulated_') &&
+          !(r['purchase_token'] as String? ?? '').startsWith('gift_'));
       if (!active && hasExpiredRealSub && !_renewalChecked && _purchaseSub != null) {
         _renewalChecked = true;
         unawaited(_iap.restorePurchases());

@@ -156,7 +156,9 @@ class _ManageSubscriptionPageState extends State<ManageSubscriptionPage> {
                                       const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 44),
                                       const SizedBox(height: 10),
                                       Text(
-                                        _info!.isYearly ? 'Plan Anual' : 'Plan Mensual',
+                                        _info!.isGift
+                                            ? 'Plus de regalo 🎁'
+                                            : (_info!.isYearly ? 'Plan Anual' : 'Plan Mensual'),
                                         style: const TextStyle(
                                           fontFamily: 'Poppins', color: Colors.white,
                                           fontSize: 20, fontWeight: FontWeight.w800,
@@ -169,17 +171,25 @@ class _ManageSubscriptionPageState extends State<ManageSubscriptionPage> {
                                 Container(
                                   decoration: glassDecoration(radius: 18),
                                   child: Column(children: [
-                                    _infoRow(Icons.calendar_today_outlined, 'Te suscribiste el',
+                                    _infoRow(Icons.calendar_today_outlined,
+                                        _info!.isGift ? 'Lo recibiste el' : 'Te suscribiste el',
                                         _formatDate(_info!.purchasedAt)),
                                     Divider(height: 1, color: Colors.white.withOpacity(0.06), indent: 46, endIndent: 16),
                                     _infoRow(
                                       Icons.event_repeat_outlined,
-                                      _info!.isSimulated ? 'Vigente hasta el' : 'Próximo cobro',
+                                      (_info!.isSimulated || _info!.isGift) ? 'Vigente hasta el' : 'Próximo cobro',
                                       _info!.expiresAt != null ? _formatDate(_info!.expiresAt!) : '—',
                                     ),
                                   ]),
                                 ),
                                 const Spacer(),
+                                if (_info!.isGift)
+                                  Text(
+                                    'Es un regalo del equipo de Pedalea: no tiene cobro y termina solo en la fecha indicada. Si quieres seguir con Plus después, puedes suscribirte desde la pantalla de Pedalea Plus.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.55), fontSize: 12.5, height: 1.4),
+                                  )
+                                else
                                 SizedBox(
                                   height: 52,
                                   child: OutlinedButton(

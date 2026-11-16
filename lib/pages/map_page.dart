@@ -265,13 +265,13 @@ class _MapPageState extends State<MapPage> with RouteAware {
       ? const Color(0xFF0047FF)
       : const Color(0xFFB8FF1F);
 
-  /// Botón redondo para cambiar la bici activa. Solo aparece si el ciclista
-  /// tiene 2 o más bicis registradas.
+  /// Botón redondo con la bici activa. Aparece desde la primera bici: con una
+  /// sola abre su ficha (km y mantenciones); con 2 o más permite cambiarla.
   Widget _buildBikeSwitcher() {
     return ValueListenableBuilder<List<Bike>>(
       valueListenable: BikeService.instance.bikes,
       builder: (context, bikes, _) {
-        if (bikes.length < 2) return const SizedBox.shrink();
+        if (bikes.isEmpty) return const SizedBox.shrink();
         final active = BikeService.instance.activeBike;
         final photo = active?.photoUrl ?? '';
         return Padding(
@@ -279,7 +279,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
           child: Tooltip(
             message: 'Bici activa: ${active?.name ?? ''}',
             child: GestureDetector(
-              onTap: () => showActiveBikePicker(context),
+              onTap: () {
+                if (bikes.length >= 2) {
+                  showActiveBikePicker(context);
+                } else if (active != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => BikeDetailPage(bikeId: active.id)),
+                  );
+                }
+              },
               child: Container(
                 width: 38,
                 height: 38,
@@ -4632,6 +4642,32 @@ class _MapPageState extends State<MapPage> with RouteAware {
             ),
           ),
 
+          // Recordatorio de seguridad (toca para ver la lista completa)
+          GestureDetector(
+            onTap: _showSafetyReminder,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(14, 6, 14, 2),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2C94C).withOpacity(0.10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFF2C94C).withOpacity(0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Text('🪖', style: TextStyle(fontSize: 15)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Usa casco, luces y respeta las señales. Toca para ver más.',
+                      style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.85), fontSize: 11.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // ── Rutas guardadas ───────────────────────────────────────────
           if (_loadingFavorites)
             const Padding(
@@ -6397,6 +6433,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
               Navigator.pop(context);
               setState(() => _routePlannerOpen = true);
               _loadFavorites();
+              _maybeShowSafetyReminder();
             },
           ),
           _drawerRow(
@@ -8741,6 +8778,96 @@ class _MapPageState extends State<MapPage> with RouteAware {
     await _redrawRoutePins();
 
     if (_routeWps.isNotEmpty) await _calcRoute();
+    _maybeShowSafetyReminder();
+  }
+
+  // ── Recordatorio de seguridad al planificar una ruta ──────────────────
+  static bool _safetyShownThisSession = false;
+
+  /// Se muestra la primera vez que se planifica una ruta en cada sesión
+  /// (el panel del planificador además lo recuerda con una línea fija).
+  void _maybeShowSafetyReminder() {
+    if (_safetyShownThisSession) return;
+    _safetyShownThisSession = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showSafetyReminder();
+    });
+  }
+
+  void _showSafetyReminder() {
+    const items = [
+      ('🪖', 'Usa casco bien ajustado', 'En Chile es obligatorio para ciclistas (Ley 21.088).'),
+      ('💡', 'Luces encendidas', 'Blanca adelante y roja atrás, sobre todo de noche o con poca luz.'),
+      ('🦺', 'Hazte visible', 'Ropa clara o reflectante.'),
+      ('🔧', 'Revisa tu bici', 'Frenos, neumáticos y cadena antes de salir.'),
+      ('🚦', 'Respeta las normas', 'Semáforos y señales; usa la ciclovía cuando exista.'),
+      ('📱', 'Ojos en el camino', 'Lleva el teléfono en un soporte y no lo manipules mientras pedaleas.'),
+      ('💧', 'Hidrátate', 'Lleva agua en trayectos largos o con calor.'),
+    ];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + MediaQuery.of(ctx).padding.bottom),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF12141C),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Antes de salir 🚲',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text('Tu seguridad es lo primero. Revisa esto antes de pedalear:',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.6), fontSize: 13)),
+            const SizedBox(height: 14),
+            for (final (emoji, title, sub) in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title,
+                              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                          Text(sub,
+                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.55), fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7CF0BC),
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Entendido, ¡a pedalear!',
+                    style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════════

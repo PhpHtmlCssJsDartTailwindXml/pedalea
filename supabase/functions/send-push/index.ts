@@ -64,7 +64,8 @@ async function buildPush(table: string, op: string, r: Row): Promise<Push | null
           type: "follow_req",
           title: "Nueva solicitud de seguimiento",
           body: `${await nameOf(follower)} quiere seguirte`,
-          payload: "follow_req",
+          // Abre el perfil de quien quiere seguirte (aceptar y seguir de vuelta).
+          payload: `follow_req|${follower}`,
           channel: "social_activity",
         };
       }

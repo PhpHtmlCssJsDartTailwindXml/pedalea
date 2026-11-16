@@ -118,7 +118,9 @@ class SocialNotificationsService {
       id: 300001,
       title: 'Nueva solicitud de seguimiento',
       body: '$name quiere seguirte',
-      payload: 'follow_req',
+      // Abre el perfil de quien quiere seguirte: ahí se acepta y se puede
+      // seguir de vuelta (no se acepta a ciegas desde la notificación).
+      payload: 'follow_req|$from',
     );
   }
 
