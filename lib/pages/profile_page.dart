@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/glass.dart';
 import '../services/achievements_service.dart';
 import '../services/emergency_contact_service.dart';
+import '../widgets/verified_badge.dart';
 import 'achievements_page.dart';
 import '../services/karma_service.dart';
 import '../services/co2_service.dart';
@@ -559,6 +560,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: _txt(22, w: FontWeight.w700, h: 1.2),
                 ),
               ),
+              if (isOfficialAccount(_user?.id)) ...[
+                const SizedBox(width: 6),
+                const VerifiedBadge(size: 22),
+              ],
               if (isPlus) ...[const SizedBox(width: 8), _plusChip()],
             ],
           ),

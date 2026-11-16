@@ -76,6 +76,8 @@ import '../pages/public_profile_page.dart';
 import '../pages/notifications_page.dart';
 import '../services/inbox_service.dart';
 import '../services/emergency_contact_service.dart';
+import '../widgets/verified_badge.dart';
+import '../widgets/service_extras.dart';
 import '../services/fall_log_service.dart';
 import '../pages/ranking_page.dart';
 import '../pages/rider_ranking_page.dart';
@@ -2579,9 +2581,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   // ✅ Mostrar formulario de alerta en el punto de long press
   void _showAlertFormAtLocation(Point point) async {
-    final result = await showDialog<Map<String, dynamic>>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
-      barrierDismissible: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
       builder: (context) => _SimpleAlertFormDialog(point: point),
     );
 
@@ -8274,6 +8278,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
           'category': m['category'],
           'icon_id': m['icon_id'],
           'has_pump': m['has_pump'],
+          'opening_hours': m['opening_hours'],
+          'phone': m['phone'],
+          'website': m['website'],
         };
       }).toList();
     } catch (e) {
@@ -8387,9 +8394,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final hasPump = svc['has_pump'] == true;
     final brand = svc['brand']?.toString() ?? '';
     final (color, icon) = _serviceStyle(category);
-    final pumpText = hasPump
-        ? 'Disponible'
-        : (category == 'fuel' ? 'Consultar en el local' : 'No confirmado');
+    // Bencinera sin bomba confirmada en los datos: decide la comunidad.
+    final communityPump = category == 'fuel' && !hasPump;
+    final pumpText = hasPump ? 'Disponible' : 'No confirmado';
 
     showModalBottomSheet(
       context: context,
@@ -8402,24 +8409,34 @@ class _MapPageState extends State<MapPage> with RouteAware {
         title: name,
         subtitle: _serviceLabel(category),
         chips: [
-          _sheetChip(
-            hasPump ? Icons.check_circle_rounded : Icons.help_outline_rounded,
-            hasPump ? 'Con bomba de aire' : 'Aire sin confirmar',
-            color: hasPump ? Colors.greenAccent : null,
-          ),
+          if (!communityPump)
+            _sheetChip(
+              hasPump ? Icons.check_circle_rounded : Icons.help_outline_rounded,
+              hasPump ? 'Con bomba de aire' : 'Aire sin confirmar',
+              color: hasPump ? Colors.greenAccent : null,
+            ),
           if (category == 'fuel' && brand.isNotEmpty)
             _sheetChip(Icons.local_gas_station_rounded, brand),
         ],
         body: [
-          _sheetFacts(
-            color,
-            [
-              (Icons.air_rounded, 'Bomba de aire', pumpText),
-              if (category == 'fuel' && brand.isNotEmpty)
-                (Icons.local_gas_station_rounded, 'Marca', brand),
-            ],
-            valueColors: hasPump ? const {0: Colors.greenAccent} : const {},
+          OpeningHoursCard(
+            openingHours: svc['opening_hours']?.toString(),
+            phone: svc['phone']?.toString(),
+            website: svc['website']?.toString(),
+            accent: color,
           ),
+          if (communityPump && id.isNotEmpty)
+            PumpVoteCard(serviceId: id, accent: color)
+          else
+            _sheetFacts(
+              color,
+              [
+                (Icons.air_rounded, 'Bomba de aire', pumpText),
+                if (category == 'fuel' && brand.isNotEmpty)
+                  (Icons.local_gas_station_rounded, 'Marca', brand),
+              ],
+              valueColors: hasPump ? const {0: Colors.greenAccent} : const {},
+            ),
           _PoiPhotoGallery(
             poiType: 'bike_service',
             poiId: id,
@@ -9746,232 +9763,28 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
 
   // Ideas rápidas por tipo: un toque rellena el título.
   static const Map<String, List<String>> _suggestions = {
-    'danger': ['Hoyo en la ciclovía', 'Auto en la ciclovía', 'Vidrios en el camino', 'Poca iluminación'],
-    'theft': ['Intento de robo', 'Robo de bicicleta', 'Sector inseguro'],
+    'danger': ['Hoyo en la ciclovía', 'Auto en la ciclovía', 'Vidrios', 'Poca luz'],
+    'theft': ['Intento de robo', 'Robo de bici', 'Sector inseguro'],
     'construction': ['Ciclovía cortada', 'Desvío por obras', 'Calzada en mal estado'],
     'accident': ['Choque', 'Ciclista caído', 'Atropello'],
     'other': ['Semáforo apagado', 'Inundación', 'Árbol caído'],
   };
 
-  static const _bg = Color(0xFF0E0E18);
+  static const _bg = Color(0xFF0B0B14);
 
-  InputDecoration _fieldDeco(String hint, IconData icon, Color accent) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(
-        fontFamily: 'Poppins',
-        color: Colors.white30,
-        fontSize: 13.5,
-      ),
-      prefixIcon: Icon(icon, color: Colors.white38, size: 19),
-      filled: true,
-      fillColor: Colors.white.withOpacity(0.05),
-      counterStyle: const TextStyle(color: Colors.white24, fontSize: 10),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.06)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: accent.withOpacity(0.7), width: 1.4),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.redAccent),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 1.4),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    );
-  }
-
-  Widget _sectionLabel(String text, {String? trailing}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white54,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 6),
-            Text(
-              trailing,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white24,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _typeTile(String key, AlertTypeInfo info) {
-    final selected = _selectedType == key;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _selectedType = key);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected
-                ? info.color.withOpacity(0.16)
-                : Colors.white.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? info.color.withOpacity(0.8)
-                  : Colors.white.withOpacity(0.07),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: selected ? info.color : Colors.white.withOpacity(0.06),
-                ),
-                child: Icon(
-                  info.icon,
-                  size: 18,
-                  color: selected ? Colors.white : Colors.white54,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                info.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 10.5,
-                  color: selected ? Colors.white : Colors.white54,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _photoPicker(Color accent) {
-    if (_photoFile != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 150,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.file(_photoFile!, fit: BoxFit.cover),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Row(
-                  children: [
-                    _photoAction(Icons.edit_rounded, _showPhotoOptions),
-                    const SizedBox(width: 6),
-                    _photoAction(
-                      Icons.close_rounded,
-                      () => setState(() => _photoFile = null),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    Widget option(IconData icon, String label, ImageSource source) {
-      return Expanded(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _pickImage(source),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withOpacity(0.07)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 18, color: accent),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white70,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        option(Icons.photo_camera_rounded, 'Cámara', ImageSource.camera),
-        const SizedBox(width: 10),
-        option(Icons.photo_library_rounded, 'Galería', ImageSource.gallery),
-      ],
-    );
-  }
-
-  Widget _photoAction(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: const BoxDecoration(
-          color: Colors.black54,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: Colors.white, size: 16),
-      ),
-    );
-  }
+  // Campos opcionales: se despliegan solo si el ciclista los quiere.
+  bool _showDetail = false;
+  bool _showPlace = false;
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final title = _titleController.text.trim();
+    final desc = _descriptionController.text.trim();
     Navigator.pop(context, {
       'type': _selectedType,
-      'title': _titleController.text.trim(),
-      'description': _descriptionController.text.trim(),
+      'title': title,
+      // El detalle es opcional: si no se escribe, se usa el título.
+      'description': desc.isNotEmpty ? desc : title,
       'locationName': _locationController.text.trim().isNotEmpty
           ? _locationController.text.trim()
           : 'Ubicación seleccionada',
@@ -9979,303 +9792,391 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
     });
   }
 
+  Widget _typeDot(String key, AlertTypeInfo info) {
+    final selected = _selectedType == key;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedType = key);
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutBack,
+            width: selected ? 54 : 44,
+            height: selected ? 54 : 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: selected ? info.color : Colors.white.withOpacity(0.06),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: info.color.withOpacity(0.55),
+                        blurRadius: 18,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Icon(
+              info.icon,
+              color: selected ? Colors.white : Colors.white54,
+              size: selected ? 26 : 21,
+            ),
+          ),
+          const SizedBox(height: 6),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 200),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              color: selected ? Colors.white : Colors.white38,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+            ),
+            child: Text(info.label),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Botón compacto para abrir un campo opcional (detalle, lugar, foto).
+  Widget _extraPill({
+    required IconData icon,
+    required String label,
+    required bool active,
+    required Color accent,
+    required VoidCallback onTap,
+    Widget? leading,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.fromLTRB(leading != null ? 4 : 12, 7, 12, 7),
+        decoration: BoxDecoration(
+          color: active ? accent.withOpacity(0.16) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: active ? accent.withOpacity(0.6) : Colors.white.withOpacity(0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            leading ?? Icon(icon, size: 16, color: active ? accent : Colors.white60),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12.5,
+                color: active ? Colors.white : Colors.white60,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _softField(String hint, Color accent) => InputDecoration(
+    hintText: hint,
+    hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white30, fontSize: 13.5),
+    filled: true,
+    fillColor: Colors.white.withOpacity(0.05),
+    isDense: true,
+    counterText: '',
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: accent.withOpacity(0.6)),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final type = _alertTypes[_selectedType]!;
     final accent = type.color;
     final suggestions = _suggestions[_selectedType] ?? const <String>[];
-    final lat = widget.point.coordinates.lat.toDouble().toStringAsFixed(5);
-    final lng = widget.point.coordinates.lng.toDouble().toStringAsFixed(5);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 24),
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: 440,
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
         decoration: BoxDecoration(
           color: _bg,
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-          boxShadow: [
-            BoxShadow(
-              color: accent.withOpacity(0.18),
-              blurRadius: 40,
-              spreadRadius: -6,
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.55),
-              blurRadius: 30,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          // Un brillo del color del tipo arriba: llamativo pero limpio.
+          gradient: RadialGradient(
+            center: const Alignment(0, -1.4),
+            radius: 1.1,
+            colors: [accent.withOpacity(0.28), _bg],
+          ),
+          border: Border(top: BorderSide(color: accent.withOpacity(0.5), width: 1.5)),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(26),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Encabezado con el color del tipo elegido ──
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
-                padding: const EdgeInsets.fromLTRB(20, 20, 14, 18),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [accent.withOpacity(0.32), _bg],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 260),
-                      width: 46,
-                      height: 46,
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: accent,
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Nueva alerta',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Tipo: cinco círculos, el elegido crece y brilla.
+                  SizedBox(
+                    height: 82,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: _alertTypes.entries
+                          .map((e) => _typeDot(e.key, e.value))
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Título grande, sin cajas.
+                  TextFormField(
+                    controller: _titleController,
+                    maxLength: 60,
+                    textCapitalization: TextCapitalization.sentences,
+                    cursorColor: accent,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '¿Qué está pasando?',
+                      hintStyle: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white30,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      counterText: '',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
+                      ),
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: accent, width: 2),
+                      ),
+                      errorBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.redAccent),
+                      ),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Escribe o elige qué está pasando'
+                        : null,
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: suggestions.map((sug) {
+                      final picked = _titleController.text.trim() == sug;
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          _titleController.text = sug;
+                          _titleController.selection =
+                              TextSelection.collapsed(offset: sug.length);
+                        }),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: picked ? accent : accent.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            sug,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: picked ? Colors.white : accent,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Extras opcionales en una sola fila.
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _extraPill(
+                        icon: Icons.notes_rounded,
+                        label: 'Detalle',
+                        active: _showDetail || _descriptionController.text.isNotEmpty,
+                        accent: accent,
+                        onTap: () => setState(() => _showDetail = !_showDetail),
+                      ),
+                      _extraPill(
+                        icon: Icons.place_rounded,
+                        label: _locationController.text.trim().isNotEmpty
+                            ? _locationController.text.trim()
+                            : 'Lugar',
+                        active: _showPlace || _locationController.text.isNotEmpty,
+                        accent: accent,
+                        onTap: () => setState(() => _showPlace = !_showPlace),
+                      ),
+                      _extraPill(
+                        icon: Icons.photo_camera_rounded,
+                        label: _photoFile != null ? 'Foto lista' : 'Foto',
+                        active: _photoFile != null,
+                        accent: accent,
+                        onTap: _showPhotoOptions,
+                        leading: _photoFile == null
+                            ? null
+                            : ClipOval(
+                                child: Image.file(
+                                  _photoFile!,
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.topCenter,
+                    child: Column(
+                      children: [
+                        if (_showDetail) ...[
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _descriptionController,
+                            minLines: 2,
+                            maxLines: 4,
+                            maxLength: 280,
+                            autofocus: true,
+                            textCapitalization: TextCapitalization.sentences,
+                            cursorColor: accent,
+                            onChanged: (_) => setState(() {}),
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            decoration: _softField('Cuenta un poco más (opcional)', accent),
+                          ),
+                        ],
+                        if (_showPlace) ...[
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _locationController,
+                            autofocus: !_showDetail,
+                            textCapitalization: TextCapitalization.words,
+                            cursorColor: accent,
+                            onChanged: (_) => setState(() {}),
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            decoration: _softField('Ej: Av. Providencia con Los Leones', accent),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // Publicar: un solo botón grande con el color del tipo.
+                  GestureDetector(
+                    onTap: _uploadingPhoto ? null : _submit,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: 54,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        gradient: LinearGradient(
+                          colors: [accent, Color.lerp(accent, Colors.black, 0.25)!],
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: accent.withOpacity(0.5),
-                            blurRadius: 16,
+                            color: accent.withOpacity(0.45),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                      child: Icon(type.icon, color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
-                            'Reportar alerta',
-                            style: TextStyle(
+                          Icon(type.icon, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Publicar alerta',
+                            style: const TextStyle(
                               fontFamily: 'Poppins',
                               color: Colors.white,
-                              fontSize: 19,
+                              fontSize: 16,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.location_on_rounded,
-                                size: 13,
-                                color: Colors.white54,
-                              ),
-                              const SizedBox(width: 3),
-                              Flexible(
-                                child: Text(
-                                  '$lat, $lng',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: Colors.white54,
-                                    fontSize: 11.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
-                      color: Colors.white54,
-                      tooltip: 'Cerrar',
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Contenido ──
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(17, 6, 17, 4),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _sectionLabel('¿Qué está pasando?'),
-                        Row(
-                          children: _alertTypes.entries
-                              .map((e) => _typeTile(e.key, e.value))
-                              .toList(),
-                        ),
-                        const SizedBox(height: 18),
-                        _sectionLabel('Título'),
-                        TextFormField(
-                          controller: _titleController,
-                          maxLength: 60,
-                          textCapitalization: TextCapitalization.sentences,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
-                          decoration: _fieldDeco(
-                            'Ej: ${suggestions.isNotEmpty ? suggestions.first : 'Describe la alerta'}',
-                            Icons.title_rounded,
-                            accent,
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Ponle un título a la alerta'
-                              : null,
-                        ),
-                        if (suggestions.isNotEmpty)
-                          SizedBox(
-                            height: 32,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: suggestions.length,
-                              separatorBuilder: (_, i) =>
-                                  const SizedBox(width: 6),
-                              itemBuilder: (_, i) {
-                                final s = suggestions[i];
-                                return ActionChip(
-                                  label: Text(s),
-                                  onPressed: () => setState(() {
-                                    _titleController.text = s;
-                                    _titleController.selection =
-                                        TextSelection.collapsed(
-                                          offset: s.length,
-                                        );
-                                  }),
-                                  labelStyle: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 11.5,
-                                    color: accent,
-                                  ),
-                                  backgroundColor: accent.withOpacity(0.1),
-                                  side: BorderSide(
-                                    color: accent.withOpacity(0.35),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                );
-                              },
-                            ),
-                          ),
-                        const SizedBox(height: 14),
-                        _sectionLabel('Descripción'),
-                        TextFormField(
-                          controller: _descriptionController,
-                          minLines: 2,
-                          maxLines: 4,
-                          maxLength: 280,
-                          textCapitalization: TextCapitalization.sentences,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
-                          decoration: _fieldDeco(
-                            'Cuenta qué viste para que otros se cuiden',
-                            Icons.notes_rounded,
-                            accent,
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Agrega una breve descripción'
-                              : null,
-                        ),
-                        const SizedBox(height: 8),
-                        _sectionLabel('Lugar', trailing: 'opcional'),
-                        TextFormField(
-                          controller: _locationController,
-                          textCapitalization: TextCapitalization.words,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
-                          decoration: _fieldDeco(
-                            'Ej: Av. Providencia con Los Leones',
-                            Icons.place_outlined,
-                            accent,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        _sectionLabel('Foto del sector', trailing: 'opcional'),
-                        _photoPicker(accent),
-                        const SizedBox(height: 16),
-                      ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Visible para todos los ciclistas en el mapa',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white30,
+                      fontSize: 11,
                     ),
                   ),
-                ),
+                ],
               ),
-
-              // ── Acción principal ──
-              Container(
-                padding: const EdgeInsets.fromLTRB(17, 10, 17, 16),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: Colors.white.withOpacity(0.06)),
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: _uploadingPhoto ? null : _submit,
-                        icon: const Icon(Icons.campaign_rounded, size: 20),
-                        label: const Text('Publicar alerta'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          textStyle: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.groups_rounded,
-                          size: 14,
-                          color: Colors.white30,
-                        ),
-                        SizedBox(width: 5),
-                        Text(
-                          'Será visible para todos los ciclistas en el mapa',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white30,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -10586,10 +10487,10 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  NameWithBadge(
+                    name: _displayName,
+                    userId: Supabase.instance.client.auth.currentUser?.id,
+                    badgeSize: 18,
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       color: Colors.white,
