@@ -6290,7 +6290,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
           .eq('id', uid)
           .maybeSingle();
       final current = (profile?['commune'] as String?)?.trim() ?? '';
-      if (current.isNotEmpty) return; // el usuario ya la tiene puesta
+      // «Santiago» se revisa de nuevo: antes se guardaba esa ciudad para todas
+      // las comunas del Gran Santiago (Maipú, Ñuñoa, Las Condes…).
+      final recheck = current.toLowerCase() == 'santiago';
+      if (current.isNotEmpty && !recheck) return; // el usuario ya la tiene puesta
 
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse'
@@ -6304,15 +6307,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
       final addr =
           (jsonDecode(res.body) as Map<String, dynamic>)['address']
               as Map<String, dynamic>?;
+      // En el Gran Santiago OSM pone la comuna en «suburb» y «Santiago» en
+      // «city», así que la comuna va primero. «county» no sirve: es la provincia.
       final commune =
-          (addr?['city'] as String? ??
+          (addr?['suburb'] as String? ??
+                  addr?['city'] as String? ??
                   addr?['town'] as String? ??
+                  addr?['village'] as String? ??
                   addr?['municipality'] as String? ??
-                  addr?['county'] as String? ??
-                  addr?['suburb'] as String? ??
                   '')
               .trim();
-      if (commune.isEmpty) return;
+      if (commune.isEmpty || commune.toLowerCase() == current.toLowerCase()) return;
       await Supabase.instance.client
           .from('profiles')
           .update({'commune': commune})
