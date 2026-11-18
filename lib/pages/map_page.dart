@@ -4157,19 +4157,83 @@ class _MapPageState extends State<MapPage> with RouteAware {
   // ── Planificador de rutas ─────────────────────────────────────────────────
 
   void _addRouteWp(Point point) {
+    final wp = _RouteWp(
+      lat: point.coordinates.lat.toDouble(),
+      lng: point.coordinates.lng.toDouble(),
+      label: 'Parada ${_routeWps.length + 1}',
+    );
     setState(() {
-      _routeWps.add(
-        _RouteWp(
-          lat: point.coordinates.lat.toDouble(),
-          lng: point.coordinates.lng.toDouble(),
-          label: 'Parada ${_routeWps.length + 1}',
-        ),
-      );
+      _routeWps.add(wp);
       _routeAddMode = false;
       _routeDistKm = null;
       _routeDurMin = null;
     });
     _redrawRoutePins();
+    _snapWpToNearestRoad(wp);
+  }
+
+  /// Si la parada quedó sobre una casa, una manzana o un parque, la mueve al
+  /// punto más cercano de una calle apta para bici (Mapbox Tilequery sobre la
+  /// capa de calles). Si ya está sobre la calle (≤ 8 m) no la toca.
+  Future<void> _snapWpToNearestRoad(_RouteWp wp) async {
+    try {
+      final url =
+          'https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/'
+          '${wp.lng},${wp.lat}.json?radius=400&limit=50&layers=road'
+          '&geometry=linestring&dedupe=true&access_token=$kMapboxToken';
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 6));
+      if (res.statusCode != 200) return;
+      final feats = (jsonDecode(res.body) as Map)['features'] as List? ?? const [];
+      // Solo calles por donde se puede pedalear y ciclovías: se descartan
+      // veredas, senderos peatonales, escaleras, autopistas, rieles, etc.
+      const streets = {
+        'street', 'street_limited', 'primary', 'primary_link', 'secondary',
+        'secondary_link', 'tertiary', 'tertiary_link', 'trunk', 'trunk_link',
+        'service', 'track',
+      };
+      const excludedTypes = {'service:driveway', 'service:parking_aisle'};
+      Map? best;
+      double bestDist = double.infinity;
+      for (final f in feats) {
+        final props = (f as Map)['properties'] as Map? ?? const {};
+        final cls = props['class'];
+        final type = props['type'];
+        final ok = (streets.contains(cls) && !excludedTypes.contains(type)) ||
+            (cls == 'path' && type == 'cycleway');
+        if (!ok) continue;
+        final dist = ((props['tilequery'] as Map?)?['distance'] as num?)?.toDouble();
+        if (dist != null && dist < bestDist) {
+          bestDist = dist;
+          best = f;
+        }
+      }
+      if (best == null || bestDist <= 8) return;
+      final c = (best['geometry'] as Map)['coordinates'] as List;
+      final i = _routeWps.indexOf(wp);
+      if (i < 0 || !mounted) return; // la parada se quitó mientras tanto
+      setState(() {
+        _routeWps[i] = _RouteWp(
+          lat: (c[1] as num).toDouble(),
+          lng: (c[0] as num).toDouble(),
+          label: wp.label,
+        );
+      });
+      _redrawRoutePins();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${wp.label} ajustada a la calle más cercana (a ${bestDist.round()} m).'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (_) {
+      // Sin conexión: la parada queda donde se tocó; al calcular, la ruta
+      // igual la ajusta a la calle más cercana.
+    }
   }
 
   Future<void> _redrawRoutePins() async {
@@ -4575,41 +4639,91 @@ class _MapPageState extends State<MapPage> with RouteAware {
       ]);
       final allPoints = [for (final p in routePts) '${p.$1},${p.$2}'];
       final coords = allPoints.join(';');
-      // Limita a ~25m cuánto puede "pegar" cada punto a una calle distinta
-      // de la que realmente tocaste — si el radio es muy amplio, Mapbox
-      // puede ajustar el punto a una calle paralela o al lado equivocado de
-      // una avenida dividida, y ahí nace el rodeo/vuelta rara.
-      final radiuses = List.filled(allPoints.length, '25').join(';');
 
-      // continue_straight=false: en una parada intermedia la bici puede
-      // devolverse por donde venía. Con "true" Mapbox prohíbe ese giro y,
-      // si la parada cayó en una calle lateral o de un solo sentido, obliga
-      // a rodear la manzana completa para seguir.
-      final url =
-          'https://api.mapbox.com/directions/v5/mapbox/cycling/$coords'
-          '?geometries=geojson&overview=full&steps=true'
-          '&continue_straight=false&alternatives=true&radiuses=$radiuses'
-          '&access_token=$kMapboxToken';
-      // En paralelo, la misma ruta a pie: sirve para detectar tramos donde
-      // la bici queda obligada a un rodeo largo (ver _mergeWithWalkingLegs).
+      // Radio con que Mapbox "pega" cada punto a una calle. Se parte en 25 m
+      // para no saltar a una calle paralela o al lado equivocado de una
+      // avenida. Si un punto quedó lejos de toda calle (tocaste el centro de
+      // una manzana, una casa o un parque) no hay calle a 25 m y Mapbox no
+      // devuelve ruta: se reintenta ampliando el radio hasta encontrar la
+      // calle más cercana, en vez de fallar con «Sin rutas».
+      Map<String, dynamic>? body;
+      String radiuses = '';
+      for (final r in const ['25', '100', '300', 'unlimited']) {
+        radiuses = List.filled(allPoints.length, r).join(';');
+        // continue_straight=false: en una parada intermedia la bici puede
+        // devolverse por donde venía. Con "true" Mapbox prohíbe ese giro y,
+        // si la parada cayó en una calle lateral o de un solo sentido,
+        // obliga a rodear la manzana completa para seguir.
+        final url =
+            'https://api.mapbox.com/directions/v5/mapbox/cycling/$coords'
+            '?geometries=geojson&overview=full&steps=true'
+            '&continue_straight=false&alternatives=true&radiuses=$radiuses'
+            '&access_token=$kMapboxToken';
+        final res = await http
+            .get(Uri.parse(url))
+            .timeout(const Duration(seconds: 15));
+        final decoded = jsonDecode(res.body);
+        final data = decoded is Map<String, dynamic> ? decoded : null;
+        final code = data?['code'] as String?;
+        final found = res.statusCode == 200 &&
+            ((data?['routes'] as List?)?.isNotEmpty ?? false);
+        if (found) {
+          body = data;
+          break;
+        }
+        // Solo vale la pena ampliar el radio si el problema es que un punto
+        // no quedó cerca de una calle; otros errores (red, token) se informan.
+        final snapProblem =
+            code == 'NoSegment' || code == 'NoRoute' || res.statusCode == 200;
+        if (!snapProblem) throw Exception('HTTP ${res.statusCode}');
+      }
+      if (body == null) throw const _NoRouteFound();
+      final routes = body['routes'] as List;
+
+      // En paralelo, la misma ruta a pie con el mismo radio: sirve para
+      // detectar tramos donde la bici queda obligada a un rodeo largo
+      // (ver _mergeWithWalkingLegs).
       final walkFuture = _fetchWalkingLegs(coords, radiuses);
-      final res = await http.get(Uri.parse(url));
-      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final routes = body['routes'] as List?;
-      if (routes == null || routes.isEmpty) throw Exception('Sin rutas');
 
-      // Diagnóstico: qué tan lejos quedó cada punto de la calle a la que
-      // Mapbox lo "pegó". Si esto es alto, el rodeo raro nace de ahí.
+      // Las paradas que quedaron lejos de una calle se mueven al punto de
+      // la calle donde Mapbox las ajustó, para que el marcador muestre por
+      // dónde pasa realmente la ruta. El índice 0 es tu ubicación actual.
       final waypoints = body['waypoints'] as List?;
-      if (waypoints != null) {
-        for (var i = 0; i < waypoints.length; i++) {
-          final snapDist = (waypoints[i]['distance'] as num?)?.toDouble() ?? 0;
-          if (snapDist > 20) {
-            debugPrint(
-              '⚠️ Punto $i quedó a ${snapDist.toStringAsFixed(0)}m de la calle ajustada',
+      final moved = <double>[];
+      if (waypoints != null && waypoints.length == _routeWps.length + 1) {
+        for (var i = 1; i < waypoints.length; i++) {
+          final wp = waypoints[i] as Map;
+          final snapDist = (wp['distance'] as num?)?.toDouble() ?? 0;
+          final loc = wp['location'] as List?;
+          if (snapDist > 25 && loc != null && loc.length == 2) {
+            final old = _routeWps[i - 1];
+            _routeWps[i - 1] = _RouteWp(
+              lat: (loc[1] as num).toDouble(),
+              lng: (loc[0] as num).toDouble(),
+              label: old.label,
             );
+            moved.add(snapDist);
           }
+        }
+      }
+      if (moved.isNotEmpty) {
+        _redrawRoutePins();
+        if (mounted) {
+          final far = moved.reduce((a, b) => a > b ? a : b).round();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                moved.length == 1
+                    ? 'Ajustamos la parada a la calle más cercana (a $far m).'
+                    : 'Ajustamos ${moved.length} paradas a la calle más cercana (hasta $far m).',
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
         }
       }
 
@@ -4654,10 +4768,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
       if (countUsage) await _recordRoutePlanUsage();
     } catch (e) {
       setState(() => _routeCalculating = false);
+      debugPrint('Error calculando ruta: $e');
       if (mounted) {
+        final msg = e is _NoRouteFound
+            ? 'No encontramos un camino en bici entre esos puntos. Prueba moviendo una parada.'
+            : (e is TimeoutException || e is SocketException)
+                ? 'No pudimos calcular la ruta: revisa tu conexión e intenta de nuevo.'
+                : 'No pudimos calcular la ruta. Intenta de nuevo en unos segundos.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(msg),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
@@ -8958,78 +9078,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   void _showSafetyReminder() {
-    const items = [
-      ('🪖', 'Usa casco bien ajustado', 'En Chile es obligatorio para ciclistas (Ley 21.088).'),
-      ('💡', 'Luces encendidas', 'Blanca adelante y roja atrás, sobre todo de noche o con poca luz.'),
-      ('🦺', 'Hazte visible', 'Ropa clara o reflectante.'),
-      ('🔧', 'Revisa tu bici', 'Frenos, neumáticos y cadena antes de salir.'),
-      ('🚦', 'Respeta las normas', 'Semáforos y señales; usa la ciclovía cuando exista.'),
-      ('📱', 'Ojos en el camino', 'Lleva el teléfono en un soporte y no lo manipules mientras pedaleas.'),
-      ('💧', 'Hidrátate', 'Lleva agua en trayectos largos o con calor.'),
-    ];
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + MediaQuery.of(ctx).padding.bottom),
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF12141C),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Antes de salir 🚲',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text('Tu seguridad es lo primero. Revisa esto antes de pedalear:',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.6), fontSize: 13)),
-            const SizedBox(height: 14),
-            for (final (emoji, title, sub) in items)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(emoji, style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title,
-                              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600)),
-                          Text(sub,
-                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.55), fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7CF0BC),
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Entendido, ¡a pedalear!',
-                    style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      ),
+      barrierColor: Colors.black54,
+      builder: (ctx) => const _SafetyChecklistSheet(),
     );
   }
 
@@ -10801,6 +10855,226 @@ class _ProfileButtonState extends State<_ProfileButton> {
       ),
     );
   }
+}
+
+// ─── Recordatorio de seguridad «Antes de salir» ─────────────────────────────
+
+/// Lista de verificación antes de pedalear: cada ítem se puede tocar para
+/// marcarlo como revisado. Es solo un recordatorio: se puede cerrar siempre.
+class _SafetyChecklistSheet extends StatefulWidget {
+  const _SafetyChecklistSheet();
+
+  @override
+  State<_SafetyChecklistSheet> createState() => _SafetyChecklistSheetState();
+}
+
+class _SafetyChecklistSheetState extends State<_SafetyChecklistSheet> {
+  static const _items = <(IconData, Color, String, String)>[
+    (Icons.sports_motorsports_rounded, Color(0xFFFFB547), 'Casco bien ajustado',
+        'Obligatorio para ciclistas en Chile (Ley 21.088).'),
+    (Icons.flashlight_on_rounded, Color(0xFFFFE066), 'Luces encendidas',
+        'Blanca adelante y roja atrás, sobre todo con poca luz.'),
+    (Icons.visibility_rounded, Color(0xFFFF8A5B), 'Hazte visible',
+        'Ropa clara o reflectante.'),
+    (Icons.handyman_rounded, Color(0xFF5BC0FF), 'Revisa tu bici',
+        'Frenos, neumáticos y cadena.'),
+    (Icons.traffic_rounded, Color(0xFFFF5B7A), 'Respeta las normas',
+        'Semáforos y señales; usa la ciclovía cuando exista.'),
+    (Icons.phone_android_rounded, Color(0xFFB98BFF), 'Ojos en el camino',
+        'Teléfono en un soporte, sin manipularlo al pedalear.'),
+    (Icons.water_drop_rounded, Color(0xFF4DE1D2), 'Hidrátate',
+        'Lleva agua en trayectos largos o con calor.'),
+  ];
+  static const _accent = Color(0xFF7CF0BC);
+  final Set<int> _done = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final all = _done.length == _items.length;
+    return Container(
+      margin: EdgeInsets.fromLTRB(10, 0, 10, 10 + bottom),
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1117),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 30, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Encabezado ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_accent.withOpacity(0.22), const Color(0xFF0E1117)],
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(colors: [_accent, Color(0xFF34C99A)]),
+                          boxShadow: [BoxShadow(color: _accent.withOpacity(0.45), blurRadius: 18)],
+                        ),
+                        child: const Icon(Icons.health_and_safety_rounded, color: Color(0xFF06261A), size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Antes de salir',
+                                style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                            Text('Toca cada punto cuando lo revises',
+                                style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.6), fontSize: 12.5)),
+                          ],
+                        ),
+                      ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: all ? _accent : Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text('${_done.length}/${_items.length}',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: all ? const Color(0xFF06261A) : Colors.white70,
+                            )),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // ── Lista ──
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                itemCount: _items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) {
+                  final (icon, color, title, sub) = _items[i];
+                  final on = _done.contains(i);
+                  return Material(
+                    color: on ? color.withOpacity(0.10) : Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(18),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => on ? _done.remove(i) : _done.add(i));
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: on ? color.withOpacity(0.55) : Colors.white.withOpacity(0.06)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.16),
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                              child: Icon(icon, color: color, size: 23),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(title,
+                                      style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 1),
+                                  Text(sub,
+                                      style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.55), fontSize: 12, height: 1.3)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              child: Icon(
+                                on ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                key: ValueKey(on),
+                                color: on ? color : Colors.white24,
+                                size: 24,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            // ── Acción ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  height: 52,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: const LinearGradient(colors: [_accent, Color(0xFF34C99A)]),
+                    boxShadow: [BoxShadow(color: _accent.withOpacity(all ? 0.5 : 0.25), blurRadius: 18, offset: const Offset(0, 6))],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.directions_bike_rounded, color: Color(0xFF06261A), size: 20),
+                      const SizedBox(width: 8),
+                      Text(all ? '¡Todo listo, a pedalear!' : 'Entendido, ¡a pedalear!',
+                          style: const TextStyle(fontFamily: 'Poppins', color: Color(0xFF06261A), fontSize: 15, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// No existe un camino en bici entre los puntos, ni siquiera ajustándolos a
+/// la calle más cercana.
+class _NoRouteFound implements Exception {
+  const _NoRouteFound();
 }
 
 // ─── Waypoint del planificador de rutas ──────────────────────────────────────
