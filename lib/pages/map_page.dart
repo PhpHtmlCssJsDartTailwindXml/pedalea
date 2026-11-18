@@ -4601,6 +4601,73 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
+  bool _locationPromptShown = false;
+
+  /// Revisa permiso y GPS. Si falta algo, muestra una ventana que explica por
+  /// qué se necesita y lleva a activarlo. Devuelve true si quedó disponible.
+  Future<bool> _ensureLocationAccess({String? reason, bool force = false}) async {
+    try {
+      var perm = await geo.Geolocator.checkPermission();
+      final service = await geo.Geolocator.isLocationServiceEnabled();
+      final ok = service &&
+          perm != geo.LocationPermission.denied &&
+          perm != geo.LocationPermission.deniedForever;
+      if (ok) return true;
+      if (!mounted || (_locationPromptShown && !force)) return false;
+      _locationPromptShown = true;
+      final go = await showModalBottomSheet<bool>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => _LocationPermissionSheet(
+          serviceOff: !service,
+          reason: reason ??
+              'Pedalea usa tu ubicación para mostrarte en el mapa, calcular rutas desde donde estás y avisarte de alertas cercanas.',
+        ),
+      );
+      if (go != true) return false;
+      if (!service) {
+        await geo.Geolocator.openLocationSettings();
+        return false;
+      }
+      if (perm == geo.LocationPermission.deniedForever) {
+        await geo.Geolocator.openAppSettings();
+        return false;
+      }
+      perm = await geo.Geolocator.requestPermission();
+      if (perm == geo.LocationPermission.deniedForever) {
+        await geo.Geolocator.openAppSettings();
+        return false;
+      }
+      final granted = perm == geo.LocationPermission.always ||
+          perm == geo.LocationPermission.whileInUse;
+      if (granted) _restartGps();
+      return granted;
+    } catch (e) {
+      debugPrint('No se pudo revisar la ubicación: $e');
+      return false;
+    }
+  }
+
+  /// Tu ubicación para iniciar la ruta, pidiendo el permiso si falta.
+  /// Devuelve null si no hay permiso, el GPS está apagado o no hay señal.
+  Future<geo.Position?> _routeOrigin() async {
+    if (_lastPosition != null) return _lastPosition;
+    try {
+      final perm = await geo.Geolocator.checkPermission();
+      if (perm == geo.LocationPermission.denied ||
+          perm == geo.LocationPermission.deniedForever) {
+        return null;
+      }
+      if (!await geo.Geolocator.isLocationServiceEnabled()) return null;
+      return await geo.Geolocator.getCurrentPosition(
+        desiredAccuracy: geo.LocationAccuracy.high,
+      ).timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('Ubicación no disponible para la ruta: $e');
+      return null;
+    }
+  }
+
   /// [countUsage] debe ser false cuando es una re-planificación interna
   /// (p.ej. al saltar una parada durante la navegación) — el límite diario
   /// es sobre "planificar una ruta nueva", no sobre sus ajustes internos.
@@ -4623,18 +4690,29 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
     setState(() => _routeCalculating = true);
     try {
-      // La ruta siempre parte de tu ubicación real en vivo, no de la primera
-      // parada que tocaste en el mapa — por eso se antepone acá, en vez de
-      // depender de que el usuario agregue su propia posición como parada.
-      final current =
-          _lastPosition ?? await geo.Geolocator.getCurrentPosition();
+      // La ruta parte de tu ubicación real en vivo. Si la app no tiene
+      // permiso de ubicación (o el GPS está apagado) y hay al menos dos
+      // paradas, parte de la primera, como hace Google Maps cuando no sabe
+      // dónde estás.
+      final current = await _routeOrigin();
+      if (current == null && _routeWps.length < 2) throw const _NoLocation();
+      final fromGps = current != null;
+      if (!fromGps && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sin acceso a tu ubicación: la ruta parte en la primera parada.'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(16),
+          ),
+        );
+      }
 
       // Se respeta el orden exacto en que tocaste las paradas (Parada 1,
       // 2, 3...) — no se reordenan por cercanía.
       // Las paradas intermedias que quedan "de pasada" se alinean con la
       // calle del trayecto directo, para no forzar vueltas a la manzana.
       final routePts = await _straightenIntermediateStops([
-        (current.longitude, current.latitude),
+        if (fromGps) (current.longitude, current.latitude),
         ..._routeWps.map((w) => (w.lng, w.lat)),
       ]);
       final allPoints = [for (final p in routePts) '${p.$1},${p.$2}'];
@@ -4690,14 +4768,15 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // dónde pasa realmente la ruta. El índice 0 es tu ubicación actual.
       final waypoints = body['waypoints'] as List?;
       final moved = <double>[];
-      if (waypoints != null && waypoints.length == _routeWps.length + 1) {
-        for (var i = 1; i < waypoints.length; i++) {
+      final offset = fromGps ? 1 : 0; // el índice 0 es tu ubicación si hay GPS
+      if (waypoints != null && waypoints.length == _routeWps.length + offset) {
+        for (var i = offset; i < waypoints.length; i++) {
           final wp = waypoints[i] as Map;
           final snapDist = (wp['distance'] as num?)?.toDouble() ?? 0;
           final loc = wp['location'] as List?;
           if (snapDist > 25 && loc != null && loc.length == 2) {
-            final old = _routeWps[i - 1];
-            _routeWps[i - 1] = _RouteWp(
+            final old = _routeWps[i - offset];
+            _routeWps[i - offset] = _RouteWp(
               lat: (loc[1] as num).toDouble(),
               lng: (loc[0] as num).toDouble(),
               label: old.label,
@@ -4770,6 +4849,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
       setState(() => _routeCalculating = false);
       debugPrint('Error calculando ruta: $e');
       if (mounted) {
+        if (e is _NoLocation) {
+          final ok = await _ensureLocationAccess(
+            force: true,
+            reason: 'Para calcular la ruta desde donde estás necesitamos tu ubicación. También puedes agregar dos paradas y la ruta partirá en la primera.',
+          );
+          if (ok && mounted) _calcRoute(countUsage: countUsage);
+          return;
+        }
         final msg = e is _NoRouteFound
             ? 'No encontramos un camino en bici entre esos puntos. Prueba moviendo una parada.'
             : (e is TimeoutException || e is SocketException)
@@ -4849,12 +4936,20 @@ class _MapPageState extends State<MapPage> with RouteAware {
     return tooltip == null ? b : Tooltip(message: tooltip, child: b);
   }
 
+  bool _rpCollapsed = false;
+
   Widget _buildRoutePlannerPanel() {
     final n = _routeWps.length;
     final calculated = _routeDistKm != null;
-    final subtitle = n == 0
+    final collapsed = _rpCollapsed;
+    String subtitle = n == 0
         ? 'Desde tu ubicación · agrega una parada'
         : 'Desde tu ubicación · $n ${n == 1 ? 'parada' : 'paradas'}';
+    if (collapsed && calculated) {
+      final min = (_routeDurMin ?? 0).round();
+      final t = min >= 60 ? '${min ~/ 60} h ${min % 60} min' : '$min min';
+      subtitle = '${_routeDistKm!.toStringAsFixed(1)} km · $t · $n ${n == 1 ? 'parada' : 'paradas'}';
+    }
     final bottom = MediaQuery.of(context).padding.bottom;
 
     // Botón principal: calcula o, si ya hay ruta, inicia la navegación.
@@ -4875,8 +4970,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Encabezado ──
-          Container(
+          // ── Encabezado (arrástralo hacia abajo para achicar el panel) ──
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              if (v > 150 && !_rpCollapsed) setState(() => _rpCollapsed = true);
+              if (v < -150 && _rpCollapsed) setState(() => _rpCollapsed = false);
+            },
+            onTap: () => setState(() => _rpCollapsed = !_rpCollapsed),
+            child: Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
             decoration: BoxDecoration(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -4918,12 +5021,21 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         ],
                       ),
                     ),
+                    _rpRoundButton(
+                      icon: collapsed ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      onTap: () => setState(() => _rpCollapsed = !_rpCollapsed),
+                      tooltip: collapsed ? 'Mostrar más' : 'Achicar',
+                    ),
+                    const SizedBox(width: 6),
                     _rpRoundButton(icon: Icons.close_rounded, onTap: _closeRoutePlanner, tooltip: 'Cerrar'),
                   ],
                 ),
               ],
             ),
           ),
+          ),
+
+          if (!collapsed) ...[
 
           // ── Recordatorio de seguridad ──
           Padding(
@@ -5091,6 +5203,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
           // ── Resultados ──
           if (calculated) _rpResults(),
+          ],
 
           // ── Acción principal ──
           Padding(
@@ -5137,7 +5250,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
             ),
           ),
 
+          if (collapsed) SizedBox(height: bottom + 12),
           // ── Acciones secundarias ──
+          if (!collapsed)
           Padding(
             padding: EdgeInsets.fromLTRB(14, 10, 14, bottom + 12),
             child: Row(
@@ -6679,9 +6794,15 @@ class _MapPageState extends State<MapPage> with RouteAware {
             label: 'Planificar ruta',
             onTap: () {
               Navigator.pop(context);
-              setState(() => _routePlannerOpen = true);
+              setState(() {
+                _routePlannerOpen = true;
+                _rpCollapsed = false;
+              });
               _loadFavorites();
-              _maybeShowSafetyReminder();
+              _ensureLocationAccess(
+                force: true,
+                reason: 'Para calcular rutas desde donde estás necesitamos tu ubicación.',
+              ).then((_) => _maybeShowSafetyReminder());
             },
           ),
           _drawerRow(
@@ -7349,7 +7470,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
         perm = await geo.Geolocator.requestPermission();
       }
       if (perm == geo.LocationPermission.denied ||
-          perm == geo.LocationPermission.deniedForever) {
+          perm == geo.LocationPermission.deniedForever ||
+          !await geo.Geolocator.isLocationServiceEnabled()) {
+        _ensureLocationAccess();
         return;
       }
 
@@ -9096,6 +9219,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _showBicimetro = false;
       _showBikeServices = false;
       _routePlannerOpen = true;
+      _rpCollapsed = false;
       _routeWps.clear();
       _routeDistKm = null;
       _routeDurMin = null;
@@ -10914,14 +11038,9 @@ class _ProfileButtonState extends State<_ProfileButton> {
 
 /// Lista de verificación antes de pedalear: cada ítem se puede tocar para
 /// marcarlo como revisado. Es solo un recordatorio: se puede cerrar siempre.
-class _SafetyChecklistSheet extends StatefulWidget {
+class _SafetyChecklistSheet extends StatelessWidget {
   const _SafetyChecklistSheet();
 
-  @override
-  State<_SafetyChecklistSheet> createState() => _SafetyChecklistSheetState();
-}
-
-class _SafetyChecklistSheetState extends State<_SafetyChecklistSheet> {
   static const _items = <(IconData, Color, String, String)>[
     (Icons.sports_motorsports_rounded, Color(0xFFFFB547), 'Casco bien ajustado',
         'Obligatorio para ciclistas en Chile (Ley 21.088).'),
@@ -10939,12 +11058,10 @@ class _SafetyChecklistSheetState extends State<_SafetyChecklistSheet> {
         'Lleva agua en trayectos largos o con calor.'),
   ];
   static const _accent = Color(0xFF7CF0BC);
-  final Set<int> _done = {};
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).padding.bottom;
-    final all = _done.length == _items.length;
     return Container(
       margin: EdgeInsets.fromLTRB(10, 0, 10, 10 + bottom),
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
@@ -10961,7 +11078,6 @@ class _SafetyChecklistSheetState extends State<_SafetyChecklistSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Encabezado ──
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
@@ -10999,32 +11115,16 @@ class _SafetyChecklistSheetState extends State<_SafetyChecklistSheet> {
                           children: [
                             const Text('Antes de salir',
                                 style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-                            Text('Toca cada punto cuando lo revises',
+                            Text('Algunos consejos para pedalear seguro',
                                 style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.6), fontSize: 12.5)),
                           ],
                         ),
-                      ),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: all ? _accent : Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text('${_done.length}/${_items.length}',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: all ? const Color(0xFF06261A) : Colors.white70,
-                            )),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            // ── Lista ──
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,
@@ -11033,85 +11133,61 @@ class _SafetyChecklistSheetState extends State<_SafetyChecklistSheet> {
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (_, i) {
                   final (icon, color, title, sub) = _items[i];
-                  final on = _done.contains(i);
-                  return Material(
-                    color: on ? color.withOpacity(0.10) : Colors.white.withOpacity(0.04),
-                    borderRadius: BorderRadius.circular(18),
-                    child: InkWell(
+                  return Container(
+                    padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
                       borderRadius: BorderRadius.circular(18),
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() => on ? _done.remove(i) : _done.add(i));
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: on ? color.withOpacity(0.55) : Colors.white.withOpacity(0.06)),
+                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.16),
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: Icon(icon, color: color, size: 23),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: color.withOpacity(0.16),
-                                borderRadius: BorderRadius.circular(13),
-                              ),
-                              child: Icon(icon, color: color, size: 23),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(title,
-                                      style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 1),
-                                  Text(sub,
-                                      style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.55), fontSize: 12, height: 1.3)),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 200),
-                              child: Icon(
-                                on ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                key: ValueKey(on),
-                                color: on ? color : Colors.white24,
-                                size: 24,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title,
+                                  style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 1),
+                              Text(sub,
+                                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.55), fontSize: 12, height: 1.3)),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   );
                 },
               ),
             ),
-            // ── Acción ──
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
               child: GestureDetector(
                 onTap: () => Navigator.pop(context),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
+                child: Container(
                   height: 52,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     gradient: const LinearGradient(colors: [_accent, Color(0xFF34C99A)]),
-                    boxShadow: [BoxShadow(color: _accent.withOpacity(all ? 0.5 : 0.25), blurRadius: 18, offset: const Offset(0, 6))],
+                    boxShadow: [BoxShadow(color: _accent.withOpacity(0.3), blurRadius: 18, offset: const Offset(0, 6))],
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.directions_bike_rounded, color: Color(0xFF06261A), size: 20),
-                      const SizedBox(width: 8),
-                      Text(all ? '¡Todo listo, a pedalear!' : 'Entendido, ¡a pedalear!',
-                          style: const TextStyle(fontFamily: 'Poppins', color: Color(0xFF06261A), fontSize: 15, fontWeight: FontWeight.w800)),
+                      Icon(Icons.directions_bike_rounded, color: Color(0xFF06261A), size: 20),
+                      SizedBox(width: 8),
+                      Text('Entendido, ¡a pedalear!',
+                          style: TextStyle(fontFamily: 'Poppins', color: Color(0xFF06261A), fontSize: 15, fontWeight: FontWeight.w800)),
                     ],
                   ),
                 ),
@@ -11122,6 +11198,86 @@ class _SafetyChecklistSheetState extends State<_SafetyChecklistSheet> {
       ),
     );
   }
+}
+
+// ─── Ventana para activar la ubicación ──────────────────────────────────────
+
+class _LocationPermissionSheet extends StatelessWidget {
+  const _LocationPermissionSheet({required this.serviceOff, required this.reason});
+
+  final bool serviceOff;
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xFF4D8DFF);
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      margin: EdgeInsets.fromLTRB(10, 0, 10, 10 + bottom),
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1117),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 38,
+            height: 4,
+            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: blue.withOpacity(0.15),
+              border: Border.all(color: blue.withOpacity(0.5), width: 1.5),
+            ),
+            child: Icon(serviceOff ? Icons.location_off_rounded : Icons.my_location_rounded, color: blue, size: 30),
+          ),
+          const SizedBox(height: 14),
+          Text(serviceOff ? 'Activa el GPS' : 'Activa tu ubicación',
+              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(reason,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.65), fontSize: 13.5, height: 1.4)),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.location_on_rounded, size: 20),
+              label: Text(serviceOff ? 'Activar GPS' : 'Activar ubicación'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: blue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Ahora no',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.5))),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// No hay ubicación disponible (sin permiso o GPS apagado) y faltan paradas
+/// para usar la primera como punto de partida.
+class _NoLocation implements Exception {
+  const _NoLocation();
 }
 
 /// No existe un camino en bici entre los puntos, ni siquiera ajustándolos a
