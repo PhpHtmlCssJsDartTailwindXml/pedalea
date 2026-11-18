@@ -1184,7 +1184,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                       ),
                     ),
                   ),
-                  if (!_isPlus && _usesPlus && _plusLeft != null && _plusLeft! >= 0)
+                  if (!_isPlus && _plusLeft != null && _plusLeft! >= 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Row(
