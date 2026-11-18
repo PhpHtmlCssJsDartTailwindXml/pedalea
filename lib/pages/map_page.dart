@@ -6348,7 +6348,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
           .where((a) => a.isNotEmpty)
           .map(
             (a) => {
-              'icon': a['icon'] as String? ?? '🏅',
+              'id': a['id'] as String? ?? '',
               'title': a['title'] as String? ?? 'Nuevo logro',
             },
           )

@@ -18,6 +18,7 @@ import 'paywall_page.dart';
 import 'manage_subscription_page.dart';
 import 'plus_unlocked_page.dart';
 import '../widgets/achievement_unlock_toast.dart';
+import '../widgets/achievement_badge.dart';
 import '../widgets/plus_medal.dart';
 import '../widgets/rider_activity.dart';
 import '../services/plus_prefs_service.dart';
@@ -244,7 +245,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ))
             .where((a) => a.isNotEmpty)
             .map((a) => {
-                  'icon': a['icon'] as String? ?? '🏅',
+                  'id': a['id'] as String? ?? '',
                   'title': a['title'] as String? ?? 'Nuevo logro',
                 })
             .toList();
@@ -1209,25 +1210,7 @@ class _ProfilePageState extends State<ProfilePage> {
               width: 70,
               child: Column(
                 children: [
-                  Container(
-                    width: 54,
-                    height: 54,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(on ? 0.08 : 0.03),
-                      border: Border.all(
-                        color: on
-                            ? _accent.withOpacity(0.5)
-                            : Colors.white.withOpacity(0.06),
-                      ),
-                    ),
-                    child: Opacity(
-                      opacity: on ? 1 : 0.3,
-                      child: Text(a['icon'] as String? ?? '🏅',
-                          style: const TextStyle(fontSize: 24)),
-                    ),
-                  ),
+                  AchievementBadge(id: a['id'] as String?, unlocked: on, size: 54),
                   const SizedBox(height: 5),
                   Text(
                     a['title'] as String? ?? '',
@@ -1421,62 +1404,9 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  void _showAchievementDetail(Map<String, dynamic> achievement, bool unlocked) {
-    final icon = achievement['icon'] as String? ?? '🏅';
-    final title = achievement['title'] as String? ?? '';
-    final description = achievement['description'] as String? ?? '';
-    final unlockedAt = achievement['unlocked_at'] as String?;
-    String dateStr = '';
-    if (unlockedAt != null) {
-      final dt = DateTime.tryParse(unlockedAt)?.toLocal();
-      if (dt != null) {
-        dateStr = '${dt.day} ${_months[dt.month - 1]} ${dt.year}';
-      }
-    }
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF161622),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Opacity(
-                opacity: unlocked ? 1 : 0.35,
-                child: Text(icon, style: const TextStyle(fontSize: 52)),
-              ),
-              const SizedBox(height: 12),
-              Text(title,
-                  textAlign: TextAlign.center,
-                  style: _txt(20,
-                      w: FontWeight.w700,
-                      c: unlocked ? Colors.white : Colors.white54)),
-              const SizedBox(height: 6),
-              Text(description,
-                  textAlign: TextAlign.center,
-                  style: _txt(14, w: FontWeight.w400, c: Colors.white60)),
-              const SizedBox(height: 14),
-              Text(
-                unlocked
-                    ? (dateStr.isNotEmpty
-                        ? 'Desbloqueado el $dateStr'
-                        : 'Desbloqueado')
-                    : 'Aún no desbloqueado',
-                style: _txt(12.5,
-                    w: FontWeight.w600,
-                    c: unlocked ? _accent : Colors.white30),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  void _showAchievementDetail(Map<String, dynamic> achievement, bool unlocked) =>
+      showAchievementDetailSheet(context, achievement, unlocked);
+
 }
 
 class _GoogleIcon extends StatelessWidget {

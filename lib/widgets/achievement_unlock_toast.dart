@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'achievement_badge.dart';
 
 /// Notificación flotante ("toast") que se muestra dentro de la misma app
 /// cuando el usuario acaba de completar un logro. Se apila sobre lo que
 /// esté en pantalla usando el Overlay, con una entrada/salida animada,
 /// y se cierra sola después de unos segundos (o al tocarla).
 class AchievementUnlockToast extends StatefulWidget {
-  final String icon;
+  final String achievementId;
   final String title;
   final VoidCallback onDismiss;
 
   const AchievementUnlockToast({
     super.key,
-    required this.icon,
+    required this.achievementId,
     required this.title,
     required this.onDismiss,
   });
@@ -85,18 +86,7 @@ class _AchievementUnlockToastState extends State<AchievementUnlockToast>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF7CF0BC).withOpacity(0.15),
-                        border: Border.all(color: const Color(0xFFC9FF5C), width: 1.5),
-                      ),
-                      child: Center(
-                        child: Text(widget.icon, style: const TextStyle(fontSize: 20)),
-                      ),
-                    ),
+                    AchievementBadge(id: widget.achievementId, size: 44),
                     const SizedBox(width: 12),
                     Flexible(
                       child: Column(
@@ -154,7 +144,7 @@ void showAchievementUnlockedToasts(
     late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (_) => AchievementUnlockToast(
-        icon: a['icon'] ?? '🏅',
+        achievementId: a['id'] ?? '',
         title: a['title'] ?? 'Nuevo logro',
         onDismiss: () => entry.remove(),
       ),
