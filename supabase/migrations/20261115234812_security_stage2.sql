@@ -4,7 +4,7 @@
 -- Cierra los accesos que la app antigua usaba directamente. Las versiones
 -- anteriores a la 1.3.3 dejarán de poder votar alertas hasta actualizar
 -- (la actualización obligatoria de Play las lleva a hacerlo al abrir la app).
--- Requiere haber ejecutado antes 20261117_security_stage1.sql.
+-- Requiere haber ejecutado antes 20261115234811_security_stage1.sql.
 
 -- 1) Contactos de emergencia: dejan de ser legibles para los demás usuarios.
 --    Cada usuario lee los suyos con my_private_profile().

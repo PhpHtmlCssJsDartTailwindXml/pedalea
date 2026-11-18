@@ -14,8 +14,8 @@
 --  * Triggers de bicis, momentos y eventos usan plus_active().
 --  * Unirse / salir de eventos solo vía RPC (join_event / leave_event).
 --  * UPDATE de eventos solo para su creador.
---    (Ocultar password_hash va aparte en 20261201_hide_event_password.sql,
---     cuando casi todos tengan la 1.3.1+: las versiones viejas piden select *.)
+--    (El hash de la contraseña se movió después a la tabla privada
+--     event_secrets en 20261115234811_security_stage1.sql.)
 --  * sync_my_plus(): la app la llama al abrir para corregir is_plus vencido.
 
 -- 1. Fuente de verdad ---------------------------------------------------------

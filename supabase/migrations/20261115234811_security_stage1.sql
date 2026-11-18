@@ -2,7 +2,7 @@
 --
 -- Solo agrega funciones y protecciones compatibles: las versiones antiguas de
 -- la app siguen funcionando igual. Los cierres que sí afectan a versiones
--- antiguas están en 20261124_security_stage2.sql.
+-- antiguas están en 20261115234812_security_stage2.sql.
 
 -- 1) Contacto de emergencia: el propio usuario lo lee con esta función.
 --    (En la etapa 2 esas columnas dejan de ser legibles para los demás.)

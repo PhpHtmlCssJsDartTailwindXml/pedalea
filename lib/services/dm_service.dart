@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// solo lee y marca como leído.
 ///
 /// Fotos, audios, responder y "eliminar para todos" requieren la migración
-/// `supabase/migrations/20261012_dm_rich_messages.sql`. Mientras no esté
+/// `supabase/migrations/20261012232603_dm_rich_messages.sql`. Mientras no esté
 /// aplicada, el servicio funciona en modo texto (como antes) y
 /// [richSupported] queda en false.
 class DmService {

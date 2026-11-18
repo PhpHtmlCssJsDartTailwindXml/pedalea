@@ -2,7 +2,7 @@
 // notificación push (FCM) para los teléfonos del destinatario.
 //
 // La llaman los triggers `notify_push()` de la BD (ver
-// supabase/migrations/20261111_push_notifications.sql), nunca la app.
+// supabase/migrations/20261111195714_push_notifications.sql), nunca la app.
 //
 // Secreto necesario:
 //   FCM_SERVICE_ACCOUNT_JSON  — JSON completo de la cuenta de servicio de
