@@ -164,8 +164,6 @@ class _StatsPageState extends State<StatsPage> {
   List<Color> get _accentGrad => StatsPrefsService.accentGradientFor(_accentIndex);
 
   final List<String> _order = StatsPrefsService.tileOrder;
-  final Set<String> _hidden = {...StatsPrefsService.hiddenTiles};
-  bool _editMode = false;
 
   @override
   void initState() {
@@ -244,9 +242,7 @@ class _StatsPageState extends State<StatsPage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 6, 20, 36),
                     children: [
-                      if (_editMode)
-                        _buildEditPanel()
-                      else ...[
+                      ...[
                         _buildActions(),
                         const SizedBox(height: 16),
                         _buildPeriodTabs(),
@@ -293,7 +289,7 @@ class _StatsPageState extends State<StatsPage> {
         children: [
           _iconBtn(Icons.arrow_back_rounded, 'Volver', () => Navigator.pop(context), color: Colors.white),
           const SizedBox(width: 2),
-          Expanded(child: Text(_editMode ? 'Personalizar' : 'Estadísticas', style: _t(19, w: FontWeight.w700))),
+          Expanded(child: Text('Estadísticas', style: _t(19, w: FontWeight.w700))),
           if (_syncing)
             Padding(
               padding: const EdgeInsets.all(14),
@@ -301,11 +297,6 @@ class _StatsPageState extends State<StatsPage> {
             )
           else
             _iconBtn(Icons.sync_rounded, 'Actualizar', _syncFromServer),
-          if (_editMode)
-            TextButton(
-              onPressed: () => setState(() => _editMode = false),
-              child: Text('Listo', style: _t(15, w: FontWeight.w700, c: _accent)),
-            ),
         ],
       ),
     );
@@ -351,7 +342,6 @@ class _StatsPageState extends State<StatsPage> {
     return Row(
       children: [
         Expanded(
-          flex: 3,
           child: btn(
             icon: Icons.ios_share_rounded,
             label: 'Compartir estadísticas',
@@ -364,15 +354,6 @@ class _StatsPageState extends State<StatsPage> {
                     decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(6)),
                     child: Text('PLUS', style: _t(8.5, w: FontWeight.w800, c: Colors.black)),
                   ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 2,
-          child: btn(
-            icon: Icons.edit_rounded,
-            label: 'Editar',
-            onTap: () => setState(() => _editMode = true),
           ),
         ),
       ],
@@ -476,7 +457,7 @@ class _StatsPageState extends State<StatsPage> {
 
   // ── Cuadrícula de datos ──────────────────────────────────────────────
   Widget _buildStatGrid() {
-    final keys = _order.where((k) => !_hidden.contains(k)).toList();
+    final keys = _order;
     if (keys.isEmpty) return const SizedBox.shrink();
     final rows = <List<String>>[];
     for (var i = 0; i < keys.length; i += 3) {
@@ -611,134 +592,6 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  // ── Personalización ──────────────────────────────────────────────────
-  void _selectAccent(int index) {
-    if (StatsPrefsService.isPlusAccentIndex(index) && !_isPlus) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const PaywallPage(
-            reason: 'Los temas y colores de acento premium son parte de Pedalea Plus.',
-          ),
-        ),
-      );
-      return;
-    }
-    // Guarda en el perfil (BD); el notifier repinta vía _onPrefsChanged.
-    PlusPrefsService.setAccentIndex(index);
-  }
-
-  Widget _accentSwatch(int index) {
-    final grad = StatsPrefsService.accentGradientFor(index);
-    final isGradient = grad.first.value != grad.last.value;
-    final selected = _accentIndex == index;
-    return GestureDetector(
-      onTap: () => _selectAccent(index),
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: isGradient ? null : grad.first,
-          gradient: isGradient ? LinearGradient(colors: grad, begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
-          shape: BoxShape.circle,
-          border: Border.all(color: selected ? Colors.white : Colors.transparent, width: 2.5),
-        ),
-        child: selected ? const Icon(Icons.check_rounded, color: Colors.black, size: 16) : null,
-      ),
-    );
-  }
-
-  Widget _label(String text) => Text(text.toUpperCase(), style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2));
-
-  Widget _buildEditPanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        _label('Color de acento'),
-        const SizedBox(height: 12),
-        Wrap(spacing: 12, runSpacing: 12, children: [
-          for (int i = 0; i < StatsPrefsService.freeAccentCount; i++) _accentSwatch(i),
-        ]),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Text('PLUS', style: _t(10, w: FontWeight.w800, c: Colors.amber, ls: 1)),
-            const SizedBox(width: 6),
-            Text(_isPlus ? 'colores y degradados' : 'toca para probar', style: _t(10.5, c: Colors.white38)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Opacity(
-          opacity: _isPlus ? 1 : 0.55,
-          child: Wrap(spacing: 12, runSpacing: 12, children: [
-            for (int i = StatsPrefsService.freeAccentCount; i < StatsPrefsService.allAccentColors.length; i++) _accentSwatch(i),
-          ]),
-        ),
-        const SizedBox(height: 28),
-        _label('Datos'),
-        const SizedBox(height: 4),
-        Text('Arrastra para ordenar · toca el ojo para mostrar u ocultar', style: _t(11.5, c: Colors.white38)),
-        const SizedBox(height: 10),
-        ReorderableListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          buildDefaultDragHandles: false,
-          itemCount: _order.length,
-          onReorder: (oldIndex, newIndex) {
-            setState(() {
-              if (newIndex > oldIndex) newIndex--;
-              final item = _order.removeAt(oldIndex);
-              _order.insert(newIndex, item);
-            });
-            StatsPrefsService.setTileOrder(_order);
-          },
-          itemBuilder: (context, i) {
-            final key = _order[i];
-            final hidden = _hidden.contains(key);
-            final (icon, label) = _tileMeta[key]!;
-            final (value, unit) = _tileValue(key);
-            return Container(
-              key: ValueKey(key),
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(hidden ? 0.02 : 0.05),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: ListTile(
-                dense: true,
-                leading: Icon(icon, color: hidden ? Colors.white24 : _accent, size: 21),
-                title: Text(label, style: _t(14, w: FontWeight.w600, c: hidden ? Colors.white38 : Colors.white)),
-                subtitle: Text('$value $unit', style: _t(12, c: Colors.white38)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: Icon(hidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                          color: hidden ? Colors.white30 : Colors.white70, size: 20),
-                      onPressed: () {
-                        setState(() => hidden ? _hidden.remove(key) : _hidden.add(key));
-                        StatsPrefsService.setHiddenTiles(_hidden);
-                      },
-                    ),
-                    ReorderableDragStartListener(
-                      index: i,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(Icons.drag_handle_rounded, color: Colors.white38),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   // ── Compartir ────────────────────────────────────────────────────────
   void _openShareSheet() {
     if (!SubscriptionService.instance.isPlus.value) {
@@ -770,7 +623,7 @@ class _StatsPageState extends State<StatsPage> {
         streak: _streak,
         maxSpeed: _maxSpeed,
         order: List.of(_order),
-        shown: _order.where((k) => !_hidden.contains(k)).toSet(),
+        shown: _order.where((k) => !StatsPrefsService.hiddenTiles.contains(k)).toSet(),
       ),
     );
   }
@@ -979,16 +832,29 @@ class _ShareSheetState extends State<_ShareSheet> {
   File? _photo;
   bool _sharing = false;
   bool _saving = false;
+  bool _saved = false; // muestra «Imagen guardada» en el botón unos segundos
 
   /// Datos que van en la imagen (máximo 6 para que se lean bien).
   static const _maxStats = 6;
   late final Set<String> _shown = widget.order.where(widget.shown.contains).take(_maxStats).toSet();
 
+  /// Guarda la selección para la próxima vez.
+  void _rememberStats() =>
+      StatsPrefsService.setHiddenTiles(widget.order.where((k) => !_shown.contains(k)).toSet());
+
+  /// El color elegido también queda como color de «Mis estadísticas».
+  void _pickColor(int i) {
+    setState(() => _accentIdx = i);
+    PlusPrefsService.setAccentIndex(i);
+  }
+
   void _toggleStat(String key) {
     if (_shown.contains(key)) {
       setState(() => _shown.remove(key));
+      _rememberStats();
     } else if (_shown.length < _maxStats) {
       setState(() => _shown.add(key));
+      _rememberStats();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Puedes mostrar hasta 6 datos. Quita uno para agregar otro.'),
@@ -1045,11 +911,15 @@ class _ShareSheetState extends State<_ShareSheet> {
       }
       final file = await _renderPng();
       await Gal.putImage(file.path, album: 'Pedalea');
-      messenger.showSnackBar(SnackBar(
-        content: const Text('Imagen guardada en tu galería'),
-        backgroundColor: const Color(0xFF1F7A55),
+      if (mounted) setState(() => _saved = true);
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Imagen guardada'),
+        backgroundColor: Color(0xFF1F7A55),
         behavior: SnackBarBehavior.floating,
       ));
+      Future.delayed(const Duration(milliseconds: 2500), () {
+        if (mounted) setState(() => _saved = false);
+      });
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text('No se pudo guardar la imagen: $e'),
@@ -1243,7 +1113,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                   Wrap(spacing: 10, runSpacing: 10, children: [
                     for (var i = 0; i < StatsPrefsService.allAccentColors.length; i++)
                       GestureDetector(
-                        onTap: () => setState(() => _accentIdx = i),
+                        onTap: () => _pickColor(i),
                         child: Container(
                           width: 30,
                           height: 30,
@@ -1275,11 +1145,14 @@ class _ShareSheetState extends State<_ShareSheet> {
                       onPressed: (_sharing || _saving) ? null : _download,
                       icon: _saving
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.download_rounded, size: 20),
-                      label: Text(_saving ? 'Guardando…' : 'Descargar'),
+                          : Icon(_saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 20),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(_saving ? 'Guardando…' : (_saved ? 'Imagen guardada' : 'Descargar')),
+                      ),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withOpacity(0.25)),
+                        foregroundColor: _saved ? const Color(0xFF7CF0BC) : Colors.white,
+                        side: BorderSide(color: _saved ? const Color(0xFF7CF0BC) : Colors.white.withOpacity(0.25)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
                       ),
