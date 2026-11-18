@@ -14,17 +14,25 @@ import '../services/stats_prefs_service.dart';
 import '../services/stats_summary.dart';
 import '../services/plus_prefs_service.dart';
 import '../services/subscription_service.dart';
+import '../services/plus_share_quota.dart';
 import 'paywall_page.dart';
 import 'rider_ranking_page.dart';
 
 const _meses = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
 ];
-const _mesesCortos = [
-  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
-];
+const _mesesCortos = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const _diasSemana = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
 
 String _fmtDia(DateTime d) => '${d.day} ${_mesesCortos[d.month - 1]}';
@@ -70,11 +78,11 @@ String _periodCaption(StatsPeriod p, DateTime now) {
 }
 
 String _prevLabel(StatsPeriod p) => switch (p) {
-      StatsPeriod.week => 'la semana pasada',
-      StatsPeriod.month => 'el mes pasado',
-      StatsPeriod.year => 'el año pasado',
-      StatsPeriod.all => '',
-    };
+  StatsPeriod.week => 'la semana pasada',
+  StatsPeriod.month => 'el mes pasado',
+  StatsPeriod.year => 'el año pasado',
+  StatsPeriod.all => '',
+};
 
 const _periodTabs = [
   (StatsPeriod.week, 'Semana'),
@@ -106,8 +114,13 @@ const kStatShort = <String, String>{
 };
 
 /// Valor y unidad de un dato según el periodo del resumen.
-(String, String) statValue(String key, PeriodSummary sum,
-    {required double total, required int streak, required double maxSpeed}) {
+(String, String) statValue(
+  String key,
+  PeriodSummary sum, {
+  required double total,
+  required int streak,
+  required double maxSpeed,
+}) {
   switch (key) {
     case 'streak':
       return ('$streak', streak == 1 ? 'día' : 'días');
@@ -221,8 +234,7 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   /// Valor y unidad de cada dato de la cuadrícula (según el periodo).
-  (String, String) _tileValue(String key) =>
-      statValue(key, _sum, total: _total, streak: _streak, maxSpeed: _maxSpeed);
+  (String, String) _tileValue(String key) => statValue(key, _sum, total: _total, streak: _streak, maxSpeed: _maxSpeed);
 
   @override
   Widget build(BuildContext context) {
@@ -277,10 +289,10 @@ class _StatsPageState extends State<StatsPage> {
 
   // ── Cabecera ──────────────────────────────────────────────────────────
   Widget _iconBtn(IconData icon, String tip, VoidCallback onTap, {Color? color}) => IconButton(
-        tooltip: tip,
-        onPressed: onTap,
-        icon: Icon(icon, color: color ?? Colors.white70, size: 22),
-      );
+    tooltip: tip,
+    onPressed: onTap,
+    icon: Icon(icon, color: color ?? Colors.white70, size: 22),
+  );
 
   Widget _buildHeader() {
     return Padding(
@@ -289,7 +301,9 @@ class _StatsPageState extends State<StatsPage> {
         children: [
           _iconBtn(Icons.arrow_back_rounded, 'Volver', () => Navigator.pop(context), color: Colors.white),
           const SizedBox(width: 2),
-          Expanded(child: Text('Estadísticas', style: _t(19, w: FontWeight.w700))),
+          Expanded(
+            child: Text('Estadísticas', style: _t(19, w: FontWeight.w700)),
+          ),
           if (_syncing)
             Padding(
               padding: const EdgeInsets.all(14),
@@ -310,51 +324,38 @@ class _StatsPageState extends State<StatsPage> {
       required VoidCallback onTap,
       bool primary = false,
       Widget? badge,
-    }) =>
-        Material(
-          color: primary ? Colors.white : Colors.white.withOpacity(0.07),
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: onTap,
-            child: SizedBox(
-              height: 46,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 19, color: primary ? Colors.black : Colors.white),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _t(13.5, w: FontWeight.w700, c: primary ? Colors.black : Colors.white),
-                    ),
-                  ),
-                  if (badge != null) ...[const SizedBox(width: 6), badge],
-                ],
+    }) => Material(
+      color: primary ? Colors.white : Colors.white.withOpacity(0.07),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: SizedBox(
+          height: 46,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 19, color: primary ? Colors.black : Colors.white),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _t(13.5, w: FontWeight.w700, c: primary ? Colors.black : Colors.white),
+                ),
               ),
-            ),
+              if (badge != null) ...[const SizedBox(width: 6), badge],
+            ],
           ),
-        );
+        ),
+      ),
+    );
 
     return Row(
       children: [
         Expanded(
-          child: btn(
-            icon: Icons.ios_share_rounded,
-            label: 'Compartir estadísticas',
-            primary: true,
-            onTap: _openShareSheet,
-            badge: _isPlus
-                ? null
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(6)),
-                    child: Text('PLUS', style: _t(8.5, w: FontWeight.w800, c: Colors.black)),
-                  ),
-          ),
+          child: btn(icon: Icons.ios_share_rounded, label: 'Compartir estadísticas', primary: true, onTap: _openShareSheet),
         ),
       ],
     );
@@ -365,10 +366,7 @@ class _StatsPageState extends State<StatsPage> {
     return Container(
       height: 42,
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(14)),
       child: Row(
         children: [
           for (final (p, label) in _periodTabs)
@@ -385,7 +383,11 @@ class _StatsPageState extends State<StatsPage> {
                   ),
                   child: Text(
                     label,
-                    style: _t(13, w: _period == p ? FontWeight.w700 : FontWeight.w500, c: _period == p ? Colors.white : Colors.white54),
+                    style: _t(
+                      13,
+                      w: _period == p ? FontWeight.w700 : FontWeight.w500,
+                      c: _period == p ? Colors.white : Colors.white54,
+                    ),
                   ),
                 ),
               ),
@@ -407,7 +409,10 @@ class _StatsPageState extends State<StatsPage> {
       final what = (_period == StatsPeriod.year || _period == StatsPeriod.all)
           ? '${_meses[d.month - 1]} ${d.year}'
           : '${_diasSemana[d.weekday - 1]} ${_fmtDia(d)}';
-      comparison = Text('${fmtKm(sel.km)} km el $what', style: _t(13.5, w: FontWeight.w600, c: _accent));
+      comparison = Text(
+        '${fmtKm(sel.km)} km el $what',
+        style: _t(13.5, w: FontWeight.w600, c: _accent),
+      );
     } else if (change != null) {
       final up = change >= 0;
       final color = up ? _accent : const Color(0xFFFF7A7A);
@@ -415,9 +420,14 @@ class _StatsPageState extends State<StatsPage> {
         children: [
           Icon(up ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: color, size: 18),
           const SizedBox(width: 6),
-          Text('${up ? '+' : ''}${change.round()} %', style: _t(13.5, w: FontWeight.w700, c: color)),
+          Text(
+            '${up ? '+' : ''}${change.round()} %',
+            style: _t(13.5, w: FontWeight.w700, c: color),
+          ),
           const SizedBox(width: 6),
-          Flexible(child: Text('vs ${_prevLabel(_period)}', style: _t(13.5, c: Colors.white54))),
+          Flexible(
+            child: Text('vs ${_prevLabel(_period)}', style: _t(13.5, c: Colors.white54)),
+          ),
         ],
       );
     } else if (_period != StatsPeriod.all && (_sum.prevKm ?? 0) < 0.1 && km > 0) {
@@ -432,7 +442,10 @@ class _StatsPageState extends State<StatsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_periodCaption(_period, DateTime.now()).toUpperCase(), style: _t(11.5, w: FontWeight.w700, c: Colors.white54, ls: 1.4)),
+        Text(
+          _periodCaption(_period, DateTime.now()).toUpperCase(),
+          style: _t(11.5, w: FontWeight.w700, c: Colors.white54, ls: 1.4),
+        ),
         const SizedBox(height: 6),
         Row(
           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -446,7 +459,10 @@ class _StatsPageState extends State<StatsPage> {
               builder: (_, v, _) => Text(fmtKm(v), style: _t(60, w: FontWeight.w800, h: 1.0, ls: -2)),
             ),
             const SizedBox(width: 8),
-            Text('km', style: _t(20, w: FontWeight.w600, c: Colors.white54)),
+            Text(
+              'km',
+              style: _t(20, w: FontWeight.w600, c: Colors.white54),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -472,10 +488,7 @@ class _StatsPageState extends State<StatsPage> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var j = 0; j < 3; j++)
-                  Expanded(child: j < r.length ? _statCell(r[j]) : const SizedBox.shrink()),
-              ],
+              children: [for (var j = 0; j < 3; j++) Expanded(child: j < r.length ? _statCell(r[j]) : const SizedBox.shrink())],
             ),
           ),
           line,
@@ -494,7 +507,14 @@ class _StatsPageState extends State<StatsPage> {
           children: [
             Icon(icon, size: 13, color: Colors.white38),
             const SizedBox(width: 5),
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(11, c: Colors.white54))),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _t(11, c: Colors.white54),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 5),
@@ -509,10 +529,7 @@ class _StatsPageState extends State<StatsPage> {
                 child: Text(value, maxLines: 1, style: _t(20, w: FontWeight.w700, h: 1.1)),
               ),
             ),
-            if (unit.isNotEmpty) ...[
-              const SizedBox(width: 3),
-              Text(unit, style: _t(11.5, c: Colors.white54)),
-            ],
+            if (unit.isNotEmpty) ...[const SizedBox(width: 3), Text(unit, style: _t(11.5, c: Colors.white54))],
           ],
         ),
       ],
@@ -522,32 +539,29 @@ class _StatsPageState extends State<StatsPage> {
   // ── Récords personales ───────────────────────────────────────────────
   Widget _buildRecords() {
     Widget row(IconData icon, Color color, String title, String value, String? sub) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 21),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: _t(14, w: FontWeight.w600)),
-                    if (sub != null) Text(sub, style: _t(11.5, c: Colors.white38)),
-                  ],
-                ),
-              ),
-              Text(value, style: _t(15, w: FontWeight.w700)),
-            ],
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: color.withOpacity(0.14), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: color, size: 21),
           ),
-        );
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: _t(14, w: FontWeight.w600)),
+                if (sub != null) Text(sub, style: _t(11.5, c: Colors.white38)),
+              ],
+            ),
+          ),
+          Text(value, style: _t(15, w: FontWeight.w700)),
+        ],
+      ),
+    );
 
     final r = _rec;
     return Column(
@@ -555,17 +569,34 @@ class _StatsPageState extends State<StatsPage> {
       children: [
         Text('Récords personales', style: _t(16, w: FontWeight.w700)),
         const SizedBox(height: 8),
-        row(Icons.bolt_rounded, const Color(0xFFFFC94D), 'Día más largo',
-            r.bestDayKm > 0 ? '${fmtKm(r.bestDayKm)} km' : '—',
-            r.bestDayDate != null ? '${_fmtDia(r.bestDayDate!)} ${r.bestDayDate!.year}' : null),
-        row(Icons.date_range_rounded, const Color(0xFF6FB6FF), 'Mejor semana',
-            r.bestWeekKm > 0 ? '${fmtKm(r.bestWeekKm)} km' : '—',
-            r.bestWeekStart != null ? 'Desde el ${_fmtDia(r.bestWeekStart!)}' : null),
-        row(Icons.local_fire_department_rounded, const Color(0xFFFF8A4C), 'Racha más larga',
-            r.longestStreak > 0 ? '${r.longestStreak} ${r.longestStreak == 1 ? 'día' : 'días'}' : '—',
-            r.longestStreakEnd != null && r.longestStreak > 0 ? 'Hasta el ${_fmtDia(r.longestStreakEnd!)}' : null),
-        row(Icons.flash_on_rounded, const Color(0xFFB98BFF), 'Velocidad máxima',
-            _maxSpeed > 0 ? '${_maxSpeed.toStringAsFixed(1).replaceAll('.', ',')} km/h' : '—', null),
+        row(
+          Icons.bolt_rounded,
+          const Color(0xFFFFC94D),
+          'Día más largo',
+          r.bestDayKm > 0 ? '${fmtKm(r.bestDayKm)} km' : '—',
+          r.bestDayDate != null ? '${_fmtDia(r.bestDayDate!)} ${r.bestDayDate!.year}' : null,
+        ),
+        row(
+          Icons.date_range_rounded,
+          const Color(0xFF6FB6FF),
+          'Mejor semana',
+          r.bestWeekKm > 0 ? '${fmtKm(r.bestWeekKm)} km' : '—',
+          r.bestWeekStart != null ? 'Desde el ${_fmtDia(r.bestWeekStart!)}' : null,
+        ),
+        row(
+          Icons.local_fire_department_rounded,
+          const Color(0xFFFF8A4C),
+          'Racha más larga',
+          r.longestStreak > 0 ? '${r.longestStreak} ${r.longestStreak == 1 ? 'día' : 'días'}' : '—',
+          r.longestStreakEnd != null && r.longestStreak > 0 ? 'Hasta el ${_fmtDia(r.longestStreakEnd!)}' : null,
+        ),
+        row(
+          Icons.flash_on_rounded,
+          const Color(0xFFB98BFF),
+          'Velocidad máxima',
+          _maxSpeed > 0 ? '${_maxSpeed.toStringAsFixed(1).replaceAll('.', ',')} km/h' : '—',
+          null,
+        ),
       ],
     );
   }
@@ -583,7 +614,9 @@ class _StatsPageState extends State<StatsPage> {
             children: [
               const Icon(Icons.leaderboard_rounded, color: Colors.white70, size: 21),
               const SizedBox(width: 12),
-              Expanded(child: Text('Ranking de ciclistas', style: _t(14, w: FontWeight.w600))),
+              Expanded(
+                child: Text('Ranking de ciclistas', style: _t(14, w: FontWeight.w600)),
+              ),
               const Icon(Icons.chevron_right_rounded, color: Colors.white38),
             ],
           ),
@@ -594,24 +627,6 @@ class _StatsPageState extends State<StatsPage> {
 
   // ── Compartir ────────────────────────────────────────────────────────
   void _openShareSheet() {
-    if (!SubscriptionService.instance.isPlus.value) {
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (_) => _StatsShareUpsellSheet(
-          onUpgrade: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const PaywallPage(reason: 'Comparte tus estadísticas en historias con Pedalea Plus.'),
-              ),
-            );
-          },
-        ),
-      );
-      return;
-    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -703,9 +718,11 @@ class _BarsChart extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.visible,
                           softWrap: false,
-                          style: _t(10.5,
-                              w: _isCurrent(bars[i].start, today) ? FontWeight.w700 : FontWeight.w500,
-                              c: _isCurrent(bars[i].start, today) ? Colors.white : Colors.white38),
+                          style: _t(
+                            10.5,
+                            w: _isCurrent(bars[i].start, today) ? FontWeight.w700 : FontWeight.w500,
+                            c: _isCurrent(bars[i].start, today) ? Colors.white : Colors.white38,
+                          ),
                         ),
                       ),
                     ],
@@ -729,69 +746,6 @@ class _BarsChart extends StatelessWidget {
       return s.year == now.year && s.month == now.month;
     }
     return s.year == now.year && s.month == now.month && s.day == now.day;
-  }
-}
-
-class _StatsShareUpsellSheet extends StatelessWidget {
-  final VoidCallback onUpgrade;
-  const _StatsShareUpsellSheet({required this.onUpgrade});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 16, left: 16, right: 16, top: 16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F0F1A),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.amber.withOpacity(0.25)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.amber.withOpacity(0.12),
-                border: Border.all(color: Colors.amber.withOpacity(0.35)),
-              ),
-              child: const Icon(Icons.ios_share_rounded, color: Colors.amber, size: 30),
-            ),
-            const SizedBox(height: 16),
-            Text('Compartir tus estadísticas es Plus', style: _t(17, w: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text('Hazte Pedalea Plus para compartir tu progreso como imagen en tus historias.',
-                textAlign: TextAlign.center, style: _t(13, c: Colors.white60)),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onUpgrade,
-                icon: const Icon(Icons.workspace_premium_rounded, size: 18),
-                label: const Text('Ver Pedalea Plus'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(foregroundColor: Colors.white38),
-              child: const Text('Ahora no', style: TextStyle(fontFamily: 'Poppins')),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -834,18 +788,171 @@ class _ShareSheetState extends State<_ShareSheet> {
   bool _saving = false;
   bool _saved = false; // muestra «Imagen guardada» en el botón unos segundos
 
+  bool get _isPlus => SubscriptionService.instance.isPlus.value;
+
+  /// Imágenes Plus gratis que quedan esta semana (null = cargando).
+  int? _plusLeft;
+
+  /// ¿La imagen actual usa algo de Plus? (foto, sin fondo o color Plus)
+  bool get _usesPlus => _style != ShareStyle.dark || StatsPrefsService.isPlusAccentIndex(_accentIdx);
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_isPlus) {
+      PlusShareQuota.remaining().then((n) {
+        if (mounted) setState(() => _plusLeft = n);
+      });
+    }
+  }
+
+  /// Antes de exportar: si la imagen usa Plus y no es Plus, usa una de las
+  /// imágenes gratis de la semana (preguntando antes) o muestra las opciones.
+  /// Devuelve true si se puede seguir.
+  Future<bool> _passQuota() async {
+    if (_isPlus || !_usesPlus) return true;
+    final left = _plusLeft ?? await PlusShareQuota.remaining();
+    if (!mounted) return false;
+    if (left == -1) return true;
+    if (left <= 0) return _showLimitSheet();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161822),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text('Imagen con funciones Plus', style: _t(17, w: FontWeight.w700)),
+        content: Text(
+          'Esta imagen usa ${_plusParts()}. Te ${left == 1 ? 'queda 1 imagen Plus gratis' : 'quedan $left imágenes Plus gratis'} esta semana.',
+          style: _t(14, c: Colors.white70, h: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar', style: _t(14, c: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Usar 1',
+              style: _t(14, w: FontWeight.w700, c: const Color(0xFF7CF0BC)),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    final after = await PlusShareQuota.use();
+    if (!mounted) return false;
+    if (after == null) {
+      setState(() => _plusLeft = 0);
+      return _showLimitSheet();
+    }
+    setState(() => _plusLeft = after);
+    return true;
+  }
+
+  String _plusParts() {
+    final parts = <String>[
+      if (_style == ShareStyle.photo) 'foto de fondo',
+      if (_style == ShareStyle.clear) 'imagen sin fondo',
+      if (StatsPrefsService.isPlusAccentIndex(_accentIdx)) 'un color Plus',
+    ];
+    if (parts.length <= 1) return parts.join();
+    return '${parts.sublist(0, parts.length - 1).join(', ')} y ${parts.last}';
+  }
+
+  /// Sin imágenes Plus gratis: hacerse Plus o seguir con el estilo gratis.
+  /// Devuelve true si eligió seguir sin lo Plus.
+  Future<bool> _showLimitSheet() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + MediaQuery.of(ctx).padding.bottom),
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF12141C),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.amber.withOpacity(0.25)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.amber.withOpacity(0.14)),
+              child: const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 30),
+            ),
+            const SizedBox(height: 14),
+            Text('Te quedó increíble', style: _t(19, w: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(
+              'Ya usaste tus ${PlusShareQuota.weeklyLimit} imágenes Plus gratis de esta semana. Con Pedalea Plus puedes usar foto de fondo, sin fondo y todos los colores cuando quieras.',
+              textAlign: TextAlign.center,
+              style: _t(13.5, c: Colors.white60, h: 1.45),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(ctx, 'plus'),
+                icon: const Icon(Icons.workspace_premium_rounded, size: 19),
+                label: const Text('Hazte Plus'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'free'),
+              child: Text(
+                'Seguir con el estilo oscuro',
+                style: _t(14, w: FontWeight.w600, c: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return false;
+    if (choice == 'plus') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const PaywallPage(reason: 'Comparte tus estadísticas con foto, sin fondo y todos los colores.'),
+        ),
+      );
+      return false;
+    }
+    if (choice == 'free') {
+      setState(() {
+        _style = ShareStyle.dark;
+        if (StatsPrefsService.isPlusAccentIndex(_accentIdx)) _accentIdx = 0;
+      });
+      await Future.delayed(const Duration(milliseconds: 80)); // que se repinte antes de exportar
+      return true;
+    }
+    return false;
+  }
+
   /// Datos que van en la imagen (máximo 6 para que se lean bien).
   static const _maxStats = 6;
   late final Set<String> _shown = widget.order.where(widget.shown.contains).take(_maxStats).toSet();
 
   /// Guarda la selección para la próxima vez.
-  void _rememberStats() =>
-      StatsPrefsService.setHiddenTiles(widget.order.where((k) => !_shown.contains(k)).toSet());
+  void _rememberStats() => StatsPrefsService.setHiddenTiles(widget.order.where((k) => !_shown.contains(k)).toSet());
 
   /// El color elegido también queda como color de «Mis estadísticas».
   void _pickColor(int i) {
     setState(() => _accentIdx = i);
-    PlusPrefsService.setAccentIndex(i);
+    if (_isPlus || !StatsPrefsService.isPlusAccentIndex(i)) PlusPrefsService.setAccentIndex(i);
   }
 
   void _toggleStat(String key) {
@@ -856,10 +963,12 @@ class _ShareSheetState extends State<_ShareSheet> {
       setState(() => _shown.add(key));
       _rememberStats();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Puedes mostrar hasta 6 datos. Quita uno para agregar otro.'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Puedes mostrar hasta 6 datos. Quita uno para agregar otro.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -868,7 +977,6 @@ class _ShareSheetState extends State<_ShareSheet> {
     (ShareStyle.photo, Icons.image_rounded, 'Con foto'),
     (ShareStyle.clear, Icons.layers_clear_rounded, 'Sin fondo'),
   ];
-
 
   Future<void> _pickPhoto() async {
     try {
@@ -899,33 +1007,33 @@ class _ShareSheetState extends State<_ShareSheet> {
   /// Guarda la imagen en la galería del teléfono.
   Future<void> _download() async {
     if (_sharing || _saving) return;
+    if (!await _passQuota() || !mounted) return;
     setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
       if (!await Gal.hasPermission(toAlbum: true) && !await Gal.requestPermission(toAlbum: true)) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Necesitamos permiso para guardar en tu galería.'),
-          behavior: SnackBarBehavior.floating,
-        ));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Necesitamos permiso para guardar en tu galería.'), behavior: SnackBarBehavior.floating),
+        );
         return;
       }
       final file = await _renderPng();
       await Gal.putImage(file.path, album: 'Pedalea');
       if (mounted) setState(() => _saved = true);
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Imagen guardada'),
-        backgroundColor: Color(0xFF1F7A55),
-        behavior: SnackBarBehavior.floating,
-      ));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Imagen guardada'), backgroundColor: Color(0xFF1F7A55), behavior: SnackBarBehavior.floating),
+      );
       Future.delayed(const Duration(milliseconds: 2500), () {
         if (mounted) setState(() => _saved = false);
       });
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('No se pudo guardar la imagen: $e'),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar la imagen: $e'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -933,6 +1041,7 @@ class _ShareSheetState extends State<_ShareSheet> {
 
   Future<void> _share() async {
     if (_sharing || _saving) return;
+    if (!await _passQuota() || !mounted) return;
     setState(() => _sharing = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -949,37 +1058,50 @@ class _ShareSheetState extends State<_ShareSheet> {
       await Share.shareXFiles([XFile(file.path)], text: '$what: ${fmtKm(km)} km con Pedalea');
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text('No se pudo compartir: $e'),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo compartir: $e'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
   }
 
-  Widget _chip(String label, bool on, VoidCallback onTap, {IconData? icon}) => GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: on ? Colors.white : Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(20),
+  Widget _plusTag() => Container(
+    margin: const EdgeInsets.only(left: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+    decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(6)),
+    child: Text(
+      'PLUS',
+      style: _t(8.5, w: FontWeight.w800, c: Colors.black),
+    ),
+  );
+
+  Widget _chip(String label, bool on, VoidCallback onTap, {IconData? icon, bool plus = false}) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: on ? Colors.white : Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[Icon(icon, size: 16, color: on ? Colors.black : Colors.white70), const SizedBox(width: 6)],
+          Text(
+            label,
+            style: _t(13, w: FontWeight.w600, c: on ? Colors.black : Colors.white70),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 16, color: on ? Colors.black : Colors.white70),
-                const SizedBox(width: 6),
-              ],
-              Text(label, style: _t(13, w: FontWeight.w600, c: on ? Colors.black : Colors.white70)),
-            ],
-          ),
-        ),
-      );
+          if (plus && !_isPlus) _plusTag(),
+        ],
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1017,7 +1139,9 @@ class _ShareSheetState extends State<_ShareSheet> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: Text('Compartir estadísticas', style: _t(18, w: FontWeight.w700))),
+                    Expanded(
+                      child: Text('Compartir estadísticas', style: _t(18, w: FontWeight.w700)),
+                    ),
                     IconButton(
                       tooltip: 'Cerrar',
                       onPressed: () => Navigator.pop(context),
@@ -1060,6 +1184,26 @@ class _ShareSheetState extends State<_ShareSheet> {
                       ),
                     ),
                   ),
+                  if (!_isPlus && _usesPlus && _plusLeft != null && _plusLeft! >= 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 16),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              _plusLeft == 0
+                                  ? 'Ya usaste tus imágenes Plus gratis de esta semana'
+                                  : 'Te ${_plusLeft == 1 ? 'queda 1 imagen Plus gratis' : 'quedan $_plusLeft imágenes Plus gratis'} esta semana',
+                              textAlign: TextAlign.center,
+                              style: _t(12, w: FontWeight.w600, c: Colors.amber),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (_style == ShareStyle.clear)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
@@ -1068,119 +1212,177 @@ class _ShareSheetState extends State<_ShareSheet> {
                       ),
                     ),
                   const SizedBox(height: 22),
-                  Text('PERIODO', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                  Text(
+                    'PERIODO',
+                    style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2),
+                  ),
                   const SizedBox(height: 10),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    for (final (p, label) in _periodTabs) _chip(label, _period == p, () => setState(() => _period = p)),
-                  ]),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final (p, label) in _periodTabs) _chip(label, _period == p, () => setState(() => _period = p)),
+                    ],
+                  ),
                   const SizedBox(height: 20),
-                  Text('ESTILO', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                  Text(
+                    'ESTILO',
+                    style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2),
+                  ),
                   const SizedBox(height: 10),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    for (final (st, icon, label) in _styles)
-                      _chip(label, _style == st, () {
-                        if (st == ShareStyle.photo && _photo == null) {
-                          _pickPhoto();
-                        } else {
-                          setState(() => _style = st);
-                        }
-                      }, icon: icon),
-                  ]),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final (st, icon, label) in _styles)
+                        _chip(
+                          label,
+                          _style == st,
+                          () {
+                            if (st == ShareStyle.photo && _photo == null) {
+                              _pickPhoto();
+                            } else {
+                              setState(() => _style = st);
+                            }
+                          },
+                          icon: icon,
+                          plus: st != ShareStyle.dark,
+                        ),
+                    ],
+                  ),
                   if (_style == ShareStyle.photo && _photo != null)
                     TextButton.icon(
                       onPressed: _pickPhoto,
                       icon: const Icon(Icons.photo_library_rounded, size: 18),
                       label: const Text('Cambiar foto'),
-                      style: TextButton.styleFrom(foregroundColor: Colors.white70, textStyle: _t(13, w: FontWeight.w600)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        textStyle: _t(13, w: FontWeight.w600),
+                      ),
                     ),
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      Text('DATOS', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                      Text(
+                        'DATOS',
+                        style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2),
+                      ),
                       const Spacer(),
                       Text('${_shown.length} de $_maxStats', style: _t(11, c: Colors.white38)),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    for (final k in widget.order)
-                      _chip(kStatMeta[k]!.$2, _shown.contains(k), () => _toggleStat(k), icon: kStatMeta[k]!.$1),
-                  ]),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final k in widget.order)
+                        _chip(kStatMeta[k]!.$2, _shown.contains(k), () => _toggleStat(k), icon: kStatMeta[k]!.$1),
+                    ],
+                  ),
                   const SizedBox(height: 20),
-                  Text('COLOR', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                  Text(
+                    'COLOR',
+                    style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2),
+                  ),
                   const SizedBox(height: 10),
-                  // Los mismos colores que en Editar: sólidos y degradados Plus.
-                  Wrap(spacing: 10, runSpacing: 10, children: [
-                    for (var i = 0; i < StatsPrefsService.allAccentColors.length; i++)
-                      GestureDetector(
-                        onTap: () => _pickColor(i),
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: StatsPrefsService.accentGradientFor(i),
-                            ),
-                            border: Border.all(color: i == _accentIdx ? Colors.white : Colors.transparent, width: 2.5),
-                          ),
-                          child: i == _accentIdx ? const Icon(Icons.check_rounded, color: Colors.black, size: 16) : null,
-                        ),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [for (var i = 0; i < StatsPrefsService.freeAccentCount; i++) _swatch(i)],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Text(
+                        'Colores Plus',
+                        style: _t(11.5, w: FontWeight.w600, c: Colors.white54),
                       ),
-                  ]),
+                      if (!_isPlus) _plusTag(),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (var i = StatsPrefsService.freeAccentCount; i < StatsPrefsService.allAccentColors.length; i++)
+                        _swatch(i),
+                    ],
+                  ),
                 ],
               ),
             ),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, 8, 20, MediaQuery.of(context).padding.bottom + 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: (_sharing || _saving) ? null : _download,
-                      icon: _saving
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : Icon(_saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 20),
-                      label: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(_saving ? 'Guardando…' : (_saved ? 'Imagen guardada' : 'Descargar')),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _saved ? const Color(0xFF7CF0BC) : Colors.white,
-                        side: BorderSide(color: _saved ? const Color(0xFF7CF0BC) : Colors.white.withOpacity(0.25)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                    ),
-                  ),
+          _footer(),
+        ],
+      ),
+    );
+  }
+
+  Widget _swatch(int i) => GestureDetector(
+    onTap: () => _pickColor(i),
+    child: Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: StatsPrefsService.accentGradientFor(i),
+        ),
+        border: Border.all(color: i == _accentIdx ? Colors.white : Colors.transparent, width: 2.5),
+      ),
+      child: i == _accentIdx ? const Icon(Icons.check_rounded, color: Colors.black, size: 16) : null,
+    ),
+  );
+
+  Widget _footer() {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 8, 20, MediaQuery.of(context).padding.bottom + 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: (_sharing || _saving) ? null : _download,
+                icon: _saving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Icon(_saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 20),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(_saving ? 'Guardando…' : (_saved ? 'Imagen guardada' : 'Descargar')),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: (_sharing || _saving) ? null : _share,
-                      icon: _sharing
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                          : const Icon(Icons.ios_share_rounded, size: 19),
-                      label: Text(_sharing ? 'Generando…' : 'Compartir'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        disabledBackgroundColor: Colors.white12,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                    ),
-                  ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _saved ? const Color(0xFF7CF0BC) : Colors.white,
+                  side: BorderSide(color: _saved ? const Color(0xFF7CF0BC) : Colors.white.withOpacity(0.25)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
                 ),
-              ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SizedBox(
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: (_sharing || _saving) ? null : _share,
+                icon: _sharing
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                    : const Icon(Icons.ios_share_rounded, size: 19),
+                label: Text(_sharing ? 'Generando…' : 'Compartir'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  disabledBackgroundColor: Colors.white12,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
             ),
           ),
         ],
@@ -1193,6 +1395,7 @@ class _ShareSheetState extends State<_ShareSheet> {
 class StoryCard extends StatelessWidget {
   final PeriodSummary summary;
   final double total;
+
   /// Color de acento: dos tonos (iguales si es un color sólido).
   final List<Color> gradient;
   final ShareStyle style;
@@ -1227,37 +1430,45 @@ class StoryCard extends StatelessWidget {
       StatsPeriod.month => '${_meses[now.month - 1]} ${now.year}',
       StatsPeriod.year => '${now.year}',
       StatsPeriod.all => 'desde siempre',
-    }
-        .toUpperCase();
-    final shadows = style == ShareStyle.dark
-        ? null
-        : [Shadow(color: Colors.black.withOpacity(0.55), blurRadius: 12)];
+    }.toUpperCase();
+    final shadows = style == ShareStyle.dark ? null : [Shadow(color: Colors.black.withOpacity(0.55), blurRadius: 12)];
     TextStyle s(double size, {FontWeight w = FontWeight.w700, Color c = Colors.white, double? h, double? ls}) =>
         TextStyle(fontFamily: 'Poppins', fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: ls, shadows: shadows);
 
     Widget stat(String value, String unit, String label) => Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(value, maxLines: 1, style: s(24, w: FontWeight.w800, h: 1.1)),
-                    ),
-                  ),
-                  if (unit.isNotEmpty) ...[const SizedBox(width: 3), Text(unit, style: s(12, w: FontWeight.w600, c: Colors.white70))],
-                ],
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, maxLines: 1, style: s(24, w: FontWeight.w800, h: 1.1)),
+                ),
               ),
-              const SizedBox(height: 2),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: s(9.5, w: FontWeight.w700, c: Colors.white60, ls: 1.2)),
+              if (unit.isNotEmpty) ...[
+                const SizedBox(width: 3),
+                Text(
+                  unit,
+                  style: s(12, w: FontWeight.w600, c: Colors.white70),
+                ),
+              ],
             ],
           ),
-        );
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: s(9.5, w: FontWeight.w700, c: Colors.white60, ls: 1.2),
+          ),
+        ],
+      ),
+    );
 
     final maxKm = summary.bars.fold<double>(0, (m, b) => b.km > m ? b.km : m);
     final cols = items.length == 4 ? 2 : 3;
@@ -1285,11 +1496,17 @@ class StoryCard extends StatelessWidget {
               const SizedBox(width: 7),
               Text('pedalea', style: s(15, w: FontWeight.w800, ls: -0.3)),
               const Spacer(),
-              Text(when, style: s(10, w: FontWeight.w700, c: Colors.white70, ls: 1.2)),
+              Text(
+                when,
+                style: s(10, w: FontWeight.w700, c: Colors.white70, ls: 1.2),
+              ),
             ],
           ),
           const Spacer(),
-          Text(title, style: s(13, w: FontWeight.w700, c: Colors.white70, ls: 2.2)),
+          Text(
+            title,
+            style: s(13, w: FontWeight.w700, c: Colors.white70, ls: 2.2),
+          ),
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -1345,7 +1562,10 @@ class StoryCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              Text('Descarga Pedalea en Google Play', style: s(10.5, w: FontWeight.w600, c: Colors.white60)),
+              Text(
+                'Descarga Pedalea en Google Play',
+                style: s(10.5, w: FontWeight.w600, c: Colors.white60),
+              ),
               const Spacer(),
               Icon(Icons.shop_rounded, size: 14, color: Colors.white60, shadows: shadows),
             ],
@@ -1412,7 +1632,12 @@ class StoryCard extends StatelessWidget {
       child: SizedBox(
         width: 360,
         height: 640,
-        child: Stack(children: [Positioned.fill(child: background), Positioned.fill(child: content)]),
+        child: Stack(
+          children: [
+            Positioned.fill(child: background),
+            Positioned.fill(child: content),
+          ],
+        ),
       ),
     );
   }
