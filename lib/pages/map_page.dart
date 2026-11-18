@@ -5053,19 +5053,34 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         last: n == 0,
                       ),
                       for (var i = 0; i < n; i++) _rpWpTile(i),
+                      const SizedBox(height: 8),
+                      // Buscar una parada por nombre o dirección (como en Google Maps)
+                      Material(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _openPlaceSearch(addStop: true),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.search_rounded, color: _rpGreen, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(n == 0 ? '¿A dónde vas? Busca un lugar o dirección' : 'Agregar otra parada…',
+                                      style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.6), fontSize: 13)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                       if (n == 0)
                         Padding(
-                          padding: const EdgeInsets.only(top: 6, left: 2),
-                          child: Row(
-                            children: [
-                              Icon(Icons.touch_app_rounded, color: Colors.white.withOpacity(0.35), size: 18),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text('Toca «Agregar parada» y luego el mapa',
-                                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.45), fontSize: 12.5)),
-                              ),
-                            ],
-                          ),
+                          padding: const EdgeInsets.only(top: 8, left: 2),
+                          child: Text('o toca «Marcar en el mapa» para elegir un punto',
+                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.4), fontSize: 11.5)),
                         ),
                     ],
                   ),
@@ -5142,7 +5157,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                             Icon(_routeAddMode ? Icons.touch_app_rounded : Icons.add_location_alt_rounded,
                                 color: _routeAddMode ? _rpGreen : Colors.white70, size: 19),
                             const SizedBox(width: 8),
-                            Text(_routeAddMode ? 'Toca el mapa…' : 'Agregar parada',
+                            Text(_routeAddMode ? 'Toca el mapa…' : 'Marcar en el mapa',
                                 style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize: 13,
@@ -8858,7 +8873,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
   }
 
-  void _openPlaceSearch() {
+  /// Buscador de lugares. Con [addStop] (desde el planificador) el lugar
+  /// elegido se agrega como una parada más, sin borrar las anteriores; sin
+  /// él, inicia una ruta nueva hacia ese destino.
+  void _openPlaceSearch({bool addStop = false}) {
     final controller = TextEditingController();
     Timer? debounce;
     List<_GeoResult> results = [];
@@ -8923,7 +8941,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
                         fontSize: 14,
                       ),
                       decoration: InputDecoration(
-                        hintText: '¿A dónde quieres ir?',
+                        hintText: addStop ? 'Busca una parada o dirección' : '¿A dónde quieres ir?',
                         hintStyle: const TextStyle(
                           fontFamily: 'Poppins',
                           color: Colors.white38,
@@ -9026,7 +9044,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
                               ),
                               onTap: () {
                                 debounce?.cancel();
-                                _navigateTo(r.lat, r.lng, r.name);
+                                if (addStop) {
+                                  Navigator.pop(sheetCtx);
+                                  _addSearchedStop(r);
+                                } else {
+                                  _navigateTo(r.lat, r.lng, r.name);
+                                }
                               },
                             );
                           },
@@ -9039,6 +9062,24 @@ class _MapPageState extends State<MapPage> with RouteAware {
           },
         );
       },
+    );
+  }
+
+  /// Agrega como parada un lugar elegido en el buscador del planificador.
+  void _addSearchedStop(_GeoResult r) {
+    final wp = _RouteWp(lat: r.lat, lng: r.lng, label: r.name.isNotEmpty ? r.name : 'Parada ${_routeWps.length + 1}');
+    setState(() {
+      _routeWps.add(wp);
+      _routeAddMode = false;
+      _routeDistKm = null;
+      _routeDurMin = null;
+    });
+    _redrawRoutePins();
+    _snapWpToNearestRoad(wp);
+    // Centra el mapa en el lugar elegido para que se vea dónde quedó.
+    mapboxMap?.flyTo(
+      CameraOptions(center: Point(coordinates: Position(r.lng, r.lat)), zoom: 15),
+      MapAnimationOptions(duration: 700),
     );
   }
 
