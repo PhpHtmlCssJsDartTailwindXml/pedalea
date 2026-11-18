@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -82,6 +83,51 @@ const _periodTabs = [
   (StatsPeriod.all, 'Total'),
 ];
 
+/// Ícono y etiqueta de cada dato (cuadrícula e imagen para compartir).
+const kStatMeta = <String, (IconData, String)>{
+  'streak': (Icons.local_fire_department_rounded, 'Racha actual'),
+  'bestDay': (Icons.bolt_rounded, 'Mejor día'),
+  'total': (Icons.route_rounded, 'Total histórico'),
+  'activeDays': (Icons.calendar_today_rounded, 'Días activos'),
+  'co2': (Icons.eco_rounded, 'CO₂ evitado'),
+  'week': (Icons.speed_rounded, 'Promedio por día'),
+  'maxSpeed': (Icons.flash_on_rounded, 'Vel. máxima'),
+};
+
+/// Etiqueta corta de cada dato para la imagen (caben 3 por fila).
+const kStatShort = <String, String>{
+  'streak': 'RACHA',
+  'bestDay': 'MEJOR DÍA',
+  'total': 'TOTAL',
+  'activeDays': 'DÍAS ACTIVOS',
+  'co2': 'CO₂ EVITADO',
+  'week': 'PROMEDIO DIARIO',
+  'maxSpeed': 'VEL. MÁXIMA',
+};
+
+/// Valor y unidad de un dato según el periodo del resumen.
+(String, String) statValue(String key, PeriodSummary sum,
+    {required double total, required int streak, required double maxSpeed}) {
+  switch (key) {
+    case 'streak':
+      return ('$streak', streak == 1 ? 'día' : 'días');
+    case 'bestDay':
+      return (fmtKm(sum.bestDayKm), 'km');
+    case 'total':
+      return (fmtKm(total), 'km');
+    case 'activeDays':
+      return ('${sum.activeDays}', sum.activeDays == 1 ? 'día' : 'días');
+    case 'co2':
+      return fmtCo2(sum.period == StatsPeriod.all ? total : sum.km);
+    case 'week':
+      return (fmtKm(sum.avgPerActiveDay), 'km');
+    case 'maxSpeed':
+      return (maxSpeed <= 0 ? '—' : maxSpeed.toStringAsFixed(1).replaceAll('.', ','), 'km/h');
+    default:
+      return ('', '');
+  }
+}
+
 TextStyle _t(double size, {FontWeight w = FontWeight.w500, Color c = Colors.white, double? h, double? ls}) =>
     TextStyle(fontFamily: 'Poppins', fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: ls);
 
@@ -99,16 +145,7 @@ class StatsPage extends StatefulWidget {
 }
 
 class _StatsPageState extends State<StatsPage> {
-  // Ícono y etiqueta de cada dato reordenable de la cuadrícula.
-  static const _tileMeta = <String, (IconData, String)>{
-    'streak': (Icons.local_fire_department_rounded, 'Racha actual'),
-    'bestDay': (Icons.bolt_rounded, 'Mejor día'),
-    'total': (Icons.route_rounded, 'Total histórico'),
-    'activeDays': (Icons.calendar_today_rounded, 'Días activos'),
-    'co2': (Icons.eco_rounded, 'CO₂ evitado'),
-    'week': (Icons.speed_rounded, 'Promedio por día'),
-    'maxSpeed': (Icons.flash_on_rounded, 'Vel. máxima'),
-  };
+  static const _tileMeta = kStatMeta;
 
   StatsPeriod _period = StatsPeriod.week;
   late PeriodSummary _sum;
@@ -186,26 +223,8 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   /// Valor y unidad de cada dato de la cuadrícula (según el periodo).
-  (String, String) _tileValue(String key) {
-    switch (key) {
-      case 'streak':
-        return ('$_streak', _streak == 1 ? 'día' : 'días');
-      case 'bestDay':
-        return (fmtKm(_sum.bestDayKm), 'km');
-      case 'total':
-        return (fmtKm(_total), 'km');
-      case 'activeDays':
-        return ('${_sum.activeDays}', _sum.activeDays == 1 ? 'día' : 'días');
-      case 'co2':
-        return fmtCo2(_period == StatsPeriod.all ? _total : _sum.km);
-      case 'week':
-        return (fmtKm(_sum.avgPerActiveDay), 'km');
-      case 'maxSpeed':
-        return (_maxSpeed <= 0 ? '—' : _maxSpeed.toStringAsFixed(1).replaceAll('.', ','), 'km/h');
-      default:
-        return ('', '');
-    }
-  }
+  (String, String) _tileValue(String key) =>
+      statValue(key, _sum, total: _total, streak: _streak, maxSpeed: _maxSpeed);
 
   @override
   Widget build(BuildContext context) {
@@ -228,6 +247,8 @@ class _StatsPageState extends State<StatsPage> {
                       if (_editMode)
                         _buildEditPanel()
                       else ...[
+                        _buildActions(),
+                        const SizedBox(height: 16),
                         _buildPeriodTabs(),
                         const SizedBox(height: 26),
                         _buildHero(),
@@ -280,15 +301,81 @@ class _StatsPageState extends State<StatsPage> {
             )
           else
             _iconBtn(Icons.sync_rounded, 'Actualizar', _syncFromServer),
-          _iconBtn(
-            _editMode ? Icons.check_rounded : Icons.tune_rounded,
-            _editMode ? 'Listo' : 'Personalizar',
-            () => setState(() => _editMode = !_editMode),
-            color: _editMode ? _accent : null,
-          ),
-          if (!_editMode) _iconBtn(Icons.ios_share_rounded, 'Compartir', _openShareSheet, color: _accent),
+          if (_editMode)
+            TextButton(
+              onPressed: () => setState(() => _editMode = false),
+              child: Text('Listo', style: _t(15, w: FontWeight.w700, c: _accent)),
+            ),
         ],
       ),
+    );
+  }
+
+  // ── Acciones con texto (para quien no reconoce los íconos) ───────────
+  Widget _buildActions() {
+    Widget btn({
+      required IconData icon,
+      required String label,
+      required VoidCallback onTap,
+      bool primary = false,
+      Widget? badge,
+    }) =>
+        Material(
+          color: primary ? Colors.white : Colors.white.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: SizedBox(
+              height: 46,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 19, color: primary ? Colors.black : Colors.white),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _t(13.5, w: FontWeight.w700, c: primary ? Colors.black : Colors.white),
+                    ),
+                  ),
+                  if (badge != null) ...[const SizedBox(width: 6), badge],
+                ],
+              ),
+            ),
+          ),
+        );
+
+    return Row(
+      children: [
+        Expanded(
+          flex: 3,
+          child: btn(
+            icon: Icons.ios_share_rounded,
+            label: 'Compartir estadísticas',
+            primary: true,
+            onTap: _openShareSheet,
+            badge: _isPlus
+                ? null
+                : Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(6)),
+                    child: Text('PLUS', style: _t(8.5, w: FontWeight.w800, c: Colors.black)),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: btn(
+            icon: Icons.edit_rounded,
+            label: 'Editar',
+            onTap: () => setState(() => _editMode = true),
+          ),
+        ),
+      ],
     );
   }
 
@@ -676,7 +763,15 @@ class _StatsPageState extends State<StatsPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ShareSheet(initialPeriod: _period, accent: _accent, total: _total),
+      builder: (_) => _ShareSheet(
+        initialPeriod: _period,
+        accentIndex: _accentIndex,
+        total: _total,
+        streak: _streak,
+        maxSpeed: _maxSpeed,
+        order: List.of(_order),
+        shown: _order.where((k) => !_hidden.contains(k)).toSet(),
+      ),
     );
   }
 }
@@ -856,9 +951,21 @@ enum ShareStyle { dark, photo, clear }
 
 class _ShareSheet extends StatefulWidget {
   final StatsPeriod initialPeriod;
-  final Color accent;
+  final int accentIndex;
   final double total;
-  const _ShareSheet({required this.initialPeriod, required this.accent, required this.total});
+  final int streak;
+  final double maxSpeed;
+  final List<String> order;
+  final Set<String> shown;
+  const _ShareSheet({
+    required this.initialPeriod,
+    required this.accentIndex,
+    required this.total,
+    required this.streak,
+    required this.maxSpeed,
+    required this.order,
+    required this.shown,
+  });
 
   @override
   State<_ShareSheet> createState() => _ShareSheetState();
@@ -867,10 +974,28 @@ class _ShareSheet extends StatefulWidget {
 class _ShareSheetState extends State<_ShareSheet> {
   final GlobalKey _cardKey = GlobalKey();
   late StatsPeriod _period = widget.initialPeriod;
-  late Color _accent = widget.accent;
+  late int _accentIdx = widget.accentIndex;
   ShareStyle _style = ShareStyle.dark;
   File? _photo;
   bool _sharing = false;
+  bool _saving = false;
+
+  /// Datos que van en la imagen (máximo 6 para que se lean bien).
+  static const _maxStats = 6;
+  late final Set<String> _shown = widget.order.where(widget.shown.contains).take(_maxStats).toSet();
+
+  void _toggleStat(String key) {
+    if (_shown.contains(key)) {
+      setState(() => _shown.remove(key));
+    } else if (_shown.length < _maxStats) {
+      setState(() => _shown.add(key));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Puedes mostrar hasta 6 datos. Quita uno para agregar otro.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
 
   static const _styles = [
     (ShareStyle.dark, Icons.dark_mode_rounded, 'Oscuro'),
@@ -878,7 +1003,6 @@ class _ShareSheetState extends State<_ShareSheet> {
     (ShareStyle.clear, Icons.layers_clear_rounded, 'Sin fondo'),
   ];
 
-  List<Color> get _palette => [...StatsPrefsService.accentPalette, ...StatsPrefsService.accentPalettePlus];
 
   Future<void> _pickPhoto() async {
     try {
@@ -893,20 +1017,56 @@ class _ShareSheetState extends State<_ShareSheet> {
     }
   }
 
+  /// Genera el PNG de la tarjeta (360×640 → 1080×1920, formato historia).
+  Future<File> _renderPng() async {
+    await Future.delayed(const Duration(milliseconds: 60));
+    final boundary = _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) throw Exception('No se pudo generar la imagen');
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/pedalea_${DateTime.now().millisecondsSinceEpoch}.png');
+    await file.writeAsBytes(byteData.buffer.asUint8List());
+    return file;
+  }
+
+  /// Guarda la imagen en la galería del teléfono.
+  Future<void> _download() async {
+    if (_sharing || _saving) return;
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (!await Gal.hasPermission(toAlbum: true) && !await Gal.requestPermission(toAlbum: true)) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Necesitamos permiso para guardar en tu galería.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
+      final file = await _renderPng();
+      await Gal.putImage(file.path, album: 'Pedalea');
+      messenger.showSnackBar(SnackBar(
+        content: const Text('Imagen guardada en tu galería'),
+        backgroundColor: const Color(0xFF1F7A55),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('No se pudo guardar la imagen: $e'),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _share() async {
-    if (_sharing) return;
+    if (_sharing || _saving) return;
     setState(() => _sharing = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await Future.delayed(const Duration(milliseconds: 60));
-      final boundary = _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      // La tarjeta mide 360×640 → 1080×1920 (historia).
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception('No se pudo generar la imagen');
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/pedalea_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(byteData.buffer.asUint8List());
+      final file = await _renderPng();
 
       final s = summarize(RideStatsService.allDays(), _period);
       final km = _period == StatsPeriod.all ? widget.total : s.km;
@@ -954,6 +1114,15 @@ class _ShareSheetState extends State<_ShareSheet> {
   @override
   Widget build(BuildContext context) {
     final s = summarize(RideStatsService.allDays(), _period);
+    final items = <(String, String, String)>[
+      for (final k in widget.order)
+        if (_shown.contains(k))
+          (
+            statValue(k, s, total: widget.total, streak: widget.streak, maxSpeed: widget.maxSpeed).$1,
+            statValue(k, s, total: widget.total, streak: widget.streak, maxSpeed: widget.maxSpeed).$2,
+            kStatShort[k] ?? kStatMeta[k]!.$2.toUpperCase(),
+          ),
+    ];
     final screenH = MediaQuery.of(context).size.height;
     final previewH = (screenH * 0.42).clamp(260.0, 420.0);
 
@@ -978,7 +1147,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: Text('Compartir', style: _t(18, w: FontWeight.w700))),
+                    Expanded(child: Text('Compartir estadísticas', style: _t(18, w: FontWeight.w700))),
                     IconButton(
                       tooltip: 'Cerrar',
                       onPressed: () => Navigator.pop(context),
@@ -1012,9 +1181,10 @@ class _ShareSheetState extends State<_ShareSheet> {
                           child: StoryCard(
                             summary: s,
                             total: widget.total,
-                            accent: _accent,
+                            gradient: StatsPrefsService.accentGradientFor(_accentIdx),
                             style: _style,
                             photo: _photo,
+                            items: items,
                           ),
                         ),
                       ),
@@ -1054,20 +1224,39 @@ class _ShareSheetState extends State<_ShareSheet> {
                       style: TextButton.styleFrom(foregroundColor: Colors.white70, textStyle: _t(13, w: FontWeight.w600)),
                     ),
                   const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Text('DATOS', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                      const Spacer(),
+                      Text('${_shown.length} de $_maxStats', style: _t(11, c: Colors.white38)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final k in widget.order)
+                      _chip(kStatMeta[k]!.$2, _shown.contains(k), () => _toggleStat(k), icon: kStatMeta[k]!.$1),
+                  ]),
+                  const SizedBox(height: 20),
                   Text('COLOR', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
                   const SizedBox(height: 10),
+                  // Los mismos colores que en Editar: sólidos y degradados Plus.
                   Wrap(spacing: 10, runSpacing: 10, children: [
-                    for (final c in _palette)
+                    for (var i = 0; i < StatsPrefsService.allAccentColors.length; i++)
                       GestureDetector(
-                        onTap: () => setState(() => _accent = c),
+                        onTap: () => setState(() => _accentIdx = i),
                         child: Container(
                           width: 30,
                           height: 30,
                           decoration: BoxDecoration(
-                            color: c,
                             shape: BoxShape.circle,
-                            border: Border.all(color: c == _accent ? Colors.white : Colors.transparent, width: 2.5),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: StatsPrefsService.accentGradientFor(i),
+                            ),
+                            border: Border.all(color: i == _accentIdx ? Colors.white : Colors.transparent, width: 2.5),
                           ),
+                          child: i == _accentIdx ? const Icon(Icons.check_rounded, color: Colors.black, size: 16) : null,
                         ),
                       ),
                   ]),
@@ -1077,24 +1266,48 @@ class _ShareSheetState extends State<_ShareSheet> {
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(20, 8, 20, MediaQuery.of(context).padding.bottom + 14),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _sharing ? null : _share,
-                icon: _sharing
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                    : const Icon(Icons.ios_share_rounded, size: 19),
-                label: Text(_sharing ? 'Generando…' : 'Compartir'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  disabledBackgroundColor: Colors.white12,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: (_sharing || _saving) ? null : _download,
+                      icon: _saving
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.download_rounded, size: 20),
+                      label: Text(_saving ? 'Guardando…' : 'Descargar'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(color: Colors.white.withOpacity(0.25)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: (_sharing || _saving) ? null : _share,
+                      icon: _sharing
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                          : const Icon(Icons.ios_share_rounded, size: 19),
+                      label: Text(_sharing ? 'Generando…' : 'Compartir'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        disabledBackgroundColor: Colors.white12,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1107,20 +1320,26 @@ class _ShareSheetState extends State<_ShareSheet> {
 class StoryCard extends StatelessWidget {
   final PeriodSummary summary;
   final double total;
-  final Color accent;
+  /// Color de acento: dos tonos (iguales si es un color sólido).
+  final List<Color> gradient;
   final ShareStyle style;
   final File? photo;
+
+  /// Datos a mostrar: (valor, unidad, etiqueta).
+  final List<(String, String, String)> items;
   const StoryCard({
     super.key,
     required this.summary,
     required this.total,
-    required this.accent,
+    required this.gradient,
     required this.style,
     required this.photo,
+    required this.items,
   });
 
   @override
   Widget build(BuildContext context) {
+    final accent = gradient.first;
     final now = DateTime.now();
     final p = summary.period;
     final km = p == StatsPeriod.all ? total : summary.km;
@@ -1137,7 +1356,6 @@ class StoryCard extends StatelessWidget {
       StatsPeriod.all => 'desde siempre',
     }
         .toUpperCase();
-    final (co2v, co2u) = fmtCo2(km);
     final shadows = style == ShareStyle.dark
         ? null
         : [Shadow(color: Colors.black.withOpacity(0.55), blurRadius: 12)];
@@ -1152,17 +1370,24 @@ class StoryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Text(value, style: s(24, w: FontWeight.w800, h: 1.1)),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(value, maxLines: 1, style: s(24, w: FontWeight.w800, h: 1.1)),
+                    ),
+                  ),
                   if (unit.isNotEmpty) ...[const SizedBox(width: 3), Text(unit, style: s(12, w: FontWeight.w600, c: Colors.white70))],
                 ],
               ),
               const SizedBox(height: 2),
-              Text(label, style: s(9.5, w: FontWeight.w700, c: Colors.white60, ls: 1.4)),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: s(9.5, w: FontWeight.w700, c: Colors.white60, ls: 1.2)),
             ],
           ),
         );
 
     final maxKm = summary.bars.fold<double>(0, (m, b) => b.km > m ? b.km : m);
+    final cols = items.length == 4 ? 2 : 3;
 
     final content = Padding(
       padding: const EdgeInsets.fromLTRB(30, 34, 30, 30),
@@ -1198,7 +1423,11 @@ class StoryCard extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(fmtKm(km), style: s(104, w: FontWeight.w800, h: 1.0, ls: -4)),
           ),
-          Text('KILÓMETROS', style: s(14, w: FontWeight.w800, c: accent, ls: 3)),
+          ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (r) => LinearGradient(colors: gradient).createShader(r),
+            child: Text('KILÓMETROS', style: s(14, w: FontWeight.w800, ls: 3)),
+          ),
           const SizedBox(height: 26),
           SizedBox(
             height: 64,
@@ -1214,7 +1443,10 @@ class StoryCard extends StatelessWidget {
                         alignment: Alignment.bottomCenter,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: b.km > 0 ? accent : Colors.white.withOpacity(0.25),
+                            color: b.km > 0 ? null : Colors.white.withOpacity(0.25),
+                            gradient: b.km > 0
+                                ? LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: gradient)
+                                : null,
                             borderRadius: BorderRadius.circular(3),
                           ),
                         ),
@@ -1224,14 +1456,17 @@ class StoryCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 26),
-          Row(
-            children: [
-              stat('${summary.activeDays}', '', 'DÍAS ACTIVOS'),
-              stat(fmtKm(summary.bestDayKm), 'km', 'MEJOR DÍA'),
-              stat(co2v, co2u, 'CO₂ EVITADO'),
-            ],
-          ),
+          // Datos elegidos: de a 3 por fila (2 si son 4, para que no quede uno solo).
+          for (var i = 0; i < items.length; i += cols) ...[
+            SizedBox(height: i == 0 ? 26 : 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var j = i; j < i + cols; j++)
+                  if (j < items.length) stat(items[j].$1, items[j].$2, items[j].$3) else const Expanded(child: SizedBox()),
+              ],
+            ),
+          ],
           const SizedBox(height: 26),
           Container(height: 1, color: Colors.white.withOpacity(0.18)),
           const SizedBox(height: 12),
@@ -1272,7 +1507,7 @@ class StoryCard extends StatelessWidget {
                 height: 380,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [accent.withOpacity(0.14), accent.withOpacity(0)]),
+                  gradient: RadialGradient(colors: [gradient.last.withOpacity(0.16), gradient.last.withOpacity(0)]),
                 ),
               ),
             ),

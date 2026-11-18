@@ -15,6 +15,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Mensajes de voz en el chat -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Guardar la imagen de estadísticas en la galería (solo Android 10 o menos) -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
 
     <!-- Requerido en Android 11+ (API 30+) para que canLaunchUrl() detecte
          apps de teléfono/SMS instaladas (visibilidad de paquetes). Sin esto,
@@ -38,7 +42,8 @@
     <application
         android:label="Pedalea"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
 
         <!-- El token de Mapbox se configura en código vía
              MapboxOptions.setAccessToken() (ver lib/core/constants.dart). -->
