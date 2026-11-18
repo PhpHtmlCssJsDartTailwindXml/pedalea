@@ -54,6 +54,9 @@ class RideStatsService {
     await _writeAll(m);
   }
 
+  /// Copia de todos los días registrados { "YYYY-MM-DD": km }.
+  static Map<String, double> allDays() => Map.of(_readAll());
+
   static double kmForDay(DateTime d) => _readAll()[dayKey(d)] ?? 0;
   static double todayKm() => kmForDay(DateTime.now());
 

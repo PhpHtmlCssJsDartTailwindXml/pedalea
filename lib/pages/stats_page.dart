@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../core/glass.dart';
@@ -9,24 +10,87 @@ import '../services/ride_stats_service.dart';
 import '../services/ride_stats_sync_service.dart';
 import '../services/co2_service.dart';
 import '../services/stats_prefs_service.dart';
+import '../services/stats_summary.dart';
 import '../services/plus_prefs_service.dart';
 import '../services/subscription_service.dart';
-import '../widgets/bike_lane_painter.dart';
 import 'paywall_page.dart';
 import 'rider_ranking_page.dart';
 
+const _meses = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
 const _mesesCortos = [
   'ene', 'feb', 'mar', 'abr', 'may', 'jun',
   'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
 ];
+const _diasSemana = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
 
 String _fmtDia(DateTime d) => '${d.day} ${_mesesCortos[d.month - 1]}';
 
-/// Pantalla de progreso del ciclista: hoy, gráfico y totales.
+/// Km con coma decimal; sin decimales y con punto de miles desde 1.000.
+String fmtKm(double v) {
+  if (v >= 1000) {
+    final s = v.round().toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+  return v.toStringAsFixed(1).replaceAll('.', ',');
+}
+
+/// CO₂ evitado por [km], en g, kg o t con coma decimal.
+(String, String) fmtCo2(double km) {
+  final kg = Co2Service.savedKg(km);
+  if (kg >= 1000) return ((kg / 1000).toStringAsFixed(1).replaceAll('.', ','), 't');
+  if (kg >= 1) return (kg.toStringAsFixed(1).replaceAll('.', ','), 'kg');
+  return ((kg * 1000).toStringAsFixed(0), 'g');
+}
+
+String _periodCaption(StatsPeriod p, DateTime now) {
+  switch (p) {
+    case StatsPeriod.week:
+      final s = weekStart(now);
+      final e = s.add(const Duration(days: 6));
+      return s.month == e.month
+          ? 'Esta semana · ${s.day}–${e.day} ${_mesesCortos[e.month - 1]}'
+          : 'Esta semana · ${_fmtDia(s)} – ${_fmtDia(e)}';
+    case StatsPeriod.month:
+      final m = _meses[now.month - 1];
+      return '${m[0].toUpperCase()}${m.substring(1)} ${now.year}';
+    case StatsPeriod.year:
+      return 'Año ${now.year}';
+    case StatsPeriod.all:
+      return 'Desde que usas Pedalea';
+  }
+}
+
+String _prevLabel(StatsPeriod p) => switch (p) {
+      StatsPeriod.week => 'la semana pasada',
+      StatsPeriod.month => 'el mes pasado',
+      StatsPeriod.year => 'el año pasado',
+      StatsPeriod.all => '',
+    };
+
+const _periodTabs = [
+  (StatsPeriod.week, 'Semana'),
+  (StatsPeriod.month, 'Mes'),
+  (StatsPeriod.year, 'Año'),
+  (StatsPeriod.all, 'Total'),
+];
+
+TextStyle _t(double size, {FontWeight w = FontWeight.w500, Color c = Colors.white, double? h, double? ls}) =>
+    TextStyle(fontFamily: 'Poppins', fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: ls);
+
+/// Pantalla de progreso del ciclista, al estilo de las apps deportivas:
+/// periodo (semana/mes/año/total), un número principal, comparación con el
+/// periodo anterior, gráfico, cuadrícula de datos y récords personales.
 ///
-/// Se puede personalizar (botón «afinar» en la cabecera): reordenar y ocultar
-/// tarjetas, elegir el color de acento y el rango del gráfico. Todo se guarda
-/// en el dispositivo vía [StatsPrefsService].
+/// Se puede personalizar (botón «afinar»): color de acento (Plus), orden y
+/// visibilidad de los datos. Todo se guarda vía [StatsPrefsService].
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
 
@@ -35,34 +99,32 @@ class StatsPage extends StatefulWidget {
 }
 
 class _StatsPageState extends State<StatsPage> {
-  // Metadatos (emoji + etiqueta) de cada tarjeta reordenable del grid.
-  static const _tileMeta = <String, (String, String)>{
-    'streak': ('🔥', 'Racha'),
-    'bestDay': ('🏆', 'Mejor día'),
-    'total': ('🛣️', 'Total'),
-    'activeDays': ('📅', 'Días activos'),
-    'co2': ('🌱', 'CO₂ total'),
-    'week': ('🚴', 'Esta semana'),
-    'maxSpeed': ('⚡', 'Vel. máx'),
+  // Ícono y etiqueta de cada dato reordenable de la cuadrícula.
+  static const _tileMeta = <String, (IconData, String)>{
+    'streak': (Icons.local_fire_department_rounded, 'Racha actual'),
+    'bestDay': (Icons.bolt_rounded, 'Mejor día'),
+    'total': (Icons.route_rounded, 'Total histórico'),
+    'activeDays': (Icons.calendar_today_rounded, 'Días activos'),
+    'co2': (Icons.eco_rounded, 'CO₂ evitado'),
+    'week': (Icons.speed_rounded, 'Promedio por día'),
+    'maxSpeed': (Icons.flash_on_rounded, 'Vel. máxima'),
   };
 
-  late List<DayStat> _chartDays;
-  int _chartRange = 7; // 7 o 30 días
+  StatsPeriod _period = StatsPeriod.week;
+  late PeriodSummary _sum;
+  late PersonalRecords _rec;
   int _selectedBar = -1;
 
-  double _today = 0, _weekKm = 0, _total = 0, _bestDay = 0, _maxSpeed = 0;
-  int _streak = 0, _activeDays = 0;
+  double _total = 0, _maxSpeed = 0;
+  int _streak = 0;
   double? _serverTotal; // total histórico real (profiles.total_km)
   bool _syncing = false;
 
   bool get _isPlus => SubscriptionService.instance.isPlus.value;
 
-  /// Índice de acento efectivo (acotado y con fallback si dejó de ser Plus).
-  int get _accentIndex => StatsPrefsService.effectiveAccentIndex(
-      PlusPrefsService.accentIndex.value, _isPlus);
+  int get _accentIndex => StatsPrefsService.effectiveAccentIndex(PlusPrefsService.accentIndex.value, _isPlus);
   Color get _accent => StatsPrefsService.allAccentColors[_accentIndex];
-  List<Color> get _accentGrad =>
-      StatsPrefsService.accentGradientFor(_accentIndex);
+  List<Color> get _accentGrad => StatsPrefsService.accentGradientFor(_accentIndex);
 
   final List<String> _order = StatsPrefsService.tileOrder;
   final Set<String> _hidden = {...StatsPrefsService.hiddenTiles};
@@ -71,7 +133,6 @@ class _StatsPageState extends State<StatsPage> {
   @override
   void initState() {
     super.initState();
-    _chartRange = StatsPrefsService.chartRange;
     PlusPrefsService.accentIndex.addListener(_onPrefsChanged);
     SubscriptionService.instance.isPlus.addListener(_onPrefsChanged);
     PlusPrefsService.refresh(); // por si cambió en otro dispositivo
@@ -80,7 +141,7 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   void _onPrefsChanged() {
-    if (mounted) setState(() {}); // repinta con el acento nuevo
+    if (mounted) setState(() {});
   }
 
   @override
@@ -91,21 +152,18 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   void _load() {
-    _chartDays = RideStatsService.lastNDays(_chartRange);
-    _today = RideStatsService.todayKm();
-    _weekKm = RideStatsService.weekKm();
+    final days = RideStatsService.allDays();
+    _sum = summarize(days, _period);
+    _rec = records(days);
     _total = _serverTotal ?? RideStatsService.totalKm();
     _streak = RideStatsService.currentStreak();
-    _activeDays = RideStatsService.activeDays();
-    _bestDay = RideStatsService.bestDayKm();
     _maxSpeed = RideStatsService.maxSpeedKmh();
     _selectedBar = -1;
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
-  /// Baja las estadísticas del servidor (Supabase) y refresca la vista. Así
-  /// "Mis estadísticas" refleja los km reales aunque se haya reinstalado la
-  /// app o se pedalee desde otro teléfono.
+  /// Baja las estadísticas del servidor y refresca la vista, para que los km
+  /// sean los reales aunque se haya reinstalado la app o se use otro teléfono.
   Future<void> _syncFromServer() async {
     if (_syncing) return;
     setState(() => _syncing = true);
@@ -121,22 +179,29 @@ class _StatsPageState extends State<StatsPage> {
     }
   }
 
+  void _setPeriod(StatsPeriod p) {
+    if (p == _period) return;
+    _period = p;
+    _load();
+  }
+
+  /// Valor y unidad de cada dato de la cuadrícula (según el periodo).
   (String, String) _tileValue(String key) {
     switch (key) {
       case 'streak':
-        return ('$_streak', _streak == 1 ? 'día seguido' : 'días seguidos');
+        return ('$_streak', _streak == 1 ? 'día' : 'días');
       case 'bestDay':
-        return (_bestDay.toStringAsFixed(1), 'km');
+        return (fmtKm(_sum.bestDayKm), 'km');
       case 'total':
-        return (_total.toStringAsFixed(1), 'km');
+        return (fmtKm(_total), 'km');
       case 'activeDays':
-        return ('$_activeDays', _activeDays == 1 ? 'día' : 'días');
+        return ('${_sum.activeDays}', _sum.activeDays == 1 ? 'día' : 'días');
       case 'co2':
-        return (Co2Service.format(Co2Service.savedKg(_total)), 'ahorrado');
+        return fmtCo2(_period == StatsPeriod.all ? _total : _sum.km);
       case 'week':
-        return (_weekKm.toStringAsFixed(1), 'km');
+        return (fmtKm(_sum.avgPerActiveDay), 'km');
       case 'maxSpeed':
-        return (_maxSpeed <= 0 ? '—' : _maxSpeed.toStringAsFixed(1), 'km/h');
+        return (_maxSpeed <= 0 ? '—' : _maxSpeed.toStringAsFixed(1).replaceAll('.', ','), 'km/h');
       default:
         return ('', '');
     }
@@ -158,27 +223,30 @@ class _StatsPageState extends State<StatsPage> {
                   onRefresh: _syncFromServer,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 36),
                     children: [
-                      if (!_editMode) ...[
-                        _buildQuickActions(),
-                        const SizedBox(height: 14),
+                      if (_editMode)
+                        _buildEditPanel()
+                      else ...[
+                        _buildPeriodTabs(),
+                        const SizedBox(height: 26),
+                        _buildHero(),
+                        const SizedBox(height: 22),
+                        _BarsChart(
+                          bars: _sum.bars,
+                          period: _period,
+                          accent: _accent,
+                          gradient: _accentGrad,
+                          selected: _selectedBar,
+                          onSelect: (i) => setState(() => _selectedBar = _selectedBar == i ? -1 : i),
+                        ),
+                        const SizedBox(height: 26),
+                        _buildStatGrid(),
+                        const SizedBox(height: 32),
+                        _buildRecords(),
+                        const SizedBox(height: 20),
+                        _buildRankingLink(),
                       ],
-                      _buildTodayHero(),
-                      const SizedBox(height: 14),
-                      _buildChartCard(),
-                      const SizedBox(height: 24),
-                      _sectionHeader(
-                        _editMode ? 'PERSONALIZAR' : 'RESUMEN',
-                        hint: _editMode ? 'Ajusta colores y tarjetas' : null,
-                      ),
-                      const SizedBox(height: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: _editMode
-                            ? _buildEditPanel()
-                            : _buildStatGrid(),
-                      ),
                     ],
                   ),
                 ),
@@ -190,655 +258,286 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  // ── Piezas de estilo (mismo lenguaje que los controles del mapa) ───────
-  BoxDecoration _pillBox({double radius = 24, Color? tint}) => BoxDecoration(
-        color: (tint ?? Colors.white).withOpacity(tint != null ? 0.12 : 0.08),
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: tint != null
-              ? tint.withOpacity(0.4)
-              : Colors.white.withOpacity(0.14),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      );
-
-  Widget _circleButton({
-    required IconData icon,
-    required Color color,
-    required String tooltip,
-    required VoidCallback onTap,
-    Color? tint,
-    double size = 21,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Ink(
-            width: 48,
-            height: 48,
-            decoration: _pillBox(tint: tint),
-            child: Icon(icon, color: color, size: size),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionHeader(String text, {String? hint}) => Row(
-        children: [
-          Container(
-            width: 3,
-            height: 13,
-            decoration: BoxDecoration(
-              color: _accent,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.6),
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const Spacer(),
-          if (hint != null)
-            Text(
-              hint,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white.withOpacity(0.3),
-                fontSize: 11,
-              ),
-            ),
-        ],
-      );
-
   // ── Cabecera ──────────────────────────────────────────────────────────
+  Widget _iconBtn(IconData icon, String tip, VoidCallback onTap, {Color? color}) => IconButton(
+        tooltip: tip,
+        onPressed: onTap,
+        icon: Icon(icon, color: color ?? Colors.white70, size: 22),
+      );
+
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       child: Row(
         children: [
-          _circleButton(
-            icon: Icons.arrow_back_ios_new_rounded,
-            color: Colors.white,
-            size: 18,
-            tooltip: 'Volver',
-            onTap: () => Navigator.pop(context),
+          _iconBtn(Icons.arrow_back_rounded, 'Volver', () => Navigator.pop(context), color: Colors.white),
+          const SizedBox(width: 2),
+          Expanded(child: Text(_editMode ? 'Personalizar' : 'Estadísticas', style: _t(19, w: FontWeight.w700))),
+          if (_syncing)
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _accent)),
+            )
+          else
+            _iconBtn(Icons.sync_rounded, 'Actualizar', _syncFromServer),
+          _iconBtn(
+            _editMode ? Icons.check_rounded : Icons.tune_rounded,
+            _editMode ? 'Listo' : 'Personalizar',
+            () => setState(() => _editMode = !_editMode),
+            color: _editMode ? _accent : null,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.only(left: 16, right: 6),
-              decoration: _pillBox(),
-              child: Row(
-                children: [
-                  Icon(Icons.insights_rounded, color: _accent, size: 20),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Mis estadísticas',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  // Sincronizar con el servidor
-                  SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: _syncing
-                        ? Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: _accent),
-                          )
-                        : IconButton(
-                            padding: EdgeInsets.zero,
-                            tooltip: 'Actualizar',
-                            icon: const Icon(Icons.sync_rounded,
-                                color: Colors.white54, size: 19),
-                            onPressed: _syncFromServer,
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          _circleButton(
-            icon: _editMode ? Icons.check_rounded : Icons.tune_rounded,
-            color: _editMode ? _accent : Colors.white70,
-            tint: _editMode ? _accent : null,
-            tooltip: _editMode ? 'Listo' : 'Personalizar',
-            onTap: () => setState(() => _editMode = !_editMode),
-          ),
+          if (!_editMode) _iconBtn(Icons.ios_share_rounded, 'Compartir', _openShareSheet, color: _accent),
         ],
       ),
     );
   }
 
-  /// Accesos rápidos: compartir y ranking.
-  Widget _buildQuickActions() {
-    Widget action({
-      required IconData icon,
-      required String label,
-      required Color color,
-      required VoidCallback onTap,
-      bool highlighted = false,
-      Widget? badge,
-    }) {
-      return Expanded(
-        child: Material(
-          color: highlighted
-              ? color.withOpacity(0.14)
-              : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(22),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(22),
-            onTap: onTap,
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: highlighted
-                      ? color.withOpacity(0.45)
-                      : Colors.white.withOpacity(0.1),
+  // ── Periodo ───────────────────────────────────────────────────────────
+  Widget _buildPeriodTabs() {
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          for (final (p, label) in _periodTabs)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _setPeriod(p),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _period == p ? Colors.white.withOpacity(0.12) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    label,
+                    style: _t(13, w: _period == p ? FontWeight.w700 : FontWeight.w500, c: _period == p ? Colors.white : Colors.white54),
+                  ),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: color, size: 18),
-                  const SizedBox(width: 7),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: highlighted ? color : Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if (badge != null) ...[const SizedBox(width: 6), badge],
-                ],
-              ),
             ),
-          ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  // ── Número principal ─────────────────────────────────────────────────
+  Widget _buildHero() {
+    final km = _period == StatsPeriod.all ? _total : _sum.km;
+    final change = _sum.changePct;
+    final sel = _selectedBar >= 0 && _selectedBar < _sum.bars.length ? _sum.bars[_selectedBar] : null;
+
+    Widget comparison;
+    if (sel != null) {
+      final d = sel.start;
+      final what = (_period == StatsPeriod.year || _period == StatsPeriod.all)
+          ? '${_meses[d.month - 1]} ${d.year}'
+          : '${_diasSemana[d.weekday - 1]} ${_fmtDia(d)}';
+      comparison = Text('${fmtKm(sel.km)} km el $what', style: _t(13.5, w: FontWeight.w600, c: _accent));
+    } else if (change != null) {
+      final up = change >= 0;
+      final color = up ? _accent : const Color(0xFFFF7A7A);
+      comparison = Row(
+        children: [
+          Icon(up ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: color, size: 18),
+          const SizedBox(width: 6),
+          Text('${up ? '+' : ''}${change.round()} %', style: _t(13.5, w: FontWeight.w700, c: color)),
+          const SizedBox(width: 6),
+          Flexible(child: Text('vs ${_prevLabel(_period)}', style: _t(13.5, c: Colors.white54))),
+        ],
+      );
+    } else if (_period != StatsPeriod.all && (_sum.prevKm ?? 0) < 0.1 && km > 0) {
+      comparison = Text('Sin actividad ${_prevLabel(_period)}', style: _t(13.5, c: Colors.white54));
+    } else {
+      comparison = Text(
+        _period == StatsPeriod.all ? '${_rec.longestStreak} días de racha máxima' : 'Sal a pedalear para sumar km',
+        style: _t(13.5, c: Colors.white54),
       );
     }
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        action(
-          icon: Icons.ios_share_rounded,
-          label: 'Compartir',
-          color: _accent,
-          highlighted: true,
-          onTap: _openShareSheet,
-          badge: _isPlus
-              ? null
-              : Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'PLUS',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.amber,
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
+        Text(_periodCaption(_period, DateTime.now()).toUpperCase(), style: _t(11.5, w: FontWeight.w700, c: Colors.white54, ls: 1.4)),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            TweenAnimationBuilder<double>(
+              key: ValueKey(_period),
+              tween: Tween(begin: 0, end: km),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              builder: (_, v, _) => Text(fmtKm(v), style: _t(60, w: FontWeight.w800, h: 1.0, ls: -2)),
+            ),
+            const SizedBox(width: 8),
+            Text('km', style: _t(20, w: FontWeight.w600, c: Colors.white54)),
+          ],
         ),
-        const SizedBox(width: 10),
-        action(
-          icon: Icons.emoji_events_rounded,
-          label: 'Ranking',
-          color: Colors.amberAccent,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const RiderRankingPage()),
+        const SizedBox(height: 10),
+        comparison,
+      ],
+    );
+  }
+
+  // ── Cuadrícula de datos ──────────────────────────────────────────────
+  Widget _buildStatGrid() {
+    final keys = _order.where((k) => !_hidden.contains(k)).toList();
+    if (keys.isEmpty) return const SizedBox.shrink();
+    final rows = <List<String>>[];
+    for (var i = 0; i < keys.length; i += 3) {
+      rows.add(keys.sublist(i, (i + 3).clamp(0, keys.length)));
+    }
+    final line = Container(height: 1, color: Colors.white.withOpacity(0.07));
+    return Column(
+      children: [
+        line,
+        for (final r in rows) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var j = 0; j < 3; j++)
+                  Expanded(child: j < r.length ? _statCell(r[j]) : const SizedBox.shrink()),
+              ],
+            ),
           ),
+          line,
+        ],
+      ],
+    );
+  }
+
+  Widget _statCell(String key) {
+    final (icon, label) = _tileMeta[key]!;
+    final (value, unit) = _tileValue(key);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 13, color: Colors.white38),
+            const SizedBox(width: 5),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _t(11, c: Colors.white54))),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, maxLines: 1, style: _t(20, w: FontWeight.w700, h: 1.1)),
+              ),
+            ),
+            if (unit.isNotEmpty) ...[
+              const SizedBox(width: 3),
+              Text(unit, style: _t(11.5, c: Colors.white54)),
+            ],
+          ],
         ),
       ],
     );
   }
 
-  Widget _heroChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: _accent, size: 14),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Hero de hoy ───────────────────────────────────────────────────────
-  Widget _buildTodayHero() {
-    final co2 = Co2Service.savedKg(_today);
-    final tree = Co2Service.treeEquivalent(co2);
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _accentGrad.first.withOpacity(0.24),
-            _accentGrad.last.withOpacity(0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: _accentGrad.first.withOpacity(0.3)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: Stack(
-          children: [
-            // Círculo decorativo (como una rueda).
-            Positioned(
-              right: -36,
-              top: -36,
-              child: Container(
-                width: 130,
-                height: 130,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _accent.withOpacity(0.1),
-                    width: 14,
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: _accent,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                                color: _accent.withOpacity(0.6),
-                                blurRadius: 6),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'HOY',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white60,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _AnimatedKm(
-                      value: _today, accent: _accent, gradient: _accentGrad),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _heroChip(Icons.eco_rounded,
-                          '${Co2Service.format(co2)} CO₂ ahorrado'),
-                      _heroChip(Icons.date_range_rounded,
-                          'Semana: ${_weekKm.toStringAsFixed(1)} km'),
-                      if (_streak > 0)
-                        _heroChip(Icons.local_fire_department_rounded,
-                            'Racha: $_streak ${_streak == 1 ? 'día' : 'días'}'),
-                    ],
-                  ),
-                  if (tree.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      tree,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white.withOpacity(0.45),
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Gráfico ───────────────────────────────────────────────────────────
-  Widget _buildChartCard() {
-    final days = _chartDays;
-    final maxKm = days.fold<double>(0.1, (m, e) => e.km > m ? e.km : m);
-    final rangeKm = days.fold<double>(0, (s, e) => s + e.km);
-    final todayKey = RideStatsService.dayKey(DateTime.now());
-    const wd = ['L', 'M', 'M', 'J', 'V', 'S', 'D']; // weekday 1..7
-    final narrow = _chartRange == 30;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: glassDecoration(radius: 24, opacity: 0.05, borderOpacity: 0.1),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  // ── Récords personales ───────────────────────────────────────────────
+  Widget _buildRecords() {
+    Widget row(IconData icon, Color color, String title, String value, String? sub) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
             children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 21),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Actividad',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '${rangeKm.toStringAsFixed(1)} km',
-                            style: TextStyle(
-                              color: _accent,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          TextSpan(
-                            text: narrow
-                                ? ' en 30 días'
-                                : ' en 7 días',
-                          ),
-                        ],
-                      ),
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 12,
-                      ),
-                    ),
+                    Text(title, style: _t(14, w: FontWeight.w600)),
+                    if (sub != null) Text(sub, style: _t(11.5, c: Colors.white38)),
                   ],
                 ),
               ),
-              _rangeSegmented(),
+              Text(value, style: _t(15, w: FontWeight.w700)),
             ],
           ),
-          const SizedBox(height: 14),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 150),
-            child: (_selectedBar >= 0 && _selectedBar < days.length)
-                ? Container(
-                    key: ValueKey(_selectedBar),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _accent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${_fmtDia(days[_selectedBar].date)}  ·  '
-                      '${days[_selectedBar].km.toStringAsFixed(1)} km',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: _accent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  )
-                : Padding(
-                    key: const ValueKey('hint'),
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      'Toca una barra para ver el detalle',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white.withOpacity(0.3),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 120,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (int i = 0; i < days.length; i++)
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(
-                          () => _selectedBar = _selectedBar == i ? -1 : i),
-                      child: _Bar(
-                        heightFactor: (days[i].km / maxKm).clamp(0.0, 1.0),
-                        isToday:
-                            RideStatsService.dayKey(days[i].date) == todayKey,
-                        isSelected: _selectedBar == i,
-                        accent: _accent,
-                        narrow: narrow,
-                        label: narrow ? null : wd[days[i].date.weekday - 1],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (narrow) ...[
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _fmtDia(days.first.date),
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white38,
-                    fontSize: 10,
-                  ),
-                ),
-                Text(
-                  'hoy',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: _accent.withOpacity(0.7),
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+        );
 
-  /// Selector de rango en una sola cápsula: 7D | 30D.
-  Widget _rangeSegmented() {
-    Widget seg(String label, int range) {
-      final sel = _chartRange == range;
-      return GestureDetector(
-        onTap: () {
-          if (_chartRange == range) return;
-          setState(() {
-            _chartRange = range;
-            _selectedBar = -1;
-            _chartDays = RideStatsService.lastNDays(range);
-          });
-          StatsPrefsService.setChartRange(range);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: sel ? _accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: sel ? Colors.black : Colors.white60,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(19),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [seg('7D', 7), seg('30D', 30)],
-      ),
-    );
-  }
-
-  // ── Grid de tarjetas (modo normal) ───────────────────────────────────
-  Widget _buildStatGrid() {
-    final visible = _order.where((k) => !_hidden.contains(k)).toList();
-    if (visible.isEmpty) {
-      return Container(
-        key: const ValueKey('empty'),
-        padding: const EdgeInsets.all(20),
-        decoration: glassDecoration(radius: 18, opacity: 0.05),
-        child: Row(
-          children: [
-            const Icon(Icons.visibility_off_rounded,
-                color: Colors.white38, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Ocultaste todas las tarjetas. Toca el botón de personalizar '
-                'para volver a mostrarlas.',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white54,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    return GridView.count(
-      key: const ValueKey('grid'),
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.55,
+    final r = _rec;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final k in visible)
-          _StatTile(
-            emoji: _tileMeta[k]!.$1,
-            label: _tileMeta[k]!.$2,
-            value: _tileValue(k).$1,
-            unit: _tileValue(k).$2,
-            accent: _accent,
-          ),
+        Text('Récords personales', style: _t(16, w: FontWeight.w700)),
+        const SizedBox(height: 8),
+        row(Icons.bolt_rounded, const Color(0xFFFFC94D), 'Día más largo',
+            r.bestDayKm > 0 ? '${fmtKm(r.bestDayKm)} km' : '—',
+            r.bestDayDate != null ? '${_fmtDia(r.bestDayDate!)} ${r.bestDayDate!.year}' : null),
+        row(Icons.date_range_rounded, const Color(0xFF6FB6FF), 'Mejor semana',
+            r.bestWeekKm > 0 ? '${fmtKm(r.bestWeekKm)} km' : '—',
+            r.bestWeekStart != null ? 'Desde el ${_fmtDia(r.bestWeekStart!)}' : null),
+        row(Icons.local_fire_department_rounded, const Color(0xFFFF8A4C), 'Racha más larga',
+            r.longestStreak > 0 ? '${r.longestStreak} ${r.longestStreak == 1 ? 'día' : 'días'}' : '—',
+            r.longestStreakEnd != null && r.longestStreak > 0 ? 'Hasta el ${_fmtDia(r.longestStreakEnd!)}' : null),
+        row(Icons.flash_on_rounded, const Color(0xFFB98BFF), 'Velocidad máxima',
+            _maxSpeed > 0 ? '${_maxSpeed.toStringAsFixed(1).replaceAll('.', ',')} km/h' : '—', null),
       ],
     );
   }
 
-  /// Cambia el color de acento; si es un acento Plus y el ciclista no lo es,
-  /// abre el paywall.
+  Widget _buildRankingLink() {
+    return Material(
+      color: Colors.white.withOpacity(0.04),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiderRankingPage())),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              const Icon(Icons.leaderboard_rounded, color: Colors.white70, size: 21),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Ranking de ciclistas', style: _t(14, w: FontWeight.w600))),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Personalización ──────────────────────────────────────────────────
   void _selectAccent(int index) {
     if (StatsPrefsService.isPlusAccentIndex(index) && !_isPlus) {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => const PaywallPage(
-            reason:
-                'Los temas y colores de acento premium son parte de Pedalea Plus.',
+            reason: 'Los temas y colores de acento premium son parte de Pedalea Plus.',
           ),
         ),
       );
       return;
     }
-    // Guarda en el perfil (BD); el notifier hace el setState vía _onPrefsChanged.
+    // Guarda en el perfil (BD); el notifier repinta vía _onPrefsChanged.
     PlusPrefsService.setAccentIndex(index);
   }
 
@@ -849,106 +548,50 @@ class _StatsPageState extends State<StatsPage> {
     return GestureDetector(
       onTap: () => _selectAccent(index),
       child: Container(
-        width: 30,
-        height: 30,
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           color: isGradient ? null : grad.first,
-          gradient: isGradient
-              ? LinearGradient(
-                  colors: grad,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
+          gradient: isGradient ? LinearGradient(colors: grad, begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: selected ? Colors.white : Colors.transparent,
-            width: 2.5,
-          ),
+          border: Border.all(color: selected ? Colors.white : Colors.transparent, width: 2.5),
         ),
-        child: selected
-            ? const Icon(Icons.check, color: Colors.black, size: 15)
-            : null,
+        child: selected ? const Icon(Icons.check_rounded, color: Colors.black, size: 16) : null,
       ),
     );
   }
 
-  // ── Panel de personalización (modo edición) ──────────────────────────
+  Widget _label(String text) => Text(text.toUpperCase(), style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2));
+
   Widget _buildEditPanel() {
     return Column(
-      key: const ValueKey('edit'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          decoration: glassDecoration(radius: 18, opacity: 0.05),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionLabel('COLOR DE ACENTO'),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  for (int i = 0;
-                      i < StatsPrefsService.freeAccentCount;
-                      i++)
-                    _accentSwatch(i),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Text(
-                    'PLUS',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.amber.withOpacity(0.9),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _isPlus ? 'colores y degradados' : 'toca para probar',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.4),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Opacity(
-                opacity: _isPlus ? 1 : 0.55,
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    for (int i = StatsPrefsService.freeAccentCount;
-                        i < StatsPrefsService.allAccentColors.length;
-                        i++)
-                      _accentSwatch(i),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        const SizedBox(height: 8),
+        _label('Color de acento'),
+        const SizedBox(height: 12),
+        Wrap(spacing: 12, runSpacing: 12, children: [
+          for (int i = 0; i < StatsPrefsService.freeAccentCount; i++) _accentSwatch(i),
+        ]),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Text('PLUS', style: _t(10, w: FontWeight.w800, c: Colors.amber, ls: 1)),
+            const SizedBox(width: 6),
+            Text(_isPlus ? 'colores y degradados' : 'toca para probar', style: _t(10.5, c: Colors.white38)),
+          ],
         ),
-        const SizedBox(height: 18),
-        _sectionLabel('TARJETAS'),
+        const SizedBox(height: 10),
+        Opacity(
+          opacity: _isPlus ? 1 : 0.55,
+          child: Wrap(spacing: 12, runSpacing: 12, children: [
+            for (int i = StatsPrefsService.freeAccentCount; i < StatsPrefsService.allAccentColors.length; i++) _accentSwatch(i),
+          ]),
+        ),
+        const SizedBox(height: 28),
+        _label('Datos'),
         const SizedBox(height: 4),
-        Text(
-          'Arrastra para ordenar · toca el ojo para mostrar u ocultar',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: Colors.white.withOpacity(0.4),
-            fontSize: 11,
-          ),
-        ),
+        Text('Arrastra para ordenar · toca el ojo para mostrar u ocultar', style: _t(11.5, c: Colors.white38)),
         const SizedBox(height: 10),
         ReorderableListView.builder(
           shrinkWrap: true,
@@ -966,7 +609,7 @@ class _StatsPageState extends State<StatsPage> {
           itemBuilder: (context, i) {
             final key = _order[i];
             final hidden = _hidden.contains(key);
-            final (emoji, label) = _tileMeta[key]!;
+            final (icon, label) = _tileMeta[key]!;
             final (value, unit) = _tileValue(key);
             return Container(
               key: ValueKey(key),
@@ -974,53 +617,21 @@ class _StatsPageState extends State<StatsPage> {
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(hidden ? 0.02 : 0.05),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: hidden ? Colors.white10 : _accent.withOpacity(0.25),
-                ),
               ),
               child: ListTile(
                 dense: true,
-                leading: Opacity(
-                  opacity: hidden ? 0.35 : 1,
-                  child: Text(emoji, style: const TextStyle(fontSize: 20)),
-                ),
-                title: Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: hidden ? Colors.white38 : Colors.white,
-                  ),
-                ),
-                subtitle: Text(
-                  '$value $unit',
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: Colors.white38,
-                  ),
-                ),
+                leading: Icon(icon, color: hidden ? Colors.white24 : _accent, size: 21),
+                title: Text(label, style: _t(14, w: FontWeight.w600, c: hidden ? Colors.white38 : Colors.white)),
+                subtitle: Text('$value $unit', style: _t(12, c: Colors.white38)),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       visualDensity: VisualDensity.compact,
-                      icon: Icon(
-                        hidden
-                            ? Icons.visibility_off_rounded
-                            : Icons.visibility_rounded,
-                        color: hidden ? Colors.white30 : _accent,
-                        size: 20,
-                      ),
+                      icon: Icon(hidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          color: hidden ? Colors.white30 : Colors.white70, size: 20),
                       onPressed: () {
-                        setState(() {
-                          if (hidden) {
-                            _hidden.remove(key);
-                          } else {
-                            _hidden.add(key);
-                          }
-                        });
+                        setState(() => hidden ? _hidden.remove(key) : _hidden.add(key));
                         StatsPrefsService.setHiddenTiles(_hidden);
                       },
                     ),
@@ -1028,8 +639,7 @@ class _StatsPageState extends State<StatsPage> {
                       index: i,
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(Icons.drag_handle_rounded,
-                            color: Colors.white38),
+                        child: Icon(Icons.drag_handle_rounded, color: Colors.white38),
                       ),
                     ),
                   ],
@@ -1042,31 +652,7 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  Widget _sectionLabel(String text) => Row(
-        children: [
-          Container(
-            width: 3,
-            height: 12,
-            decoration: BoxDecoration(
-              color: _accent,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.6),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ],
-      );
-
-  // ── Hoja para compartir ──────────────────────────────────────────────
+  // ── Compartir ────────────────────────────────────────────────────────
   void _openShareSheet() {
     if (!SubscriptionService.instance.isPlus.value) {
       showModalBottomSheet(
@@ -1078,10 +664,7 @@ class _StatsPageState extends State<StatsPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const PaywallPage(
-                  reason:
-                      'Comparte tus estadísticas en historias con Pedalea Plus.',
-                ),
+                builder: (_) => const PaywallPage(reason: 'Comparte tus estadísticas en historias con Pedalea Plus.'),
               ),
             );
           },
@@ -1093,142 +676,114 @@ class _StatsPageState extends State<StatsPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ShareSheet(
-        today: _today,
-        total: _total,
-        weekKm: _weekKm,
-        streak: _streak,
-        bestDay: _bestDay,
-        activeDays: _activeDays,
-      ),
+      builder: (_) => _ShareSheet(initialPeriod: _period, accent: _accent, total: _total),
     );
   }
 }
 
-/// Número de km grande con animación de conteo al aparecer.
-class _AnimatedKm extends StatelessWidget {
-  final double value;
+/// Gráfico de barras limpio: una barra por día (semana/mes) o por mes.
+class _BarsChart extends StatelessWidget {
+  final List<StatsBar> bars;
+  final StatsPeriod period;
   final Color accent;
-  final List<Color>? gradient;
-  const _AnimatedKm({required this.value, required this.accent, this.gradient});
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: value),
-      duration: const Duration(milliseconds: 900),
-      curve: Curves.easeOutCubic,
-      builder: (_, v, _) => Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          _gradientNumber(v.toStringAsFixed(1)),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              'km',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: accent,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _gradientNumber(String text) {
-    const style = TextStyle(
-      fontFamily: 'Poppins',
-      color: Colors.white,
-      fontSize: 52,
-      fontWeight: FontWeight.w800,
-      height: 1,
-    );
-    final g = gradient;
-    if (g == null || g.length < 2 || g.first.value == g.last.value) {
-      return Text(text, style: style);
-    }
-    return ShaderMask(
-      blendMode: BlendMode.srcIn,
-      shaderCallback: (bounds) => LinearGradient(
-        colors: g,
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ).createShader(bounds),
-      child: Text(text, style: style),
-    );
-  }
-}
-
-/// Una barra del gráfico, con animación de crecimiento.
-class _Bar extends StatelessWidget {
-  final double heightFactor;
-  final bool isToday;
-  final bool isSelected;
-  final bool narrow;
-  final Color accent;
-  final String? label;
-  const _Bar({
-    required this.heightFactor,
-    required this.isToday,
-    required this.isSelected,
-    required this.narrow,
+  final List<Color> gradient;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  const _BarsChart({
+    required this.bars,
+    required this.period,
     required this.accent,
-    this.label,
+    required this.gradient,
+    required this.selected,
+    required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final active = isToday || isSelected;
-    return Column(
-      children: [
-        Expanded(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: heightFactor),
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeOutCubic,
-            builder: (_, v, _) => FractionallySizedBox(
-              alignment: Alignment.bottomCenter,
-              heightFactor: v <= 0.02 ? 0.02 : v,
-              child: Container(
-                width: narrow ? 6 : 18,
-                decoration: BoxDecoration(
-                  color: active
-                      ? accent
-                      : Colors.white.withOpacity(isSelected ? 0.5 : 0.22),
-                  borderRadius: BorderRadius.circular(narrow ? 3 : 6),
-                  boxShadow: active
-                      ? [BoxShadow(color: accent.withOpacity(0.4), blurRadius: 8)]
-                      : null,
+    final maxKm = bars.fold<double>(0, (m, b) => b.km > m ? b.km : m);
+    final today = DateTime.now();
+    final dense = bars.length > 14;
+    return SizedBox(
+      height: 150,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (var i = 0; i < bars.length; i++)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onSelect(i),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: dense ? 1.2 : 5),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: maxKm <= 0 ? 0 : bars[i].km / maxKm),
+                            duration: const Duration(milliseconds: 600),
+                            curve: Curves.easeOutCubic,
+                            builder: (_, f, _) => FractionallySizedBox(
+                              heightFactor: f < 0.02 ? 0.02 : f,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(dense ? 2 : 6),
+                                  gradient: bars[i].km <= 0
+                                      ? null
+                                      : LinearGradient(
+                                          begin: Alignment.bottomCenter,
+                                          end: Alignment.topCenter,
+                                          colors: [
+                                            gradient.first.withOpacity(selected == -1 || selected == i ? 0.95 : 0.35),
+                                            gradient.last.withOpacity(selected == -1 || selected == i ? 1 : 0.4),
+                                          ],
+                                        ),
+                                  color: bars[i].km <= 0 ? Colors.white.withOpacity(0.08) : null,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 14,
+                        child: Text(
+                          _showLabel(i) ? bars[i].label : '',
+                          maxLines: 1,
+                          overflow: TextOverflow.visible,
+                          softWrap: false,
+                          style: _t(10.5,
+                              w: _isCurrent(bars[i].start, today) ? FontWeight.w700 : FontWeight.w500,
+                              c: _isCurrent(bars[i].start, today) ? Colors.white : Colors.white38),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        if (label != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            label!,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: active ? accent : Colors.white38,
-              fontSize: 11,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-            ),
-          ),
         ],
-      ],
+      ),
     );
+  }
+
+  bool _showLabel(int i) {
+    if (bars.length <= 14) return true;
+    final d = bars[i].start.day;
+    return d == 1 || d % 5 == 0;
+  }
+
+  bool _isCurrent(DateTime s, DateTime now) {
+    if (period == StatsPeriod.year || period == StatsPeriod.all) {
+      return s.year == now.year && s.month == now.month;
+    }
+    return s.year == now.year && s.month == now.month && s.day == now.day;
   }
 }
 
-/// Invita a suscribirse a Pedalea Plus cuando el usuario gratis intenta
-/// compartir su resumen de estadísticas.
 class _StatsShareUpsellSheet extends StatelessWidget {
   final VoidCallback onUpgrade;
   const _StatsShareUpsellSheet({required this.onUpgrade});
@@ -1236,12 +791,7 @@ class _StatsShareUpsellSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 16,
-        left: 16,
-        right: 16,
-        top: 16,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 16, left: 16, right: 16, top: 16),
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF0F0F1A),
@@ -1260,26 +810,13 @@ class _StatsShareUpsellSheet extends StatelessWidget {
                 color: Colors.amber.withOpacity(0.12),
                 border: Border.all(color: Colors.amber.withOpacity(0.35)),
               ),
-              child: const Icon(Icons.ios_share_rounded,
-                  color: Colors.amber, size: 30),
+              child: const Icon(Icons.ios_share_rounded, color: Colors.amber, size: 30),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Compartir tus estadísticas es Plus',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text('Compartir tus estadísticas es Plus', style: _t(17, w: FontWeight.w700)),
             const SizedBox(height: 8),
-            const Text(
-              'Hazte Pedalea Plus para compartir tu progreso como imagen en tus historias.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontFamily: 'Poppins', color: Colors.white60, fontSize: 13),
-            ),
+            Text('Hazte Pedalea Plus para compartir tu progreso como imagen en tus historias.',
+                textAlign: TextAlign.center, style: _t(13, c: Colors.white60)),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -1292,10 +829,8 @@ class _StatsShareUpsellSheet extends StatelessWidget {
                   foregroundColor: Colors.black,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
                 ),
               ),
             ),
@@ -1303,8 +838,7 @@ class _StatsShareUpsellSheet extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.pop(context),
               style: TextButton.styleFrom(foregroundColor: Colors.white38),
-              child: const Text('Ahora no',
-                  style: TextStyle(fontFamily: 'Poppins')),
+              child: const Text('Ahora no', style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
         ),
@@ -1313,22 +847,18 @@ class _StatsShareUpsellSheet extends StatelessWidget {
   }
 }
 
-/// Hoja inferior con la tarjeta de resumen lista para compartir como imagen.
+// ═══════════════════════════════════════════════════════════════════════
+// Imagen para compartir (formato historia 9:16)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Estilo de la imagen para compartir.
+enum ShareStyle { dark, photo, clear }
+
 class _ShareSheet extends StatefulWidget {
-  final double today;
+  final StatsPeriod initialPeriod;
+  final Color accent;
   final double total;
-  final double weekKm;
-  final int streak;
-  final double bestDay;
-  final int activeDays;
-  const _ShareSheet({
-    required this.today,
-    required this.total,
-    required this.weekKm,
-    required this.streak,
-    required this.bestDay,
-    required this.activeDays,
-  });
+  const _ShareSheet({required this.initialPeriod, required this.accent, required this.total});
 
   @override
   State<_ShareSheet> createState() => _ShareSheetState();
@@ -1336,39 +866,31 @@ class _ShareSheet extends StatefulWidget {
 
 class _ShareSheetState extends State<_ShareSheet> {
   final GlobalKey _cardKey = GlobalKey();
+  late StatsPeriod _period = widget.initialPeriod;
+  late Color _accent = widget.accent;
+  ShareStyle _style = ShareStyle.dark;
+  File? _photo;
   bool _sharing = false;
 
-  // ── Personalización de la tarjeta ─────────────────────────────────────
-  static const _statMeta = {
-    'today': ('🚴', 'Hoy'),
-    'weekKm': ('📆', 'Semana'),
-    'streak': ('🔥', 'Racha'),
-    'bestDay': ('🏆', 'Mejor día'),
-    'activeDays': ('📅', 'Días activo'),
-  };
-  final List<String> _order = [
-    'streak',
-    'bestDay',
-    'activeDays',
-    'today',
-    'weekKm'
+  static const _styles = [
+    (ShareStyle.dark, Icons.dark_mode_rounded, 'Oscuro'),
+    (ShareStyle.photo, Icons.image_rounded, 'Con foto'),
+    (ShareStyle.clear, Icons.layers_clear_rounded, 'Sin fondo'),
   ];
-  final Set<String> _shownStats = {'streak', 'bestDay', 'activeDays', 'co2'};
 
-  // Arranca desde el color que el ciclista eligió en la pantalla principal.
-  Color _accentColor = StatsPrefsService.allAccentColors[
-      StatsPrefsService.effectiveAccentIndex(
-          PlusPrefsService.accentIndex.value,
-          SubscriptionService.instance.isPlus.value)];
+  List<Color> get _palette => [...StatsPrefsService.accentPalette, ...StatsPrefsService.accentPalettePlus];
 
-  void _toggleStat(String key) {
-    setState(() {
-      if (_shownStats.contains(key)) {
-        _shownStats.remove(key);
-      } else {
-        _shownStats.add(key);
-      }
-    });
+  Future<void> _pickPhoto() async {
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 88);
+      if (x == null) return;
+      setState(() {
+        _photo = File(x.path);
+        _style = ShareStyle.photo;
+      });
+    } catch (e) {
+      debugPrint('No se pudo elegir la foto: $e');
+    }
   }
 
   Future<void> _share() async {
@@ -1377,426 +899,200 @@ class _ShareSheetState extends State<_ShareSheet> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await Future.delayed(const Duration(milliseconds: 60));
-      final boundary =
-          _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final boundary = _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      // La tarjeta mide 360×640 → 1080×1920 (historia).
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception('No se pudo generar la imagen');
       final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/pedalea_resumen_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
+      final file = File('${dir.path}/pedalea_${DateTime.now().millisecondsSinceEpoch}.png');
       await file.writeAsBytes(byteData.buffer.asUint8List());
 
-      final co2 = Co2Service.savedKg(widget.total);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text:
-            '🚴 Mi resumen en Pedalea: ${widget.total.toStringAsFixed(1)} km '
-            'pedaleados y ${Co2Service.format(co2)} de CO₂ ahorrado. '
-            '¡Pedalea Santiago! 🌱',
-      );
+      final s = summarize(RideStatsService.allDays(), _period);
+      final km = _period == StatsPeriod.all ? widget.total : s.km;
+      final what = switch (_period) {
+        StatsPeriod.week => 'Mi semana en bici',
+        StatsPeriod.month => 'Mi mes en bici',
+        StatsPeriod.year => 'Mi año en bici',
+        StatsPeriod.all => 'Mis km en bici',
+      };
+      await Share.shareXFiles([XFile(file.path)], text: '$what: ${fmtKm(km)} km con Pedalea');
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('No se pudo compartir: $e'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      messenger.showSnackBar(SnackBar(
+        content: Text('No se pudo compartir: $e'),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
   }
 
-  Widget _sectionLabel(String text, {String? hint}) => Row(
-        children: [
-          Container(
-            width: 3,
-            height: 12,
-            decoration: BoxDecoration(
-              color: _accentColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.6),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-            ),
-          ),
-          if (hint != null) ...[
-            const Spacer(),
-            Text(
-              hint,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white.withOpacity(0.3),
-                fontSize: 10.5,
-              ),
-            ),
-          ],
-        ],
-      );
-
-  Widget _card({required Widget child}) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: child,
-      );
-
-  /// Fila de un dato de la tarjeta: tocar la muestra u oculta.
-  Widget _statRow({
-    required String emoji,
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-    Widget? trailing,
-  }) {
-    return Material(
-      color: selected
-          ? _accentColor.withOpacity(0.1)
-          : Colors.white.withOpacity(0.03),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+  Widget _chip(String label, bool on, VoidCallback onTap, {IconData? icon}) => GestureDetector(
         onTap: onTap,
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.only(left: 12, right: 6),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected
-                  ? _accentColor.withOpacity(0.35)
-                  : Colors.white.withOpacity(0.08),
-            ),
+            color: on ? Colors.white : Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: selected ? _accentColor : Colors.transparent,
-                  border: Border.all(
-                    color: selected ? _accentColor : Colors.white38,
-                    width: 1.5,
-                  ),
-                ),
-                child: selected
-                    ? const Icon(Icons.check_rounded,
-                        size: 13, color: Colors.black)
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Text(emoji, style: const TextStyle(fontSize: 16)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: selected ? Colors.white : Colors.white54,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-              ),
-              ?trailing,
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: on ? Colors.black : Colors.white70),
+                const SizedBox(width: 6),
+              ],
+              Text(label, style: _t(13, w: FontWeight.w600, c: on ? Colors.black : Colors.white70)),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
 
   @override
   Widget build(BuildContext context) {
+    final s = summarize(RideStatsService.allDays(), _period);
+    final screenH = MediaQuery.of(context).size.height;
+    final previewH = (screenH * 0.42).clamp(260.0, 420.0);
+
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.92,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xF50A0A12),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.08)),
-        ),
+      constraints: BoxConstraints(maxHeight: screenH * 0.94),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0B0C12),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Cabecera ───────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 12, 8),
+            padding: const EdgeInsets.fromLTRB(20, 10, 8, 4),
             child: Column(
               children: [
                 Container(
-                  width: 40,
+                  width: 38,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
                 ),
+                const SizedBox(height: 6),
                 Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: _accentColor.withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(13),
-                        border:
-                            Border.all(color: _accentColor.withOpacity(0.3)),
-                      ),
-                      child: Icon(Icons.ios_share_rounded,
-                          color: _accentColor, size: 19),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Compartir resumen',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            'Personaliza la imagen antes de compartir',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white.withOpacity(0.45),
-                              fontSize: 11.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Expanded(child: Text('Compartir', style: _t(18, w: FontWeight.w700))),
                     IconButton(
                       tooltip: 'Cerrar',
                       onPressed: () => Navigator.pop(context),
-                      icon: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
-                        ),
-                        child: const Icon(Icons.close_rounded,
-                            color: Colors.white60, size: 18),
-                      ),
+                      icon: const Icon(Icons.close_rounded, color: Colors.white60),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-
-          // ── Contenido desplazable ─────────────────────────────────
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _sectionLabel('VISTA PREVIA'),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(22),
-                      border:
-                          Border.all(color: Colors.white.withOpacity(0.06)),
-                    ),
-                    child: Center(
-                      // La tarjeta que se exporta como imagen.
-                      child: RepaintBoundary(
-                        key: _cardKey,
-                        child: _ShareCard(
-                          today: widget.today,
-                          total: widget.total,
-                          weekKm: widget.weekKm,
-                          streak: widget.streak,
-                          bestDay: widget.bestDay,
-                          activeDays: widget.activeDays,
-                          accentColor: _accentColor,
-                          shownStats: _shownStats,
-                          statOrder: _order,
+                  // Vista previa (la tarjeta real mide 360×640 y se escala).
+                  Center(
+                    child: Container(
+                      height: previewH,
+                      width: previewH * 9 / 16,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        color: _style == ShareStyle.clear ? const Color(0xFF3A3F4B) : null,
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 24, offset: const Offset(0, 10))],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: FittedBox(
+                        child: RepaintBoundary(
+                          key: _cardKey,
+                          child: StoryCard(
+                            summary: s,
+                            total: widget.total,
+                            accent: _accent,
+                            style: _style,
+                            photo: _photo,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
-
-                  _card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _sectionLabel('COLOR'),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 10,
-                          children: StatsPrefsService.accentPalette.map((c) {
-                            final isSelected = c == _accentColor;
-                            return GestureDetector(
-                              onTap: () => setState(() => _accentColor = c),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 34,
-                                height: 34,
-                                padding: const EdgeInsets.all(3),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: c,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: isSelected
-                                      ? const Icon(Icons.check,
-                                          color: Colors.black, size: 15)
-                                      : null,
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
+                  if (_style == ShareStyle.clear)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Center(
+                        child: Text('Imagen sin fondo: pégala sobre tu propia historia', style: _t(11.5, c: Colors.white38)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  _card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _sectionLabel('QUÉ MOSTRAR',
-                            hint: 'Arrastra ≡ para ordenar'),
-                        const SizedBox(height: 12),
-                        ReorderableListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          buildDefaultDragHandles: false,
-                          itemCount: _order.length,
-                          onReorder: (oldIndex, newIndex) {
-                            setState(() {
-                              if (newIndex > oldIndex) newIndex--;
-                              final item = _order.removeAt(oldIndex);
-                              _order.insert(newIndex, item);
-                            });
-                          },
-                          itemBuilder: (context, i) {
-                            final key = _order[i];
-                            final (emoji, label) = _statMeta[key]!;
-                            return Padding(
-                              key: ValueKey(key),
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _statRow(
-                                emoji: emoji,
-                                label: label,
-                                selected: _shownStats.contains(key),
-                                onTap: () => _toggleStat(key),
-                                trailing: ReorderableDragStartListener(
-                                  index: i,
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: Icon(Icons.drag_handle_rounded,
-                                        color: Colors.white38, size: 20),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 8),
-                          child: Divider(
-                              height: 1,
-                              color: Colors.white.withOpacity(0.07)),
-                        ),
-                        _statRow(
-                          emoji: '🌱',
-                          label: 'CO₂ ahorrado',
-                          selected: _shownStats.contains('co2'),
-                          onTap: () => _toggleStat('co2'),
-                        ),
-                      ],
+                  const SizedBox(height: 22),
+                  Text('PERIODO', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final (p, label) in _periodTabs) _chip(label, _period == p, () => setState(() => _period = p)),
+                  ]),
+                  const SizedBox(height: 20),
+                  Text('ESTILO', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final (st, icon, label) in _styles)
+                      _chip(label, _style == st, () {
+                        if (st == ShareStyle.photo && _photo == null) {
+                          _pickPhoto();
+                        } else {
+                          setState(() => _style = st);
+                        }
+                      }, icon: icon),
+                  ]),
+                  if (_style == ShareStyle.photo && _photo != null)
+                    TextButton.icon(
+                      onPressed: _pickPhoto,
+                      icon: const Icon(Icons.photo_library_rounded, size: 18),
+                      label: const Text('Cambiar foto'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.white70, textStyle: _t(13, w: FontWeight.w600)),
                     ),
-                  ),
+                  const SizedBox(height: 20),
+                  Text('COLOR', style: _t(11, w: FontWeight.w700, c: Colors.white54, ls: 1.2)),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    for (final c in _palette)
+                      GestureDetector(
+                        onTap: () => setState(() => _accent = c),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: c == _accent ? Colors.white : Colors.transparent, width: 2.5),
+                          ),
+                        ),
+                      ),
+                  ]),
                 ],
               ),
             ),
           ),
-
-          // ── Botón fijo ───────────────────────────────────────────
-          Container(
-            padding: EdgeInsets.fromLTRB(
-                16, 10, 16, MediaQuery.of(context).padding.bottom + 14),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: Colors.white.withOpacity(0.06)),
-              ),
-            ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, 8, 20, MediaQuery.of(context).padding.bottom + 14),
             child: SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
                 onPressed: _sharing ? null : _share,
                 icon: _sharing
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          color: Colors.black,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(Icons.ios_share_rounded, size: 18),
-                label:
-                    Text(_sharing ? 'Generando...' : 'Compartir mi resumen'),
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                    : const Icon(Icons.ios_share_rounded, size: 19),
+                label: Text(_sharing ? 'Generando…' : 'Compartir'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _accentColor,
+                  backgroundColor: Colors.white,
                   foregroundColor: Colors.black,
                   disabledBackgroundColor: Colors.white12,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26),
-                  ),
-                  textStyle: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
                   elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
                 ),
               ),
             ),
@@ -1807,347 +1103,208 @@ class _ShareSheetState extends State<_ShareSheet> {
   }
 }
 
-/// Tarjeta visual del resumen (diseño pensado para redes sociales).
-class _ShareCard extends StatelessWidget {
-  final double today;
+/// La imagen que se comparte: 360×640 lógicos (1080×1920 al exportar).
+class StoryCard extends StatelessWidget {
+  final PeriodSummary summary;
   final double total;
-  final double weekKm;
-  final int streak;
-  final double bestDay;
-  final int activeDays;
-  final Color accentColor;
-  final Set<String> shownStats;
-  final List<String> statOrder;
-  const _ShareCard({
-    required this.today,
+  final Color accent;
+  final ShareStyle style;
+  final File? photo;
+  const StoryCard({
+    super.key,
+    required this.summary,
     required this.total,
-    required this.weekKm,
-    required this.streak,
-    required this.bestDay,
-    required this.activeDays,
-    required this.accentColor,
-    required this.shownStats,
-    required this.statOrder,
+    required this.accent,
+    required this.style,
+    required this.photo,
   });
-
-  Widget? _buildStat(String key) {
-    switch (key) {
-      case 'today':
-        return _miniStat('🚴', today.toStringAsFixed(1), 'hoy (km)');
-      case 'weekKm':
-        return _miniStat('📆', weekKm.toStringAsFixed(1), 'semana (km)');
-      case 'streak':
-        return _miniStat(
-            '🔥', '$streak', streak == 1 ? 'día racha' : 'días racha');
-      case 'bestDay':
-        return _miniStat('🏆', bestDay.toStringAsFixed(0), 'mejor día');
-      case 'activeDays':
-        return _miniStat('📅', '$activeDays', 'días activo');
-      default:
-        return null;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final co2 = Co2Service.savedKg(total);
-    final accent = accentColor;
+    final now = DateTime.now();
+    final p = summary.period;
+    final km = p == StatsPeriod.all ? total : summary.km;
+    final title = switch (p) {
+      StatsPeriod.week => 'MI SEMANA EN BICI',
+      StatsPeriod.month => 'MI MES EN BICI',
+      StatsPeriod.year => 'MI AÑO EN BICI',
+      StatsPeriod.all => 'MIS KM EN BICI',
+    };
+    final when = switch (p) {
+      StatsPeriod.week => '${_fmtDia(weekStart(now))} – ${_fmtDia(weekStart(now).add(const Duration(days: 6)))}',
+      StatsPeriod.month => '${_meses[now.month - 1]} ${now.year}',
+      StatsPeriod.year => '${now.year}',
+      StatsPeriod.all => 'desde siempre',
+    }
+        .toUpperCase();
+    final (co2v, co2u) = fmtCo2(km);
+    final shadows = style == ShareStyle.dark
+        ? null
+        : [Shadow(color: Colors.black.withOpacity(0.55), blurRadius: 12)];
+    TextStyle s(double size, {FontWeight w = FontWeight.w700, Color c = Colors.white, double? h, double? ls}) =>
+        TextStyle(fontFamily: 'Poppins', fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: ls, shadows: shadows);
 
-    final miniStats = statOrder
-        .where(shownStats.contains)
-        .map(_buildStat)
-        .whereType<Widget>()
-        .toList();
-
-    return Container(
-      width: 320,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accent.withOpacity(0.25)),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color.lerp(accent, Colors.black, 0.82)!,
-                    const Color(0xFF06060C),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: BikeLanePainter(color: accent.withOpacity(0.28)),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Image.asset(
-                      'assets/icono_ciclista.png',
-                      width: 28,
-                      height: 28,
-                      errorBuilder: (_, _, _) =>
-                          Icon(Icons.directions_bike, color: accent, size: 26),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Pedalea',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Spacer(),
-                    const Text('🚴', style: TextStyle(fontSize: 20)),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                const Text(
-                  'KILÓMETROS PEDALEADOS',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white54,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      total.toStringAsFixed(1),
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 56,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(
-                        'km',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: accent,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (miniStats.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  Container(height: 1, color: Colors.white12),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    runSpacing: 14,
-                    children: miniStats,
-                  ),
+    Widget stat(String value, String unit, String label) => Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(value, style: s(24, w: FontWeight.w800, h: 1.1)),
+                  if (unit.isNotEmpty) ...[const SizedBox(width: 3), Text(unit, style: s(12, w: FontWeight.w600, c: Colors.white70))],
                 ],
-                if (shownStats.contains('co2')) ...[
-                  const SizedBox(height: 18),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: accent.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.eco_rounded, color: accent, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '${Co2Service.format(co2)} de CO₂ que no contaminaste',
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                const Center(
-                  child: Text(
-                    'Pedalea Santiago 🇨🇱',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 2),
+              Text(label, style: s(9.5, w: FontWeight.w700, c: Colors.white60, ls: 1.4)),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        );
 
-  Widget _miniStat(String emoji, String value, String label) {
-    return SizedBox(
-      width: 84,
+    final maxKm = summary.bars.fold<double>(0, (m, b) => b.km > m ? b.km : m);
+
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(30, 34, 30, 30),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 18)),
+          Row(
+            children: [
+              // Logo de la app en círculo.
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                  image: const DecorationImage(
+                    image: AssetImage('assets/branding/pedalea-icono-fondo-oscuro.png'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text('pedalea', style: s(15, w: FontWeight.w800, ls: -0.3)),
+              const Spacer(),
+              Text(when, style: s(10, w: FontWeight.w700, c: Colors.white70, ls: 1.2)),
+            ],
+          ),
+          const Spacer(),
+          Text(title, style: s(13, w: FontWeight.w700, c: Colors.white70, ls: 2.2)),
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
+            alignment: Alignment.centerLeft,
+            child: Text(fmtKm(km), style: s(104, w: FontWeight.w800, h: 1.0, ls: -4)),
+          ),
+          Text('KILÓMETROS', style: s(14, w: FontWeight.w800, c: accent, ls: 3)),
+          const SizedBox(height: 26),
+          SizedBox(
+            height: 64,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (final b in summary.bars)
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: summary.bars.length > 14 ? 1 : 4),
+                      child: FractionallySizedBox(
+                        heightFactor: maxKm <= 0 ? 0.04 : (b.km / maxKm).clamp(0.04, 1.0),
+                        alignment: Alignment.bottomCenter,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: b.km > 0 ? accent : Colors.white.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white54,
-              fontSize: 10,
-            ),
+          const SizedBox(height: 26),
+          Row(
+            children: [
+              stat('${summary.activeDays}', '', 'DÍAS ACTIVOS'),
+              stat(fmtKm(summary.bestDayKm), 'km', 'MEJOR DÍA'),
+              stat(co2v, co2u, 'CO₂ EVITADO'),
+            ],
+          ),
+          const SizedBox(height: 26),
+          Container(height: 1, color: Colors.white.withOpacity(0.18)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text('Descarga Pedalea en Google Play', style: s(10.5, w: FontWeight.w600, c: Colors.white60)),
+              const Spacer(),
+              Icon(Icons.shop_rounded, size: 14, color: Colors.white60, shadows: shadows),
+            ],
           ),
         ],
       ),
     );
-  }
-}
 
-/// Tarjeta del grid de estadísticas.
-class _StatTile extends StatelessWidget {
-  final String emoji;
-  final String label;
-  final String value;
-  final String unit;
-  final Color accent;
-  const _StatTile({
-    required this.emoji,
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accent.withOpacity(0.08),
-            Colors.white.withOpacity(0.03),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.09)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
+    Widget background;
+    switch (style) {
+      case ShareStyle.dark:
+        background = Stack(
+          children: [
+            const Positioned.fill(child: ColoredBox(color: Color(0xFF07080C))),
+            Positioned(
+              top: -120,
+              right: -140,
+              child: Container(
+                width: 420,
+                height: 420,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Text(emoji, style: const TextStyle(fontSize: 15)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white54,
-                    fontSize: 13,
-                  ),
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(colors: [accent.withOpacity(0.35), accent.withOpacity(0)]),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Flexible(
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
+            ),
+            Positioned(
+              bottom: -160,
+              left: -120,
+              child: Container(
+                width: 380,
+                height: 380,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(colors: [accent.withOpacity(0.14), accent.withOpacity(0)]),
                 ),
               ),
-              const SizedBox(width: 4),
-              Text(
-                unit,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white38,
-                  fontSize: 12,
+            ),
+          ],
+        );
+      case ShareStyle.photo:
+        background = Stack(
+          fit: StackFit.expand,
+          children: [
+            if (photo != null) Image.file(photo!, fit: BoxFit.cover) else const ColoredBox(color: Color(0xFF1B1E26)),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x66000000), Color(0x00000000), Color(0xCC000000)],
+                  stops: [0, 0.35, 0.75],
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        );
+      case ShareStyle.clear:
+        background = const SizedBox.shrink();
+    }
+
+    return Material(
+      type: MaterialType.transparency,
+      child: SizedBox(
+        width: 360,
+        height: 640,
+        child: Stack(children: [Positioned.fill(child: background), Positioned.fill(child: content)]),
       ),
     );
   }
