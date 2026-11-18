@@ -53,7 +53,7 @@ class PedaleaApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Pedalea',
-      theme: ThemeData(primarySwatch: Colors.green),
+      theme: ThemeData(primarySwatch: Colors.green, fontFamily: 'Poppins'),
       navigatorKey: appNavigatorKey,
       navigatorObservers: [routeObserver],
       home: const _StartupGate(),
