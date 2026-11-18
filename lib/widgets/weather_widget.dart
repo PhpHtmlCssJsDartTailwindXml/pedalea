@@ -34,8 +34,14 @@ class WeatherPill extends StatefulWidget {
   State<WeatherPill> createState() => _WeatherPillState();
 }
 
-class _WeatherPillState extends State<WeatherPill> {
+/// Por qué no hay ubicación para consultar el clima.
+enum _LocIssue { denied, deniedForever, serviceOff }
+
+class _WeatherPillState extends State<WeatherPill> with WidgetsBindingObserver {
   final _service = WeatherService();
+
+  /// Problema de ubicación detectado en la última carga (null = sin problema).
+  final _locIssue = ValueNotifier<_LocIssue?>(null);
 
   /// Datos actuales (se mantienen mientras se actualiza, para no dejar la
   /// ficha en blanco) y si hay una carga en curso.
@@ -46,6 +52,7 @@ class _WeatherPillState extends State<WeatherPill> {
   void initState() {
     super.initState();
     WeatherPill.initHint();
+    WidgetsBinding.instance.addObserver(this);
     _data.addListener(_rebuild);
     _busy.addListener(_rebuild);
     _load();
@@ -55,8 +62,50 @@ class _WeatherPillState extends State<WeatherPill> {
     if (mounted) setState(() {});
   }
 
+  /// Al volver de los ajustes del teléfono, si faltaba la ubicación, reintenta.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        (_locIssue.value != null || _data.value == null) &&
+        !_busy.value) {
+      _load(force: true);
+    }
+  }
+
+  Future<_LocIssue?> _checkLocation() async {
+    try {
+      if (!await geo.Geolocator.isLocationServiceEnabled()) return _LocIssue.serviceOff;
+      final perm = await geo.Geolocator.checkPermission();
+      if (perm == geo.LocationPermission.deniedForever) return _LocIssue.deniedForever;
+      if (perm == geo.LocationPermission.denied) return _LocIssue.denied;
+    } catch (_) {}
+    return null;
+  }
+
+  /// Botón «Activar ubicación» de la ficha: pide el permiso o abre ajustes.
+  Future<void> _fixLocation() async {
+    final issue = _locIssue.value ?? await _checkLocation();
+    try {
+      if (issue == _LocIssue.serviceOff) {
+        await geo.Geolocator.openLocationSettings();
+        return; // se recarga al volver (didChangeAppLifecycleState)
+      }
+      if (issue == _LocIssue.deniedForever) {
+        await geo.Geolocator.openAppSettings();
+        return;
+      }
+      final perm = await geo.Geolocator.requestPermission();
+      if (perm == geo.LocationPermission.deniedForever) {
+        await geo.Geolocator.openAppSettings();
+        return;
+      }
+    } catch (_) {}
+    await _load(force: true);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _data.removeListener(_rebuild);
     _busy.removeListener(_rebuild);
     super.dispose();
@@ -66,6 +115,10 @@ class _WeatherPillState extends State<WeatherPill> {
     if (_busy.value && _data.value != null && !force) return;
     _busy.value = true;
     try {
+      // Sin permiso o con el GPS apagado no tiene sentido reintentar: se avisa.
+      final issue = await _checkLocation();
+      if (mounted) _locIssue.value = issue;
+      if (issue != null) return;
       // Reintenta: al arrancar la app el permiso/fix de GPS puede no estar
       // listo todavía. Se usa primero la última posición conocida (instantánea).
       for (var attempt = 0; attempt < 3; attempt++) {
@@ -109,9 +162,14 @@ class _WeatherPillState extends State<WeatherPill> {
           valueListenable: _busy,
           builder: (_, busy, _) {
             if (data == null) {
-              return _WeatherPlaceholder(
-                busy: busy,
-                onRetry: () => _load(force: true),
+              return ValueListenableBuilder<_LocIssue?>(
+                valueListenable: _locIssue,
+                builder: (_, issue, _) => _WeatherPlaceholder(
+                  busy: busy,
+                  issue: issue,
+                  onRetry: () => _load(force: true),
+                  onFixLocation: _fixLocation,
+                ),
               );
             }
             return _WeatherSheet(
@@ -203,8 +261,15 @@ BoxDecoration _sheetBox() => BoxDecoration(
 /// Ficha mientras todavía no hay datos: cargando, o error con reintento.
 class _WeatherPlaceholder extends StatelessWidget {
   final bool busy;
+  final _LocIssue? issue;
   final VoidCallback onRetry;
-  const _WeatherPlaceholder({required this.busy, required this.onRetry});
+  final VoidCallback onFixLocation;
+  const _WeatherPlaceholder({
+    required this.busy,
+    required this.issue,
+    required this.onRetry,
+    required this.onFixLocation,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -225,6 +290,58 @@ class _WeatherPlaceholder extends StatelessWidget {
             const Text(
               'Consultando el clima de tu zona…',
               style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
+            ),
+          ] else if (issue != null) ...[
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF4D8DFF).withOpacity(0.15),
+                border: Border.all(color: const Color(0xFF4D8DFF).withOpacity(0.5), width: 1.5),
+              ),
+              child: Icon(
+                issue == _LocIssue.serviceOff ? Icons.location_off_rounded : Icons.my_location_rounded,
+                color: const Color(0xFF4D8DFF),
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              issue == _LocIssue.serviceOff ? 'Activa el GPS para ver el clima' : 'Activa tu ubicación para ver el clima',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              switch (issue!) {
+                _LocIssue.serviceOff => 'El GPS del teléfono está apagado. Enciéndelo para saber el clima de tu zona.',
+                _LocIssue.denied => 'Pedalea necesita tu ubicación para mostrarte el clima de donde estás.',
+                _LocIssue.deniedForever => 'El permiso de ubicación está bloqueado. En Ajustes → Permisos → Ubicación, elige «Permitir mientras se usa la app».',
+              },
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white60, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: onFixLocation,
+                icon: const Icon(Icons.location_on_rounded, size: 20),
+                label: Text(switch (issue!) {
+                  _LocIssue.serviceOff => 'Activar GPS',
+                  _LocIssue.denied => 'Activar ubicación',
+                  _LocIssue.deniedForever => 'Abrir ajustes',
+                }),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4D8DFF),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
             ),
           ] else ...[
             const Text('🌡️', style: TextStyle(fontSize: 36)),
