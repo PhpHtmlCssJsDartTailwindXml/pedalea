@@ -54,6 +54,7 @@ import '../services/connectivity_service.dart';
 import '../services/fall_detection_service.dart';
 import '../services/proximity_alert_service.dart';
 import '../services/notification_service.dart';
+import '../services/pedal_filter.dart';
 import '../services/ride_stats_service.dart';
 import '../services/ride_stats_sync_service.dart';
 import '../services/ride_heat_service.dart';
@@ -791,6 +792,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
   double _sessionKm = 0;
   double _unsavedKm = 0;
   double _sessionMaxSpeedKmh = 0; // velocidad máxima detectada en la sesión
+  // Retiene los km en bloques de ~2 min y descarta los que parecen vehículo.
+  final PedalFilter _pedalFilter = PedalFilter();
   bool _communeAutofillTried = false; // 1 intento de autocompletar comuna/sesión
 
   // ── Trazado de la sesión actual (para compartir el viaje al terminar) ────
@@ -1158,10 +1161,19 @@ class _MapPageState extends State<MapPage> with RouteAware {
     // _ensureEventsIcon) antes de que el widget termine de destruirse.
     _mapGeneration++;
     _styleIsLoaded = false;
-    // Guarda los km que quedaron por debajo del umbral de persistencia.
+    // Evalúa el bloque en curso y guarda los km que quedaron por debajo del
+    // umbral de persistencia (sin tocar el mapa: el widget se está cerrando).
+    final lastChunk = _pedalFilter.flush();
+    if (lastChunk != null && lastChunk.accepted) {
+      _unsavedKm += lastChunk.km;
+      if (lastChunk.maxKmh > _sessionMaxSpeedKmh) {
+        _sessionMaxSpeedKmh = lastChunk.maxKmh;
+      }
+    }
     if (_unsavedKm > 0.02) {
       _saveKmToProfile(_unsavedKm);
       RideStatsService.addKm(_unsavedKm);
+      RideStatsService.recordMaxSpeed(_sessionMaxSpeedKmh);
       RideStatsSyncService.instance.pushDelta(
         km: _unsavedKm,
         maxSpeedKmh: _sessionMaxSpeedKmh,
@@ -1673,16 +1685,21 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
             final accuracyOk = position.accuracy <= 50;
             final timeOk = elapsedSec >= 1 && elapsedSec <= 120;
-            // 1,8 km/h descarta el jitter del GPS estando parado; 80 km/h
-            // descarta saltos imposibles (rebote entre edificios, túneles).
-            final speedOk = speedKmh >= 1.8 && speedKmh <= 80;
+            // 1,8 km/h descarta el jitter del GPS estando parado; sobre
+            // 150 km/h es un salto imposible (rebote entre edificios, túneles).
+            // Entre 60 y 150 km/h el tramo se pasa al filtro igual: no suma,
+            // pero marca el bloque como vehículo.
+            final speedOk = speedKmh >= 1.8 && speedKmh <= 150;
 
             if (distM >= 5 && distM < 500 && accuracyOk && timeOk && speedOk) {
-              _sessionKm += distM / 1000;
-              _unsavedKm += distM / 1000;
-              if (speedKmh > _sessionMaxSpeedKmh && speedKmh <= 80) {
-                _sessionMaxSpeedKmh = speedKmh;
-              }
+              // Los km no se suman al instante: el filtro los junta en
+              // bloques de ~2 min y descarta los que parecen auto o micro.
+              _applyPedalChunk(_pedalFilter.add(
+                at: fixAt,
+                km: distM / 1000,
+                speedKmh: speedKmh,
+                seconds: elapsedSec,
+              ));
               _routePoints.add(position);
               // Mapa de calor personal (Plus): registra la zona, no el trazado.
               // Más estricto que el conteo de km: un salto de GPS o un
@@ -1690,19 +1707,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
               // en calles donde nunca pedaleaste.
               if (position.accuracy <= 25 && speedKmh <= 45 && distM < 200) {
                 RideHeatService.addPoint(position.latitude, position.longitude);
-              }
-              // Se persiste seguido (0,2 km) para no perder km si el SO mata
-              // la app; el RPC de Supabase es incremental, no pesa.
-              if (_unsavedKm >= 0.2) {
-                _saveKmToProfile(_unsavedKm); // total histórico (Supabase)
-                RideStatsService.addKm(_unsavedKm); // registro diario local
-                RideStatsService.recordMaxSpeed(_sessionMaxSpeedKmh);
-                RideStatsSyncService.instance.pushDelta(
-                  km: _unsavedKm,
-                  maxSpeedKmh: _sessionMaxSpeedKmh,
-                ); // estadísticas por día + ranking (Supabase)
-                _unsavedKm = 0;
-                if (_showHeatmap) _updateHeatmapLayer(); // ~cada 200 m
               }
             }
           }
@@ -1757,6 +1761,36 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _positionStreamSubscription?.cancel();
     _positionStreamSubscription = null;
     _startFollowing();
+  }
+
+  /// Suma a la sesión un bloque ya evaluado por [PedalFilter] (si parece
+  /// pedaleo) y persiste los km cada 0,2 km. Con [persistAll] guarda también
+  /// lo que quede bajo ese umbral (al apagar el modo activo o salir).
+  void _applyPedalChunk(PedalChunk? chunk, {bool persistAll = false}) {
+    if (chunk != null && chunk.accepted && chunk.km > 0) {
+      _sessionKm += chunk.km;
+      _unsavedKm += chunk.km;
+      if (chunk.maxKmh > _sessionMaxSpeedKmh) {
+        _sessionMaxSpeedKmh = chunk.maxKmh;
+      }
+    }
+    _persistKm(force: persistAll);
+  }
+
+  /// Guarda los km pendientes. Se persiste seguido (0,2 km) para no perder km
+  /// si el SO mata la app; el RPC de Supabase es incremental, no pesa.
+  void _persistKm({bool force = false}) {
+    if (_unsavedKm <= 0 || (!force && _unsavedKm < 0.2)) return;
+    if (force && _unsavedKm <= 0.02) return;
+    _saveKmToProfile(_unsavedKm); // total histórico (Supabase)
+    RideStatsService.addKm(_unsavedKm); // registro diario local
+    RideStatsService.recordMaxSpeed(_sessionMaxSpeedKmh);
+    RideStatsSyncService.instance.pushDelta(
+      km: _unsavedKm,
+      maxSpeedKmh: _sessionMaxSpeedKmh,
+    ); // estadísticas por día + ranking (Supabase)
+    _unsavedKm = 0;
+    if (_showHeatmap && mounted) _updateHeatmapLayer(); // ~cada 200 m
   }
 
   // ── Modo pasajero ─────────────────────────────────────────────────────────
@@ -1818,16 +1852,10 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   void _enterPassengerMode(String vehicle) {
-    // Guardar km pendientes antes de dejar de contar.
-    if (_unsavedKm > 0) {
-      _saveKmToProfile(_unsavedKm);
-      RideStatsService.addKm(_unsavedKm);
-      RideStatsSyncService.instance.pushDelta(
-        km: _unsavedKm,
-        maxSpeedKmh: _sessionMaxSpeedKmh,
-      );
-      _unsavedKm = 0;
-    }
+    // El bloque en curso ya incluye el tramo en vehículo: se descarta. Los km
+    // de bloques anteriores (ya evaluados) se guardan antes de dejar de contar.
+    _pedalFilter.discard();
+    _persistKm(force: true);
     _fallService.stop(); // sin falsos positivos por frenadas del vehículo
     setState(() {
       _isPassenger = true;
@@ -6428,6 +6456,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
         _sessionStartAt = DateTime.now();
       });
     } else {
+      // Evalúa el último bloque y guarda lo que quede antes de apagar.
+      _applyPedalChunk(_pedalFilter.flush(), persistAll: true);
       setState(() => _modoActivo = false);
       _presenceService.clearMyLocation();
       _maybeOfferRouteShare();

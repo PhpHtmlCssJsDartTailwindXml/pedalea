@@ -16,7 +16,12 @@ class DayStat {
 /// de internet ni de la base de datos.
 class RideStatsService {
   static const _key = 'ride_stats_v1';
-  static const _maxSpeedKey = 'ride_max_speed_v1';
+  // v2: la v1 guardaba velocidades de auto/micro (hasta 80 km/h). Al cambiar
+  // la clave se parte de 0 y se rellena con el servidor ya corregido.
+  static const _maxSpeedKey = 'ride_max_speed_v2';
+
+  /// Velocidad máxima creíble en bici urbana (km/h).
+  static const maxBikeSpeedKmh = 60.0;
   static SharedPreferences? _prefs;
 
   static Future<void> init() async {
@@ -77,9 +82,10 @@ class RideStatsService {
   static double maxSpeedKmh() => _prefs?.getDouble(_maxSpeedKey) ?? 0;
 
   /// Registra una nueva velocidad si supera la máxima guardada. Descarta
-  /// valores absurdos (> 120 km/h ≈ rebote de GPS).
+  /// valores que no son de bici (> [maxBikeSpeedKmh]: auto, micro o un salto
+  /// del GPS).
   static Future<void> recordMaxSpeed(double kmh) async {
-    if (kmh <= 0 || kmh > 120) return;
+    if (kmh <= 0 || kmh > maxBikeSpeedKmh) return;
     await init();
     if (kmh > maxSpeedKmh()) await _prefs?.setDouble(_maxSpeedKey, kmh);
   }
