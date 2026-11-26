@@ -65,6 +65,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
         return (Icons.volunteer_activism_rounded, const Color(0xFFF2C94C));
       case 'app_update':
         return (Icons.system_update_rounded, const Color(0xFFB39DDB));
+      case 'plus_promo':
+        return (Icons.workspace_premium_rounded, const Color(0xFFF2C94C));
+      case 'weekly_summary':
+        return (Icons.insights_rounded, _accent);
+      case 'streak_reminder':
+        return (Icons.local_fire_department_rounded, const Color(0xFFFF8A50));
       default:
         return (Icons.notifications_rounded, Colors.white70);
     }

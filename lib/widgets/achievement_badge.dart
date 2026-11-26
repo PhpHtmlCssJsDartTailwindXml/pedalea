@@ -18,6 +18,7 @@ const _bolt = Icons.bolt_rounded;
 
 const Map<String, _Look> _looks = {
   // Kilómetros
+  'first_ride': _Look(Icons.pedal_bike_rounded, BadgeTier.bronze),
   'km_10': _Look(_bike, BadgeTier.bronze, '10'),
   'km_25': _Look(_bike, BadgeTier.bronze, '25'),
   'km_50': _Look(_bike, BadgeTier.silver, '50'),

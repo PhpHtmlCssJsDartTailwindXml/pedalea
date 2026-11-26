@@ -88,10 +88,10 @@ class _PaywallPageState extends State<PaywallPage> {
     }
   }
 
-  /// Precio mensual equivalente del plan anual ("$3.333/mes"), para que la
+  /// Precio mensual equivalente del plan anual ("$1.666/mes"), para que la
   /// comparación con el mensual sea directa.
   String _perMonth(ProductDetails? yearly) {
-    final raw = yearly?.rawPrice ?? 39990;
+    final raw = yearly?.rawPrice ?? 19990;
     final symbol = yearly?.currencySymbol ?? '\$';
     final v = (raw / 12).round();
     final txt = v.toString().replaceAllMapped(
@@ -101,8 +101,8 @@ class _PaywallPageState extends State<PaywallPage> {
 
   /// "AHORRA 33%" del anual frente a 12 meses del mensual.
   String _savingsBadge(ProductDetails? monthly, ProductDetails? yearly) {
-    final m = monthly?.rawPrice ?? 4990;
-    final y = yearly?.rawPrice ?? 39990;
+    final m = monthly?.rawPrice ?? 1990;
+    final y = yearly?.rawPrice ?? 19990;
     if (m <= 0) return 'MEJOR PRECIO';
     final pct = ((1 - y / (m * 12)) * 100).round();
     return pct > 0 ? 'AHORRA $pct%' : 'MEJOR PRECIO';
@@ -111,18 +111,22 @@ class _PaywallPageState extends State<PaywallPage> {
   @override
   Widget build(BuildContext context) {
     final products = _service.products;
-    ProductDetails? findProduct(String id) {
-      for (final p in products) {
-        if (p.id == id) return p;
-      }
-      return null;
-    }
-
     final hasRealProducts = products.isNotEmpty;
-    final monthly = findProduct(SubscriptionProductIds.monthly);
-    final yearly = findProduct(SubscriptionProductIds.yearly);
+    // Precio del plan base (no el $0 de una oferta de prueba).
+    final monthly = _service.basePlan(SubscriptionProductIds.monthly);
+    final yearly = _service.basePlan(SubscriptionProductIds.yearly);
+    final monthlyTrial = _service.trialOffer(SubscriptionProductIds.monthly);
+    final yearlyTrial = _service.trialOffer(SubscriptionProductIds.yearly);
     final isYearly = _selectedProductId == SubscriptionProductIds.yearly;
-    final selected = isYearly ? yearly : monthly;
+    final base = isYearly ? yearly : monthly;
+    final trial = isYearly ? yearlyTrial : monthlyTrial;
+    final trialDays = trial == null ? null : SubscriptionService.trialDays(trial);
+    // Si Play ofrece prueba gratis a este usuario, se compra esa oferta.
+    final selected = trial ?? base;
+    String trialNote(ProductDetails? t) {
+      final d = t == null ? null : SubscriptionService.trialDays(t);
+      return d == null ? '' : ' · $d días gratis';
+    }
 
     return Scaffold(
       backgroundColor: _kNavy,
@@ -182,9 +186,9 @@ class _PaywallPageState extends State<PaywallPage> {
                   const SizedBox(height: 10),
                   _planCard(
                     title: 'Anual',
-                    price: yearly?.price ?? '\$39.990',
+                    price: yearly?.price ?? '\$19.990',
                     period: '/año',
-                    subtitle: 'Equivale a ${_perMonth(yearly)}',
+                    subtitle: 'Equivale a ${_perMonth(yearly)}${trialNote(yearlyTrial)}',
                     badge: _savingsBadge(monthly, yearly),
                     isSelected: isYearly,
                     onTap: () => setState(() =>
@@ -193,9 +197,9 @@ class _PaywallPageState extends State<PaywallPage> {
                   const SizedBox(height: 10),
                   _planCard(
                     title: 'Mensual',
-                    price: monthly?.price ?? '\$4.990',
+                    price: monthly?.price ?? '\$1.990',
                     period: '/mes',
-                    subtitle: 'Flexible, sin compromiso',
+                    subtitle: 'Flexible, sin compromiso${trialNote(monthlyTrial)}',
                     badge: null,
                     isSelected: !isYearly,
                     onTap: () => setState(() =>
@@ -261,14 +265,19 @@ class _PaywallPageState extends State<PaywallPage> {
                               child: CircularProgressIndicator(
                                   color: Colors.black, strokeWidth: 2),
                             )
-                          : Text(isYearly
-                              ? 'Hazte Plus por ${yearly?.price ?? '\$39.990'} al año'
-                              : 'Hazte Plus por ${monthly?.price ?? '\$4.990'} al mes'),
+                          : Text(trialDays != null
+                              ? 'Prueba Plus $trialDays días gratis'
+                              : isYearly
+                                  ? 'Hazte Plus por ${yearly?.price ?? '\$19.990'} al año'
+                                  : 'Hazte Plus por ${monthly?.price ?? '\$1.990'} al mes'),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Cancela cuando quieras desde Google Play. Sin letra chica.',
+                    trialDays != null
+                        ? 'Luego ${base?.price ?? (isYearly ? '\$19.990' : '\$1.990')} ${isYearly ? 'al año' : 'al mes'}. '
+                            'Cancela antes de que termine la prueba y no pagas nada.'
+                        : 'Cancela cuando quieras desde Google Play. Sin letra chica.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Poppins',

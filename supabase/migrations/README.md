@@ -31,6 +31,7 @@ el orden alfabético de los archivos es el orden en que se aplican.
 | 13 | `20261116113425_pump_votes.sql` | Votación de la comunidad sobre bombas de aire en bencineras. |
 | 14 | `20261118124024_plus_share_uses.sql` | Imágenes Plus gratis al compartir estadísticas (2 por semana). |
 | 15 | `20261123140815_bike_speed_limits.sql` | Velocidad máxima realista (tope 60 km/h) y limpieza de las velocidades de auto o micro. |
+| 16 | `20261126170747_engagement_pushes.sql` | Logro «Primer pedaleo», resumen semanal (lunes 8:00) y aviso de racha (18:00) con pg_cron. |
 
 ## Seguridad
 

@@ -174,6 +174,7 @@ class AchievementsService {
 
       // --- Kilómetros totales (profiles.total_km) ---
       final kmChecks = {
+        'first_ride': 1, // «Primer pedaleo»: el primer kilómetro con la app
         'km_10': 10, 'km_25': 25, 'km_50': 50, 'km_100': 100,
         'km_250': 250, 'km_500': 500, 'km_1000': 1000,
         'km_2500': 2500, 'km_5000': 5000, 'km_10000': 10000,

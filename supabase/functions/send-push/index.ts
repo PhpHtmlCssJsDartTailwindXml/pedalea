@@ -165,6 +165,27 @@ async function buildPush(table: string, op: string, r: Row): Promise<Push | null
       };
     }
 
+    case "plus_promo": {
+      // Aviso de una promoción de Pedalea Plus a quienes NO son Plus.
+      // Se envía a mano con supabase/snippets/aviso_promo_plus.sql.
+      const { data: rows } = await supabase.from("device_tokens").select("user_id");
+      const all = [...new Set((rows ?? []).map((t) => t.user_id as string))];
+      if (all.length === 0) return null;
+      const { data: plus } = await supabase.from("profiles").select("id")
+        .in("id", all).eq("is_plus", true);
+      const plusIds = new Set((plus ?? []).map((p) => p.id as string));
+      const users = all.filter((u) => !plusIds.has(u));
+      if (users.length === 0) return null;
+      return {
+        to: users,
+        type: "plus_promo",
+        title: clip(str(r.title).trim(), 60) || "Pedalea Plus",
+        body: clip(str(r.body).trim(), 180),
+        payload: "plus_promo",
+        channel: "app_news",
+      };
+    }
+
     case "alert_milestone": {
       // Lo envía register_alert_view() al llegar a 3, 10, 25… ciclistas.
       const author = str(r.author_id);
@@ -310,89 +331,123 @@ Deno.serve(async (req) => {
   if (!input.table || !input.record) return json({ error: "bad_request" }, 400);
 
   try {
+    // Avisos personalizados en lote (resumen semanal, racha): cada elemento
+    // trae su propio destinatario y texto. Los envían funciones de la BD
+    // programadas con pg_cron (weekly_summary_push, streak_reminder_push).
+    if (input.table === "personal") {
+      const r = input.record;
+      const type = str(r.type);
+      const payload = str(r.payload);
+      const store = r.store === true;
+      const items = Array.isArray(r.items) ? r.items as Row[] : [];
+      let sent = 0, removed = 0;
+      // De a 10 en paralelo, para no exceder el tiempo máximo de la función.
+      for (let i = 0; i < items.length; i += 10) {
+        const results = await Promise.all(items.slice(i, i + 10).map((it) => {
+          const uid = str(it.user_id);
+          const title = clip(str(it.title).trim(), 60);
+          const body = clip(str(it.body).trim(), 180);
+          if (!uid || !title || !type) return { sent: 0, removed: 0 };
+          return deliver({ to: [uid], type, title, body, payload, channel: "app_news" }, store);
+        }));
+        for (const res of results) {
+          sent += res.sent;
+          removed += res.removed;
+        }
+      }
+      return json({ sent, removed, items: items.length });
+    }
+
     const push = await buildPush(input.table, input.op ?? "INSERT", input.record);
     if (!push || push.to.length === 0) return json({ sent: 0 });
-
-    // Centro de notificaciones: se guarda una copia para verla en la app
-    // aunque el push no llegue o se descarte. Los mensajes de chat y directos
-    // tienen su propio contador de no leídos, por eso no se guardan aquí.
-    if (push.type !== "chat" && push.type !== "dm") {
-      const { error: insErr } = await supabase.from("notifications").insert(
-        push.to.map((uid) => ({
-          user_id: uid,
-          type: push.type,
-          title: push.title,
-          body: push.body,
-          payload: push.payload,
-        })),
-      );
-      if (insErr) console.error("notifications insert:", insErr.message);
-    }
-
-    const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");
-    if (!saRaw) return json({ skipped: "fcm_not_configured" });
-
-    const { data: rows } = await supabase
-      .from("device_tokens")
-      .select("token")
-      .in("user_id", push.to);
-    const tokens = (rows ?? []).map((t) => t.token as string);
-    if (tokens.length === 0) return json({ sent: 0, reason: "no_tokens" });
-
-    const sa = JSON.parse(saRaw) as ServiceAccount;
-    const bearer = await accessToken(sa);
-    const url =
-      `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
-
-    const dead: string[] = [];
-    let sent = 0;
-    await Promise.all(tokens.map(async (token) => {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${bearer}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: {
-            token,
-            notification: { title: push.title, body: push.body },
-            data: {
-              type: push.type,
-              title: push.title,
-              body: push.body,
-              payload: push.payload,
-              ...(push.data ?? {}),
-            },
-            android: {
-              priority: "HIGH",
-              notification: {
-                channel_id: push.channel,
-                // Avisos del mismo chat/tipo se reemplazan en vez de apilarse.
-                tag: push.type === "chat" || push.type === "dm"
-                  ? push.payload.split("|").slice(0, 2).join("|")
-                  : push.type,
-              },
-            },
-          },
-        }),
-      });
-      if (res.ok) {
-        sent++;
-        return;
-      }
-      const err = await res.text();
-      // Token de una app desinstalada o caducado: se limpia.
-      if (res.status === 404 || err.includes("UNREGISTERED")) dead.push(token);
-      else console.error(`fcm ${res.status}: ${err}`);
-    }));
-
-    if (dead.length > 0) {
-      await supabase.from("device_tokens").delete().in("token", dead);
-    }
-    return json({ sent, removed: dead.length });
+    return json(await deliver(push, push.type !== "chat" && push.type !== "dm"));
   } catch (e) {
     console.error("send-push:", e);
     return json({ error: String(e) }, 500);
   }
 });
+
+/** Guarda la copia en el centro de notificaciones (si [store]) y envía por FCM. */
+async function deliver(push: Push, store: boolean): Promise<{ sent: number; removed: number }> {
+  // Centro de notificaciones: se guarda una copia para verla en la app
+  // aunque el push no llegue o se descarte. Los mensajes de chat y directos
+  // tienen su propio contador de no leídos, por eso no se guardan aquí.
+  if (store) {
+    const { error: insErr } = await supabase.from("notifications").insert(
+      push.to.map((uid) => ({
+        user_id: uid,
+        type: push.type,
+        title: push.title,
+        body: push.body,
+        payload: push.payload,
+      })),
+    );
+    if (insErr) console.error("notifications insert:", insErr.message);
+  }
+
+  const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");
+  if (!saRaw) {
+    console.error("send-push: FCM_SERVICE_ACCOUNT_JSON no configurado");
+    return { sent: 0, removed: 0 };
+  }
+
+  const { data: rows } = await supabase
+    .from("device_tokens")
+    .select("token")
+    .in("user_id", push.to);
+  const tokens = (rows ?? []).map((t) => t.token as string);
+  if (tokens.length === 0) return { sent: 0, removed: 0 };
+
+  const sa = JSON.parse(saRaw) as ServiceAccount;
+  const bearer = await accessToken(sa);
+  const url =
+    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
+
+  const dead: string[] = [];
+  let sent = 0;
+  await Promise.all(tokens.map(async (token) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${bearer}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          token,
+          notification: { title: push.title, body: push.body },
+          data: {
+            type: push.type,
+            title: push.title,
+            body: push.body,
+            payload: push.payload,
+            ...(push.data ?? {}),
+          },
+          android: {
+            priority: "HIGH",
+            notification: {
+              channel_id: push.channel,
+              // Avisos del mismo chat/tipo se reemplazan en vez de apilarse.
+              tag: push.type === "chat" || push.type === "dm"
+                ? push.payload.split("|").slice(0, 2).join("|")
+                : push.type,
+            },
+          },
+        },
+      }),
+    });
+    if (res.ok) {
+      sent++;
+      return;
+    }
+    const err = await res.text();
+    // Token de una app desinstalada o caducado: se limpia.
+    if (res.status === 404 || err.includes("UNREGISTERED")) dead.push(token);
+    else console.error(`fcm ${res.status}: ${err}`);
+  }));
+
+  if (dead.length > 0) {
+    await supabase.from("device_tokens").delete().in("token", dead);
+  }
+  return { sent, removed: dead.length };
+}

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/billing_client_wrappers.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -202,6 +204,64 @@ class SubscriptionService {
     } catch (e) {
       debugPrint('SubscriptionService _loadProducts error: $e');
     }
+  }
+
+  // ── Planes y prueba gratis ────────────────────────────────────────────
+  // Google Play entrega un ProductDetails por cada plan base y por cada
+  // oferta. Si en Play Console se crea una oferta de prueba gratis, el mismo
+  // producto llega dos veces: la del plan base (precio normal) y la de la
+  // oferta (primer tramo a $0). Play solo envía la oferta a quien puede usarla.
+
+  /// Plan base de [id] (sin oferta): su precio es el que se cobra cada periodo.
+  ProductDetails? basePlan(String id) {
+    ProductDetails? first;
+    for (final p in _products) {
+      if (p.id != id) continue;
+      first ??= p;
+      if (p is! GooglePlayProductDetails) return p;
+      final o = _offerOf(p);
+      if (o == null || o.offerId == null) return p;
+    }
+    return first;
+  }
+
+  /// Oferta con prueba gratis de [id], si Play se la ofrece a este usuario.
+  ProductDetails? trialOffer(String id) {
+    for (final p in _products) {
+      if (p.id == id && trialDays(p) != null) return p;
+    }
+    return null;
+  }
+
+  static SubscriptionOfferDetailsWrapper? _offerOf(GooglePlayProductDetails p) {
+    final i = p.subscriptionIndex;
+    final list = p.productDetails.subscriptionOfferDetails;
+    if (i == null || list == null || i >= list.length) return null;
+    return list[i];
+  }
+
+  /// Días de prueba gratis de una oferta (primer tramo a $0), o null.
+  static int? trialDays(ProductDetails p) {
+    if (p is! GooglePlayProductDetails) return null;
+    final o = _offerOf(p);
+    if (o == null || o.pricingPhases.isEmpty) return null;
+    final first = o.pricingPhases.first;
+    if (first.priceAmountMicros != 0) return null;
+    return isoPeriodDays(first.billingPeriod);
+  }
+
+  /// Convierte un periodo ISO 8601 de Play (P7D, P1W, P1M, P1Y) en días.
+  @visibleForTesting
+  static int? isoPeriodDays(String iso) {
+    final m = RegExp(r'^P(\d+)([DWMY])$').firstMatch(iso);
+    if (m == null) return null;
+    final n = int.parse(m.group(1)!);
+    return switch (m.group(2)) {
+      'D' => n,
+      'W' => n * 7,
+      'M' => n * 30,
+      _ => n * 365,
+    };
   }
 
   Future<void> buy(ProductDetails product) async {

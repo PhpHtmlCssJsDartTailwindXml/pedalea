@@ -8,7 +8,9 @@ import '../pages/follow_requests_page.dart';
 import '../pages/public_profile_page.dart';
 import '../pages/dm_thread_page.dart';
 import '../pages/my_bikes_page.dart';
+import '../pages/paywall_page.dart';
 import '../pages/profile_page.dart';
+import '../pages/stats_page.dart';
 import 'app_update_service.dart';
 
 /// Servicio centralizado de notificaciones locales (alertas push).
@@ -342,6 +344,12 @@ class NotificationService {
     } else if (payload == 'app_update') {
       // La app ya está abierta: revisa en Play y muestra la actualización.
       AppUpdateService.enforceUpdate(force: true);
+    } else if (payload == 'plus_promo') {
+      // Promoción de Plus: abre la pantalla de planes.
+      nav.push(MaterialPageRoute(builder: (_) => const PaywallPage()));
+    } else if (payload == 'my_stats') {
+      // Resumen semanal o aviso de racha: abre las estadísticas.
+      nav.push(MaterialPageRoute(builder: (_) => const StatsPage()));
     } else if (payload == 'my_impact') {
       nav.push(MaterialPageRoute(builder: (_) => const ProfilePage()));
     } else if (payload.startsWith('bike|') && parts.length >= 2) {

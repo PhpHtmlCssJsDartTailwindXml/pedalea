@@ -1219,21 +1219,19 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final duration = DateTime.now().difference(startAt);
 
     if (!SubscriptionService.instance.isPlus.value) {
+      // Sin Plus: se sugiere compartir la imagen de estadísticas (gratis),
+      // solo tras un viaje de al menos 1 km para no molestar en trayectos cortos.
+      if (_sessionKm < 1) return;
       showModalBottomSheet(
         context: context,
         backgroundColor: Colors.transparent,
-        builder: (_) => _ShareUpsellSheet(
+        builder: (_) => _ShareStatsSuggestionSheet(
           distanceKm: _sessionKm,
-          onUpgrade: () {
+          onShare: () {
             Navigator.pop(context);
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const PaywallPage(
-                  reason:
-                      'Comparte tus viajes y estadísticas en historias con Pedalea Plus.',
-                ),
-              ),
+              MaterialPageRoute(builder: (_) => const StatsPage(openShare: true)),
             );
           },
         ),
@@ -12321,10 +12319,13 @@ class _FallCountdownDialogState extends State<_FallCountdownDialog> {
 
 /// Se muestra en vez de la tarjeta de compartir cuando el usuario NO tiene
 /// Pedalea Plus: invita a suscribirse para desbloquear la función.
-class _ShareUpsellSheet extends StatelessWidget {
+/// Al terminar un viaje (sin Plus): invita a compartir la imagen de
+/// estadísticas, que es gratis. Cada historia compartida lleva el pie
+/// «Descarga Pedalea en Google Play».
+class _ShareStatsSuggestionSheet extends StatelessWidget {
   final double distanceKm;
-  final VoidCallback onUpgrade;
-  const _ShareUpsellSheet({required this.distanceKm, required this.onUpgrade});
+  final VoidCallback onShare;
+  const _ShareStatsSuggestionSheet({required this.distanceKm, required this.onShare});
 
   @override
   Widget build(BuildContext context) {
@@ -12371,7 +12372,7 @@ class _ShareUpsellSheet extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Compartir tu ruta y estadísticas en historias es una función de Pedalea Plus.',
+              'Muéstralo en tus historias: crea gratis tu imagen de estadísticas en un toque.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Poppins',
@@ -12383,9 +12384,9 @@ class _ShareUpsellSheet extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: onUpgrade,
-                icon: const Icon(Icons.workspace_premium_rounded, size: 18),
-                label: const Text('Ver Pedalea Plus'),
+                onPressed: onShare,
+                icon: const Icon(Icons.ios_share_rounded, size: 18),
+                label: const Text('Compartir mis estadísticas'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.amber,
                   foregroundColor: Colors.black,

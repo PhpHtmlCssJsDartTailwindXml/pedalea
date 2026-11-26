@@ -151,7 +151,9 @@ TextStyle _t(double size, {FontWeight w = FontWeight.w500, Color c = Colors.whit
 /// Se puede personalizar (botón «afinar»): color de acento (Plus), orden y
 /// visibilidad de los datos. Todo se guarda vía [StatsPrefsService].
 class StatsPage extends StatefulWidget {
-  const StatsPage({super.key});
+  /// Abre la hoja de compartir al entrar (sugerencia al terminar un viaje).
+  final bool openShare;
+  const StatsPage({super.key, this.openShare = false});
 
   @override
   State<StatsPage> createState() => _StatsPageState();
@@ -186,6 +188,11 @@ class _StatsPageState extends State<StatsPage> {
     PlusPrefsService.refresh(); // por si cambió en otro dispositivo
     _load();
     _syncFromServer();
+    if (widget.openShare) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openShareSheet();
+      });
+    }
   }
 
   void _onPrefsChanged() {
