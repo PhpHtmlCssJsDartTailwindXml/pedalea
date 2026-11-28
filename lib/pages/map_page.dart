@@ -290,7 +290,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         final active = BikeService.instance.activeBike;
         final photo = active?.photoUrl ?? '';
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.only(left: 8),
           child: Tooltip(
             message: 'Bici activa: ${active?.name ?? ''}',
             child: GestureDetector(
@@ -305,9 +305,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   );
                 }
               },
-              child: SizedBox(
-                width: 28,
-                height: 28,
+              child: Container(
+                width: 36,
+                height: 36,
+                padding: const EdgeInsets.all(3),
+                decoration: _dayNightBox(radius: 18),
                 child: ClipOval(
                   child: photo.isNotEmpty
                       ? CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover)
@@ -373,18 +375,41 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             );
         },
-        child: SizedBox(
-          width: 48,
-          height: 34,
-          child: Center(
-            child: Container(
-              width: 20,
-              height: 5,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(3),
-              ),
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              color.withOpacity(0.22),
+              _isDayMode ? Colors.white : const Color(0xFF15161D),
             ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.7)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.pedal_bike_rounded, size: 15, color: _overlayText),
+              const SizedBox(width: 6),
+              Text(
+                'Ciclovías',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: _overlayText,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 16,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -483,25 +508,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
       _maybeRestoreHeatmap();
     } catch (e) {
       debugPrint('No se pudieron cargar las capas guardadas: $e');
-    }
-  }
-
-  bool _giftCheckRunning = false;
-
-  /// Si el equipo le regaló Plus y aún no lo había visto, muestra la
-  /// bienvenida de regalo (una sola vez por regalo).
-  Future<void> _maybeShowGiftWelcome() async {
-    if (!mounted || _giftCheckRunning) return;
-    if (!SubscriptionService.instance.isPlus.value) return;
-    _giftCheckRunning = true;
-    try {
-      final until = await SubscriptionService.instance.takeUnseenGift();
-      if (until == null || !mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => PlusUnlockedPage(giftUntil: until)),
-      );
-    } finally {
-      _giftCheckRunning = false;
     }
   }
 
@@ -667,7 +673,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
   Widget _mapStylePicker() {
     final isPlus = SubscriptionService.instance.isPlus.value;
     final current = PlusPrefsService.mapStyle.value;
-    const accent = Color(0xFF7CF0BC);
     Widget chip(String label, String uri, {required bool locked}) {
       final selected = current == uri && (uri.isEmpty || isPlus);
       return GestureDetector(
@@ -689,24 +694,20 @@ class _MapPageState extends State<MapPage> with RouteAware {
           _applyMapStyle(uri);
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? accent.withOpacity(0.18)
+                ? const Color(0xFF3DDC84)
                 : Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? accent : Colors.white.withOpacity(0.15),
-              width: selected ? 1.5 : 1,
+              color: selected ? Colors.transparent : Colors.white.withOpacity(0.10),
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (selected) ...[
-                const Icon(Icons.check_rounded, color: accent, size: 14),
-                const SizedBox(width: 4),
-              ] else if (locked) ...[
+              if (locked && !selected) ...[
                 Icon(Icons.lock_outline_rounded,
                     color: Colors.white.withOpacity(0.5), size: 12),
                 const SizedBox(width: 4),
@@ -715,9 +716,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 label,
                 style: TextStyle(
                   fontFamily: 'Poppins',
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: selected ? accent : Colors.white70,
+                  color: selected ? Colors.black : Colors.white,
                 ),
               ),
             ],
@@ -727,29 +728,36 @@ class _MapPageState extends State<MapPage> with RouteAware {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 4, 20, 10),
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ESTILO DE MAPA',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.4),
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
+          Padding(
+            padding: const EdgeInsets.only(left: 20),
+            child: Text(
+              'ESTILO DE MAPA',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.4),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              chip('Automático', '', locked: false),
-              for (final s in PlusPrefsService.premiumMapStyles)
-                chip(s.$1, s.$2, locked: !isPlus),
-            ],
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                chip('Automático', '', locked: false),
+                for (final s in PlusPrefsService.premiumMapStyles) ...[
+                  const SizedBox(width: 8),
+                  chip(s.$1, s.$2, locked: !isPlus),
+                ],
+              ],
+            ),
           ),
         ],
       ),
@@ -986,9 +994,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _currentStyle = _resolveMapStyle();
     PlusPrefsService.mapStyle.addListener(_onMapStylePrefChanged);
     SubscriptionService.instance.isPlus.addListener(_maybeRestoreHeatmap);
-    // Plus de regalo: bienvenida especial la primera vez que se detecta.
-    SubscriptionService.instance.isPlus.addListener(_maybeShowGiftWelcome);
-    Future.delayed(const Duration(seconds: 3), _maybeShowGiftWelcome);
     _loadLayerPrefs();
     BikeService.instance.load();
     // Pedir calificación en Play Store a quien ya pedaleó con la app, con
@@ -1001,6 +1006,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _checkLocationPermission();
     _loadMyUsername();
     _loadFallDetectionPref();
+    _cardTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && !_cardCollapsed) setState(() => _cardCollapsed = true);
+    });
     _helpBubbleTimer = Timer(const Duration(seconds: 20), () {
       if (mounted) setState(() => _helpBubbleHidden = true);
     });
@@ -1154,6 +1162,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
   void dispose() {
     _stillThereTimer?.cancel();
     _helpBubbleTimer?.cancel();
+    _cardTimer?.cancel();
     routeObserver.unsubscribe(this);
     // Invalida cualquier operación async de mapa en curso (ver
     // _ensureEventsIcon) antes de que el widget termine de destruirse.
@@ -1181,7 +1190,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
     RideHeatService.flushNow();
     PlusPrefsService.mapStyle.removeListener(_onMapStylePrefChanged);
     SubscriptionService.instance.isPlus.removeListener(_maybeRestoreHeatmap);
-    SubscriptionService.instance.isPlus.removeListener(_maybeShowGiftWelcome);
     _positionStreamSubscription?.cancel();
     _layersTipTimer?.cancel();
     _helpTipHideTimer?.cancel();
@@ -2106,6 +2114,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
         setState(() => _currentAlerts = alerts);
         _updateAlertsLayer(alerts);
         CacheService.saveAlerts(alerts); // Guardar en caché
+        // Revisa la cercanía también al llegar las alertas: con el teléfono
+        // quieto el GPS no vuelve a revisar hasta moverse ~15 m, y si las
+        // alertas cargaban después del primer GPS no se avisaba ni se
+        // preguntaba «¿Sigue ahí?».
+        final pos = _lastPosition;
+        if (_proximityAlertsEnabled && pos != null) _checkProximityAlerts(pos);
       },
       onError: (error) {
         debugPrint('❌ Error stream alertas: $error');
@@ -3961,196 +3975,489 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
-  Widget _buildSpeedometer() {
-    return ValueListenableBuilder<double>(
-      valueListenable: _speedNotifier,
-      builder: (context, speed, _) {
-        String? mensaje;
-        Color mensajeColor = Colors.orangeAccent;
-        if (_isPassenger) {
-          final v = _vehicleInfo(_passengerVehicle);
-          mensaje = "${v.emoji} Vas en ${v.label} · no cuenta como pedaleo";
-          mensajeColor = Colors.lightBlueAccent;
-        } else if (speed > 35) {
-          mensaje = "⚠️ ¡MUY RÁPIDO! Considera reducir la velocidad";
-          mensajeColor = Colors.redAccent;
-        } else if (speed > 30) {
-          mensaje = "💧 Hidrátate, vas muy rápido";
-          mensajeColor = Colors.orangeAccent;
-        } else if (speed > 25) {
-          mensaje = "⚡ Buen ritmo, ¡sigue así!";
-          mensajeColor = Colors.greenAccent;
-        } else if (speed > 0 && speed <= 25) {
-          mensaje = "🚴 Pedalea, ¡buen paseo!";
-          mensajeColor = Colors.lightBlueAccent;
-        }
-        final accentColor = _isDayMode
-            ? const Color(0xFF00A86B)
-            : Colors.greenAccent;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (mensaje != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: _dayNightBox(radius: 20),
-                child: Text(
-                  mensaje,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: _isDayMode
-                        ? mensajeColor.withOpacity(0.85)
-                        : mensajeColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            Container(
-              width: 85,
-              height: 85,
-              decoration: _dayNightBox(radius: 50),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    speed.toStringAsFixed(0),
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: _overlayText,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    "km/h",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: accentColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
+  // ══════════════════════════════════════════════════════════════════════════
+  //  INTERFAZ DEL MAPA
+  //   • Explorar: búsqueda con menú y perfil, capas en chips, clima y una
+  //     tarjeta abajo (velocidad, estado del GPS, Planificar ruta, SOS,
+  //     Reportar · Comunidad · Guardadas).
+  //   • En ruta: aviso verde del próximo giro arriba y tarjeta con velocidad,
+  //     km restantes, minutos y hora de llegada, Finalizar ruta y SOS.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Color get _cardBg => _isDayMode ? Colors.white : const Color(0xFF15161D);
+  Color get _accentGreen =>
+      _isDayMode ? const Color(0xFF00A86B) : const Color(0xFF3DDC84);
+
+  /// Alto medido de la tarjeta inferior (para ubicar encima los controles,
+  /// los avisos y el logo de Mapbox).
+  double _cardH = 236;
+  final GlobalKey _cardKey = GlobalKey();
+
+  /// Tarjeta de explorar plegada: solo la velocidad y el estado.
+  bool _cardCollapsed = false;
+  Timer? _cardTimer;
+
+  /// Pliega o despliega la tarjeta. Al desplegarla, se vuelve a plegar sola
+  /// a los 5 segundos.
+  void _setCardCollapsed(bool v) {
+    _cardTimer?.cancel();
+    setState(() => _cardCollapsed = v);
+    if (!v) {
+      _cardTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted && !_cardCollapsed) setState(() => _cardCollapsed = true);
+      });
+    }
   }
 
-  /// Bajo la búsqueda, solo si vas de pasajero: «Vas en micro» y el botón
-  /// para volver a pedalear. El estado de ciclista va como sello en tu foto.
-  Widget _buildTopBar() {
-    if (!_isPassenger) return const SizedBox.shrink();
-    final accent =
-        _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
-    final v = _vehicleInfo(_passengerVehicle);
-    return Row(
+  void _measureCard() {
+    final h = _cardKey.currentContext?.size?.height;
+    if (h == null || !mounted || (h - _cardH).abs() < 1) return;
+    setState(() => _cardH = h);
+    final map = mapboxMap;
+    if (map != null) _configureMapOrnaments(map);
+  }
+
+  // ── Explorar: parte de arriba ─────────────────────────────────────────────
+
+  Widget _buildExploreTop() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Menú · búsqueda · perfil, en una sola píldora.
         Container(
-          height: 38,
-          padding: const EdgeInsets.only(left: 14, right: 5),
-          decoration: _dayNightBox(radius: 19),
+          height: 54,
+          decoration: _dayNightBox(radius: 18),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '${v.emoji} Vas en ${v.label}',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: _overlayText,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
+              IconButton(
+                tooltip: 'Menú',
+                icon: Icon(Icons.menu_rounded, color: _overlayText, size: 24),
+                onPressed: () {
+                  if (_drawerOpen) {
+                    _scaffoldKey.currentState?.closeDrawer();
+                  } else {
+                    _scaffoldKey.currentState?.openDrawer();
+                  }
+                },
+              ),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openPlaceSearch,
+                  child: Row(
+                    children: [
+                      Icon(Icons.search_rounded, color: _accentGreen, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '¿A dónde vas?',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: _overlaySubtext,
+                            fontSize: 14.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: () => _exitPassengerMode(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    'Pedalear',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.black,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: _ProfileButton(
+                  isDayMode: _isDayMode,
+                  statusColor: _isPassenger
+                      ? Colors.lightBlueAccent
+                      : _modoActivo
+                      ? Colors.greenAccent
+                      : Colors.grey,
+                  statusIcon: _isPassenger
+                      ? Icons.directions_bus_rounded
+                      : Icons.directions_bike_rounded,
                 ),
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Capas del mapa: se encienden y apagan con un toque.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          child: Row(
+            children: [
+              _buildCicloviaLegend(),
+              const SizedBox(width: 8),
+              _layerChip('Estacionamientos', const Color(0xFF00BCD4),
+                  _showBikeParkings, _toggleBikeParkings,
+                  loading: _bikeParkingsLoading),
+              const SizedBox(width: 8),
+              _layerChip('Talleres', const Color(0xFF3B82F6),
+                  _showBikeServices, _toggleBikeServices,
+                  loading: _bikeServicesLoading),
+              const SizedBox(width: 8),
+              _layerChip('BiciMetro', const Color(0xFF8B5CF6),
+                  _showBicimetro, _toggleBicimetro),
+              const SizedBox(width: 8),
+              _layerChip('CicloRecreoVía', const Color(0xFFFFB300),
+                  _showCicloRecreo, _toggleCicloRecreo),
+              _buildBikeSwitcher(),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Clima (al tocarlo, el detalle).
+        Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: _dayNightBox(radius: 17),
+          child: Center(
+            widthFactor: 1,
+            child: WeatherPill(isDayMode: _isDayMode),
           ),
         ),
       ],
     );
   }
 
-  /// Columna derecha bajo la búsqueda: clima, color de las ciclovías y bici
-  /// activa, apilados en una sola cápsula angosta.
-  Widget _buildSideColumn() {
-    Widget line() => Container(
-      width: 22,
-      height: 1,
-      color: _overlayText.withOpacity(0.12),
-    );
-    return Container(
-      width: 48,
-      decoration: _dayNightBox(radius: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Clima, con el recordatorio «Toca para ver el clima» a la izquierda.
-          Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
+  Widget _layerChip(
+    String label,
+    Color color,
+    bool on,
+    VoidCallback onTap, {
+    bool loading = false,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: on
+            ? BoxDecoration(
+                color: Color.alphaBlend(
+                  color.withOpacity(0.22),
+                  _isDayMode ? Colors.white : const Color(0xFF15161D),
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: color.withOpacity(0.7)),
+              )
+            : _dayNightBox(radius: 18),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (loading)
               SizedBox(
-                width: 48,
-                height: 44,
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: WeatherPill(isDayMode: _isDayMode),
-                    ),
+                width: 9,
+                height: 9,
+                child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
+              )
+            else
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: on ? color : color.withOpacity(0.35),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: on ? _overlayText : _overlaySubtext,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Hoja con los estilos de mapa (botón de capas).
+  void _showMapStyleSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + MediaQuery.of(ctx).padding.bottom),
+        padding: const EdgeInsets.fromLTRB(4, 14, 4, 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF15161D),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: ValueListenableBuilder(
+          valueListenable: PlusPrefsService.mapStyle,
+          builder: (_, _, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Text(
+                  'Estilo del mapa',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              Positioned(
-                right: 54,
-                child: IgnorePointer(
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: WeatherPill.showHint,
-                    builder: (_, show, _) => AnimatedOpacity(
-                      duration: const Duration(milliseconds: 300),
-                      opacity: show ? 1 : 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          borderRadius: BorderRadius.circular(10),
+              _mapStylePicker(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Explorar: tarjeta de abajo ────────────────────────────────────────────
+
+  /// Estado del GPS según la precisión del último punto.
+  (String, Color) get _gpsStatus {
+    final acc = _lastPosition?.accuracy;
+    if (acc == null) return ('Buscando GPS…', Colors.orangeAccent);
+    if (acc <= 15) return ('GPS preciso', _accentGreen);
+    if (acc <= 40) return ('GPS aceptable', Colors.amber);
+    return ('GPS débil', Colors.orangeAccent);
+  }
+
+  Widget _cardShell({required Widget child, bool collapsible = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final card = Container(
+      key: _cardKey,
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 14 + bottomPad),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: _isDayMode
+            ? null
+            : Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(_isDayMode ? 0.10 : 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: collapsible
+                ? () => _setCardCollapsed(!_cardCollapsed)
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: _overlayText.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: child,
+          ),
+        ],
+      ),
+    );
+    final measured = NotificationListener<SizeChangedLayoutNotification>(
+      onNotification: (_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
+        return true;
+      },
+      child: SizeChangedLayoutNotifier(child: card),
+    );
+    if (!collapsible) return measured;
+    // Deslizar hacia abajo la pliega; hacia arriba la despliega.
+    return GestureDetector(
+      onVerticalDragEnd: (d) {
+        final v = d.primaryVelocity ?? 0;
+        if (v > 150 && !_cardCollapsed) _setCardCollapsed(true);
+        if (v < -150 && _cardCollapsed) _setCardCollapsed(false);
+      },
+      child: measured,
+    );
+  }
+
+  Widget _buildExploreCard() {
+    return _cardShell(
+      collapsible: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Velocidad · estado
+          ValueListenableBuilder<double>(
+            valueListenable: _speedNotifier,
+            builder: (context, speed, _) {
+              final (gpsText, gpsColor) = _gpsStatus;
+              String title;
+              String sub;
+              Color subColor = gpsColor;
+              if (_isPassenger) {
+                final v = _vehicleInfo(_passengerVehicle);
+                title = '${v.emoji} Vas en ${v.label}';
+                sub = 'No cuenta como pedaleo';
+                subColor = Colors.lightBlueAccent;
+              } else if (!_modoActivo) {
+                title = 'Conteo de km en pausa';
+                sub = gpsText;
+              } else if (speed >= 3) {
+                title = 'Pedaleando · ${_sessionKm.toStringAsFixed(1).replaceAll('.', ',')} km';
+                sub = speed > 35
+                    ? '⚠️ ¡Muy rápido! Reduce la velocidad'
+                    : speed > 30
+                    ? '💧 Vas rápido, hidrátate'
+                    : gpsText;
+                if (speed > 30) subColor = speed > 35 ? Colors.redAccent : Colors.orangeAccent;
+              } else {
+                title = 'Listo para pedalear';
+                sub = gpsText;
+              }
+              return Row(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        speed.toStringAsFixed(0),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: _overlayText,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          height: 1.0,
                         ),
-                        child: const Text(
-                          'Toca para ver el clima',
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'km/h',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: _accentGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    margin: const EdgeInsets.symmetric(horizontal: 14),
+                    color: _overlayText.withOpacity(0.12),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
                           maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 9.5,
+                            color: _overlayText,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: subColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                sub,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: _overlaySubtext,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_isPassenger)
+                    TextButton(
+                      onPressed: () => _exitPassengerMode(),
+                      child: Text(
+                        'Pedalear',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: _accentGreen,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  // SOS siempre a la vista, también con la tarjeta plegada.
+                  _PanicButton(compact: true),
+                ],
+              );
+            },
+          ),
+          if (!_cardCollapsed) ...[
+          const SizedBox(height: 14),
+          // Planificar ruta
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _openPlanner,
+                    icon: const Icon(Icons.alt_route_rounded, size: 20),
+                    label: const Text('Planificar ruta'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentGreen,
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -4158,81 +4465,97 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             ],
           ),
-          line(),
-          _buildCicloviaLegend(),
-          ValueListenableBuilder<List<Bike>>(
-            valueListenable: BikeService.instance.bikes,
-            builder: (_, bikes, _) => bikes.isEmpty
-                ? const SizedBox.shrink()
-                : Column(children: [line(), _buildBikeSwitcher()]),
+          const SizedBox(height: 10),
+          // Reportar · Comunidad · Guardadas
+          Row(
+            children: [
+              Expanded(
+                child: _cardTile(
+                  Icons.warning_amber_rounded,
+                  'Reportar',
+                  const Color(0xFFFFA726),
+                  _showReportHint,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _cardTile(
+                  Icons.chat_bubble_outline_rounded,
+                  'Mensajes',
+                  _accentGreen,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MessagesPage()),
+                  ).then((_) => _loadDmUnread()),
+                  badge: _dmUnread,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _cardTile(
+                  Icons.bookmark_border_rounded,
+                  'Guardadas',
+                  const Color(0xFF60A5FA),
+                  _openPlanner,
+                ),
+              ),
+            ],
           ),
+          ],
         ],
       ),
     );
   }
 
-  /// Píldora ancha de búsqueda de destino (abre el buscador).
-  Widget _buildSearchPill() {
-    final accent =
-        _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _openPlaceSearch,
-        borderRadius: BorderRadius.circular(24),
-        child: Ink(
-          height: 48,
-          decoration: _dayNightBox(radius: 24),
-          child: Row(
-            children: [
-              const SizedBox(width: 14),
-              Icon(Icons.search_rounded, color: accent, size: 21),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '¿A dónde vas?',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: _overlaySubtext,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Botón redondo de mensajes con contador de no leídos.
-  Widget _buildMessagesButton() {
-    final accent =
-        _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
+  Widget _cardTile(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap, {
+    int badge = 0,
+  }) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: _dayNightBox(radius: 24),
-          child: IconButton(
-            icon: Icon(Icons.forum_rounded, color: accent, size: 21),
-            tooltip: 'Mensajes',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MessagesPage()),
-              ).then((_) => _loadDmUnread());
+        Material(
+          color: _overlayText.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap();
             },
+            child: Container(
+              height: 60,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _overlayText.withOpacity(0.08)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: color, size: 20),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: _overlayText,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        if (_dmUnread > 0)
+        if (badge > 0)
           Positioned(
-            top: -2,
-            right: -2,
+            top: -4,
+            right: -4,
             child: IgnorePointer(
               child: Container(
                 padding: const EdgeInsets.all(3),
@@ -4240,10 +4563,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   color: Color(0xFFFF4D6D),
                   shape: BoxShape.circle,
                 ),
-                constraints:
-                    const BoxConstraints(minWidth: 17, minHeight: 17),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                 child: Text(
-                  _dmUnread > 9 ? '9+' : '$_dmUnread',
+                  badge > 9 ? '9+' : '$badge',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontFamily: 'Poppins',
@@ -4259,6 +4581,503 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
+  /// Abre el planificador de rutas con tus rutas guardadas.
+  void _openPlanner() {
+    setState(() {
+      _routePlannerOpen = true;
+      _rpCollapsed = false;
+    });
+    _loadFavorites();
+    _ensureLocationAccess(
+      force: true,
+      reason: 'Para calcular rutas desde donde estás necesitamos tu ubicación.',
+    ).then((_) => _maybeShowSafetyReminder());
+  }
+
+  /// «Reportar» de la tarjeta: explica cómo crear el reporte en el mapa.
+  void _showReportHint() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.touch_app_rounded, color: Color(0xFFFFA726)),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Mantén presionado el mapa en el lugar del problema para crear un reporte.',
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF15161D),
+          behavior: SnackBarBehavior.floating,
+          // Justo encima de la tarjeta, sin taparla.
+          margin: EdgeInsets.fromLTRB(16, 0, 16, _cardH + 12),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+  }
+
+  /// «Reportar»: formulario de alerta en tu ubicación (o el centro del mapa).
+  Future<void> _reportHere() async {
+    Point? point;
+    final pos = _lastPosition;
+    if (pos != null) {
+      point = Point(coordinates: Position(pos.longitude, pos.latitude));
+    } else if (mapboxMap != null) {
+      point = (await mapboxMap!.getCameraState()).center;
+    }
+    if (point == null || !mounted) return;
+    _showAlertFormAtLocation(point);
+  }
+
+  // ── En ruta: giros ────────────────────────────────────────────────────────
+
+  /// Giros de la ruta (Mapbox, en español) con su posición en _routeCoords.
+  List<_NavStep> _navSteps = [];
+
+  /// Metros acumulados desde el inicio de la ruta hasta cada punto.
+  List<double> _routeCum = [0];
+
+  void _setNavSteps(List steps) {
+    final out = <_NavStep>[];
+    var from = 0;
+    for (final st in steps) {
+      final m = (st as Map)['maneuver'] as Map?;
+      final loc = m?['location'] as List?;
+      if (m == null || loc == null || loc.length < 2) continue;
+      final type = m['type']?.toString() ?? '';
+      if (type == 'depart') continue;
+      final lng = (loc[0] as num).toDouble();
+      final lat = (loc[1] as num).toDouble();
+      // Punto más cercano de la ruta, avanzando (los giros vienen en orden).
+      var best = from;
+      var bestD = double.infinity;
+      for (var i = from; i < _routeCoords.length; i++) {
+        final d = geo.Geolocator.distanceBetween(
+          lat,
+          lng,
+          _routeCoords[i][1],
+          _routeCoords[i][0],
+        );
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+        if (bestD < 15 && d > bestD + 200) break;
+      }
+      from = best;
+      out.add(_NavStep(
+        idx: best,
+        type: type,
+        modifier: m['modifier']?.toString() ?? '',
+        instruction: m['instruction']?.toString() ?? '',
+      ));
+    }
+    _navSteps = out;
+  }
+
+  /// Próximo giro (skip = 1 → el siguiente a ese).
+  _NavStep? _nextStep([int skip = 0]) {
+    var n = 0;
+    for (final st in _navSteps) {
+      if (st.idx > _routeProgressIdx) {
+        if (n == skip) return st;
+        n++;
+      }
+    }
+    return null;
+  }
+
+  double _metersToStep(_NavStep st) {
+    if (_routeCum.length < 2) return 0;
+    final i = _routeProgressIdx.clamp(0, _routeCum.length - 1);
+    final j = st.idx.clamp(0, _routeCum.length - 1);
+    final m = _routeCum[j] - _routeCum[i];
+    return m < 0 ? 0 : m;
+  }
+
+  static String _fmtMeters(double m) {
+    if (m >= 1000) {
+      return '${(m / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+    }
+    if (m >= 100) return '${(m / 10).round() * 10} m';
+    return '${(m / 5).round() * 5} m';
+  }
+
+  static IconData _stepIcon(_NavStep st) {
+    if (st.type == 'arrive') return Icons.flag_rounded;
+    if (st.type == 'roundabout' || st.type == 'rotary') {
+      return Icons.roundabout_right_rounded;
+    }
+    switch (st.modifier) {
+      case 'left':
+        return Icons.turn_left_rounded;
+      case 'right':
+        return Icons.turn_right_rounded;
+      case 'slight left':
+        return Icons.turn_slight_left_rounded;
+      case 'slight right':
+        return Icons.turn_slight_right_rounded;
+      case 'sharp left':
+        return Icons.turn_sharp_left_rounded;
+      case 'sharp right':
+        return Icons.turn_sharp_right_rounded;
+      case 'uturn':
+        return Icons.u_turn_left_rounded;
+      default:
+        return Icons.straight_rounded;
+    }
+  }
+
+  static String _stepShort(_NavStep st) {
+    if (st.type == 'arrive') return 'llegas';
+    if (st.type == 'roundabout' || st.type == 'rotary') return 'rotonda';
+    switch (st.modifier) {
+      case 'left':
+      case 'sharp left':
+        return 'a la izquierda';
+      case 'right':
+      case 'sharp right':
+        return 'a la derecha';
+      case 'slight left':
+        return 'levemente a la izquierda';
+      case 'slight right':
+        return 'levemente a la derecha';
+      case 'uturn':
+        return 'en U';
+      default:
+        return 'derecho';
+    }
+  }
+
+  // ── En ruta: aviso de arriba ──────────────────────────────────────────────
+
+  Widget _buildNavBanner() {
+    final next = _nextStep();
+    final after = _nextStep(1);
+    Widget banner;
+    if (_rerouting) {
+      banner = _navBannerBox(
+        color: Colors.orange,
+        icon: null,
+        big: 'Recalculando…',
+        small: 'Te saliste de la ruta',
+      );
+    } else if (next == null) {
+      banner = _navBannerBox(
+        color: const Color(0xFF3DDC84),
+        icon: Icons.straight_rounded,
+        big: 'Sigue la ruta',
+        small: _navNextStopLabel,
+      );
+    } else {
+      banner = _navBannerBox(
+        color: const Color(0xFF3DDC84),
+        icon: _stepIcon(next),
+        big: _fmtMeters(_metersToStep(next)),
+        small: next.instruction.isNotEmpty ? next.instruction : _stepShort(next),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        banner,
+        if (!_rerouting && after != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: _dayNightBox(radius: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Luego',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: _overlaySubtext,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(_stepIcon(after), color: _overlayText, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  _stepShort(after),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: _overlayText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _navBannerBox({
+    required Color color,
+    required IconData? icon,
+    required String big,
+    required String small,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          if (icon != null)
+            Icon(icon, color: Colors.black, size: 38)
+          else
+            const SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 3, color: Colors.black),
+            ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  big,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.black,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  small,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Color(0xE6000000),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── En ruta: controles y tarjeta ──────────────────────────────────────────
+
+  Widget _buildNavControls() {
+    Widget btn(IconData icon, String tip, Color color, VoidCallback onTap) =>
+        IconButton(
+          tooltip: tip,
+          icon: Icon(icon, color: color, size: 22),
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+        );
+    Widget line() => Container(
+      width: 24,
+      height: 1,
+      color: _overlayText.withOpacity(0.12),
+    );
+    return Container(
+      width: 48,
+      decoration: _dayNightBox(radius: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          btn(
+            _isFollowingUser ? Icons.navigation : Icons.navigation_outlined,
+            'Seguirme',
+            _isFollowingUser ? _accentGreen : _overlayText,
+            () {
+              if (!_isFollowingUser) _toggleFollowing();
+            },
+          ),
+          line(),
+          btn(Icons.map_outlined, 'Ver toda la ruta', _overlayText, _fitRouteOverview),
+          line(),
+          btn(Icons.warning_amber_rounded, 'Reportar', const Color(0xFFFFA726),
+              _reportHere),
+        ],
+      ),
+    );
+  }
+
+  /// Muestra la ruta completa en pantalla (deja de seguirte).
+  Future<void> _fitRouteOverview() async {
+    final map = mapboxMap;
+    if (map == null || _routeCoords.length < 2) return;
+    final topInset = MediaQuery.of(context).padding.top;
+    if (_isFollowingUser) await _toggleFollowing();
+    final step = (_routeCoords.length / 200).ceil().clamp(1, 1000);
+    final pts = <Point>[
+      for (var i = 0; i < _routeCoords.length; i += step)
+        Point(coordinates: Position(_routeCoords[i][0], _routeCoords[i][1])),
+      Point(coordinates: Position(_routeCoords.last[0], _routeCoords.last[1])),
+    ];
+    final cam = await map.cameraForCoordinatesPadding(
+      pts,
+      CameraOptions(bearing: 0, pitch: 0),
+      MbxEdgeInsets(top: topInset + 160, left: 40, bottom: _cardH + 40, right: 80),
+      null,
+      null,
+    );
+    map.easeTo(cam, MapAnimationOptions(duration: 600));
+  }
+
+  Widget _buildNavCard() {
+    final total = _routeDistKm ?? 0;
+    final remainingKm = _remainingRouteDistanceKm();
+    final progress = total > 0 ? ((total - remainingKm) / total).clamp(0.0, 1.0) : 0.0;
+    final avg = _navAvgSpeedKmh() ?? 15.0;
+    final mins = avg > 0 ? (remainingKm / avg * 60).round() : 0;
+    final pendingStops = _routeWps.length - _navNextWpIndex;
+
+    Widget stat(String value, String label, {Color? color}) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: color ?? _overlayText,
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: _overlaySubtext,
+              fontSize: 11.5,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return _cardShell(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ValueListenableBuilder<double>(
+                valueListenable: _speedNotifier,
+                builder: (_, speed, _) =>
+                    stat('${speed.round()}', 'km/h', color: _accentGreen),
+              ),
+              stat(remainingKm.toStringAsFixed(1).replaceAll('.', ','), 'km restantes'),
+              stat('$mins', 'min · llegas ${_navEtaLabel()}'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 5,
+              backgroundColor: _overlayText.withOpacity(0.1),
+              color: _accentGreen,
+            ),
+          ),
+          if (pendingStops > 1) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.flag_outlined, size: 14, color: _overlaySubtext),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _navNextStopLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: _overlaySubtext,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _skipCurrentStop,
+                  child: Text(
+                    'Saltar parada',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: _accentGreen,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: OutlinedButton(
+                    onPressed: _stopNavigation,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _overlayText,
+                      backgroundColor: _overlayText.withOpacity(0.05),
+                      side: BorderSide(color: _overlayText.withOpacity(0.12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: const Text('Finalizar ruta'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _PanicButton(compact: true),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Grupo vertical de controles del mapa: orientar al norte y seguir
   /// ubicación, en una sola cápsula.
   Widget _buildMapControls() {
@@ -4271,6 +5090,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          IconButton(
+            icon: Icon(Icons.layers_outlined, color: idle, size: 22),
+            onPressed: _showMapStyleSheet,
+            tooltip: 'Estilo del mapa',
+          ),
+          Container(
+            width: 24,
+            height: 1,
+            color: _overlayText.withOpacity(0.12),
+          ),
           IconButton(
             icon: Icon(Icons.explore, color: accent, size: 22),
             onPressed: _resetNorth,
@@ -4317,6 +5146,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     });
     _redrawRoutePins();
     _snapWpToNearestRoad(wp);
+    _labelFromMap(wp);
   }
 
   /// Si la parada quedó sobre una casa, una manzana o un parque, la mueve al
@@ -4472,6 +5302,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // Guardar coords completas para borrar lo recorrido
       _routeCoords = positions.map((p) => List<double>.from(p)).toList();
       _routeProgressIdx = 0;
+      _navSteps = [];
+      _routeCum = [0];
+      for (var i = 1; i < _routeCoords.length; i++) {
+        _routeCum.add(_routeCum.last +
+            geo.Geolocator.distanceBetween(
+              _routeCoords[i - 1][1],
+              _routeCoords[i - 1][0],
+              _routeCoords[i][1],
+              _routeCoords[i][0],
+            ));
+      }
       final fc = jsonEncode({
         'type': 'FeatureCollection',
         'features': [
@@ -4650,7 +5491,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     try {
       final url =
           'https://api.mapbox.com/directions/v5/mapbox/walking/$coords'
-          '?geometries=geojson&overview=false&steps=true'
+          '?geometries=geojson&overview=false&steps=true&language=es'
           '&radiuses=$radiuses&access_token=$kMapboxToken';
       final res = await http
           .get(Uri.parse(url))
@@ -4683,10 +5524,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
   /// frente y sube hasta el próximo retorno para volver por la otra calzada.
   /// Un ciclista real se baja y cruza. Por eso, si un tramo en bici mide
   /// bastante más que el mismo tramo a pie, se usa el trazado a pie.
-  ({List coords, double distance, double duration, int walkedLegs, double savedMeters})
+  ({List coords, double distance, double duration, int walkedLegs, double savedMeters, List steps})
   _mergeWithWalkingLegs(Map<String, dynamic> route, List? walkLegs) {
     final full = (route['geometry'] as Map)['coordinates'] as List;
     final bikeLegs = route['legs'] as List?;
+    List stepsOf(Map leg) => (leg['steps'] as List?) ?? const [];
+    final allBikeSteps = [
+      for (final l in bikeLegs ?? const []) ...stepsOf(l as Map),
+    ];
     final total = (route['distance'] as num).toDouble();
     final totalDur = (route['duration'] as num).toDouble();
     if (bikeLegs == null ||
@@ -4698,10 +5543,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
         duration: totalDur,
         walkedLegs: 0,
         savedMeters: 0.0,
+        steps: allBikeSteps,
       );
     }
 
     final coords = [];
+    final steps = [];
     double distance = 0, duration = 0, saved = 0;
     int walked = 0;
     for (var i = 0; i < bikeLegs.length; i++) {
@@ -4718,6 +5565,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
           bikeDist - walkDist > 300;
       if (detour) {
         coords.addAll(walkCoords);
+        steps.addAll(stepsOf(walk));
         distance += walkDist;
         // Se pedalea casi todo el tramo; se suma 1 min por el cruce a pie.
         final speed = bikeDur > 0 ? bikeDist / bikeDur : 4.2;
@@ -4726,6 +5574,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         walked++;
       } else {
         coords.addAll(_legCoords(bike));
+        steps.addAll(stepsOf(bike));
         distance += bikeDist;
         duration += bikeDur;
       }
@@ -4737,6 +5586,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         duration: totalDur,
         walkedLegs: 0,
         savedMeters: 0.0,
+        steps: allBikeSteps,
       );
     }
     return (
@@ -4745,6 +5595,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
       duration: duration,
       walkedLegs: walked,
       savedMeters: saved,
+      steps: steps,
     );
   }
 
@@ -4841,10 +5692,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
       // permiso de ubicación (o el GPS está apagado) y hay al menos dos
       // paradas, parte de la primera, como hace Google Maps cuando no sabe
       // dónde estás.
-      final current = await _routeOrigin();
+      final current =
+          (_rpFromGps || _navigating) ? await _routeOrigin() : null;
       if (current == null && _routeWps.length < 2) throw const _NoLocation();
       final fromGps = current != null;
-      if (!fromGps && mounted) {
+      if (!fromGps && _rpFromGps && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Sin acceso a tu ubicación: la ruta parte en la primera parada.'),
@@ -4881,7 +5733,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         // obliga a rodear la manzana completa para seguir.
         final url =
             'https://api.mapbox.com/directions/v5/mapbox/cycling/$coords'
-            '?geometries=geojson&overview=full&steps=true'
+            '?geometries=geojson&overview=full&steps=true&language=es'
             '&continue_straight=false&alternatives=true&radiuses=$radiuses'
             '&access_token=$kMapboxToken';
         final res = await http
@@ -4975,6 +5827,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         _routeElevGain = null;
       });
       await _drawRouteLine(merged.coords);
+      _setNavSteps(merged.steps);
       if (merged.walkedLegs > 0 && mounted) {
         final km = (merged.savedMeters / 1000).toStringAsFixed(1);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -5031,6 +5884,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     setState(() {
       _routePlannerOpen = false;
       _routeAddMode = false;
+      _rpFromGps = true;
       _routeWps.clear();
       _routeDistKm = null;
       _routeDurMin = null;
@@ -5087,410 +5941,490 @@ class _MapPageState extends State<MapPage> with RouteAware {
   bool _rpCollapsed = false;
 
   /// Panel compacto: ocupa lo mínimo para que se siga viendo el mapa.
-  Widget _buildRoutePlannerPanel() {
-    final n = _routeWps.length;
-    final calculated = _routeDistKm != null;
-    final collapsed = _rpCollapsed;
-    String subtitle = n == 0
-        ? 'Desde tu ubicación · agrega una parada'
-        : 'Desde tu ubicación · $n ${n == 1 ? 'parada' : 'paradas'}';
-    if (collapsed && calculated) {
-      final min = (_routeDurMin ?? 0).round();
-      final t = min >= 60 ? '${min ~/ 60} h ${min % 60} min' : '$min min';
-      subtitle = '${_routeDistKm!.toStringAsFixed(1)} km · $t · $n ${n == 1 ? 'parada' : 'paradas'}';
+  // ══════════════════════════════════════════════════════════════════════════
+  //  PLANIFICADOR DE RUTAS
+  //   • Arriba: origen («Tu ubicación» o un punto fijo), paradas y destino,
+  //     botón para invertir el recorrido y «Agregar parada».
+  //   • Abajo: rutas guardadas, resultados y Calcular ruta / Iniciar.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// true = la ruta parte desde tu GPS; false = parte en la primera parada
+  /// (después de invertir el recorrido).
+  bool _rpFromGps = true;
+  static const _rpMeLabel = 'Tu ubicación';
+
+  /// Invierte el orden de las paradas agregadas (tu ubicación sigue siendo
+  /// el punto de partida).
+  void _swapRouteEnds() {
+    if (_routeWps.length < 2) return;
+    HapticFeedback.selectionClick();
+    final hadRoute = _routeDistKm != null;
+    setState(() {
+      final list = _routeWps.reversed.toList();
+      _routeWps
+        ..clear()
+        ..addAll(list);
+      _routeDistKm = null;
+      _routeDurMin = null;
+    });
+    _clearRouteLayers();
+    _redrawRoutePins();
+    if (hadRoute) _calcRoute(countUsage: false);
+  }
+
+  /// Arrastrar una parada a otra posición.
+  void _reorderRouteWp(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (oldIndex == newIndex) return;
+    final hadRoute = _routeDistKm != null;
+    setState(() {
+      final wp = _routeWps.removeAt(oldIndex);
+      _routeWps.insert(newIndex, wp);
+      _routeDistKm = null;
+      _routeDurMin = null;
+    });
+    _clearRouteLayers();
+    _redrawRoutePins();
+    if (hadRoute) _calcRoute(countUsage: false);
+  }
+
+  /// Nombre de la calle y comuna de un punto marcado en el mapa (en vez de
+  /// «Parada 1»).
+  Future<void> _labelFromMap(_RouteWp wp) async {
+    try {
+      final url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+          '${wp.lng},${wp.lat}.json?types=address,poi&language=es&limit=1'
+          '&access_token=$kMapboxToken';
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 6));
+      if (res.statusCode != 200) return;
+      final feats = (jsonDecode(res.body) as Map)['features'] as List?;
+      if (feats == null || feats.isEmpty) return;
+      final f = feats.first as Map;
+      final text = f['text']?.toString() ?? '';
+      final number = f['address']?.toString();
+      String? comuna;
+      for (final c in (f['context'] as List? ?? const [])) {
+        final id = (c as Map)['id']?.toString() ?? '';
+        if (id.startsWith('place.')) comuna = c['text']?.toString();
+      }
+      final street = number != null && number.isNotEmpty ? '$text $number' : text;
+      final label = [street, ?comuna].where((x) => x.isNotEmpty).join(', ');
+      if (label.isEmpty || !mounted) return;
+      final i = _routeWps.indexWhere((w) => w.label == wp.label);
+      if (i < 0) return;
+      setState(() {
+        _routeWps[i] = _RouteWp(lat: _routeWps[i].lat, lng: _routeWps[i].lng, label: label);
+      });
+    } catch (_) {
+      // Sin conexión: se queda «Parada N».
     }
+  }
+
+  Widget _rpField({
+    required Widget dot,
+    required String text,
+    bool highlight = false,
+    bool placeholder = false,
+    VoidCallback? onTap,
+    VoidCallback? onRemove,
+    Widget? dragHandle,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 46,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(left: 12, right: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: highlight ? _rpGreen : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            dot,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: placeholder ? Colors.white.withOpacity(0.5) : Colors.white,
+                  fontSize: 14.5,
+                ),
+              ),
+            ),
+            ?dragHandle,
+            if (onRemove != null)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Quitar',
+                icon: Icon(Icons.close_rounded, color: Colors.white.withOpacity(0.4), size: 18),
+                onPressed: onRemove,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _removeRouteWp(int i) {
+    setState(() {
+      final removed = _routeWps.removeAt(i);
+      if (removed.label == _rpMeLabel) _rpFromGps = true;
+      _routeDistKm = null;
+      _routeDurMin = null;
+    });
+    _clearRouteLayers();
+    if (_routeWps.isNotEmpty) _redrawRoutePins();
+  }
+
+  /// Tarjeta de arriba: origen, paradas, destino e invertir.
+  Widget _buildPlannerTop() {
+    final offset = _rpFromGps ? 0 : 1;
+    final stops = _routeWps.length - offset;
+    final originLabel = _rpFromGps ? _rpMeLabel : _routeWps.first.label;
+    final blueDot = Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _rpBlue,
+        border: Border.all(color: Colors.white.withOpacity(0.8), width: 2),
+      ),
+    );
+    final pinDot = const Icon(Icons.location_on_rounded, color: _rpGreen, size: 20);
+
+    String? destInfo;
+    if (stops > 0) {
+      final dest = _routeWps.last;
+      final pos = _lastPosition;
+      final km = pos == null
+          ? null
+          : geo.Geolocator.distanceBetween(pos.latitude, pos.longitude, dest.lat, dest.lng) / 1000;
+      destInfo = km == null
+          ? dest.label
+          : '${dest.label} · ${km.toStringAsFixed(1).replaceAll('.', ',')} km de ti';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(2, 12, 4, 4),
+          decoration: BoxDecoration(
+            color: _rpBg,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withOpacity(0.07)),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 18, offset: const Offset(0, 6)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+                    onPressed: _closeRoutePlanner,
+                  ),
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 166),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            _rpField(dot: blueDot, text: originLabel),
+                            if (stops > 0)
+                            ReorderableListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: false,
+                              padding: EdgeInsets.zero,
+                              itemCount: _routeWps.length,
+                              onReorder: _reorderRouteWp,
+                              proxyDecorator: (child, _, _) => Material(
+                                color: Colors.transparent,
+                                child: child,
+                              ),
+                              itemBuilder: (_, i) => ReorderableDelayedDragStartListener(
+                                key: ObjectKey(_routeWps[i]),
+                                index: i,
+                                child: _rpField(
+                                dragHandle: stops > 1
+                                    ? ReorderableDragStartListener(
+                                        index: i,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                                          child: Icon(Icons.drag_indicator_rounded,
+                                              color: Colors.white.withOpacity(0.35), size: 20),
+                                        ),
+                                      )
+                                    : null,
+                                dot: i == _routeWps.length - 1
+                                    ? pinDot
+                                    : Container(
+                                        width: 18,
+                                        height: 18,
+                                        alignment: Alignment.center,
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: _rpGreen,
+                                        ),
+                                        child: Text(
+                                          '${i - offset + 1}',
+                                          style: const TextStyle(
+                                            color: Color(0xFF06261A),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                text: _routeWps[i].label,
+                                highlight: i == _routeWps.length - 1,
+                                onRemove: () => _removeRouteWp(i),
+                              ),
+                              ),
+                            ),
+                            if (stops == 0)
+                              _rpField(
+                                dot: pinDot,
+                                text: _routeAddMode ? 'Toca el mapa…' : 'Busca o toca el mapa',
+                                highlight: true,
+                                placeholder: true,
+                                onTap: () => _openPlaceSearch(addStop: true),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Invertir el orden de las paradas',
+                    icon: Icon(
+                      Icons.swap_vert_rounded,
+                      color: stops > 1 ? Colors.white : Colors.white24,
+                      size: 24,
+                    ),
+                    onPressed: stops > 1 ? _swapRouteEnds : null,
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 40),
+                child: Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _openPlaceSearch(addStop: true),
+                      icon: const Icon(Icons.add_rounded, color: _rpGreen, size: 20),
+                      label: const Text(
+                        'Agregar parada',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: _rpGreen,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (_routeAddMode) ...[
+                      const Spacer(),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: Text(
+                          '📍 Toca el mapa',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: _rpGreen,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (destInfo != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: _rpBg.withOpacity(0.95),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'Destino elegido  ',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text: destInfo,
+                    style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Hoja de abajo: rutas guardadas, resultados y acciones.
+  Widget _buildPlannerSheet() {
+    final calculated = _routeDistKm != null;
+    final stops = _routeWps.length - (_rpFromGps ? 0 : 1);
+    final canCalc = stops > 0 && !_routeCalculating;
+    final showStart = calculated && !_routeCalculating;
+    final mainEnabled = showStart || canCalc;
     final bottom = MediaQuery.of(context).padding.bottom;
 
-    // Botón principal: calcula o, si ya hay ruta, inicia la navegación.
-    final bool canCalc = n > 0 && !_routeCalculating;
-    final bool showStart = calculated && !_routeCalculating;
-    final List<Color> mainColors = showStart
-        ? const [_rpBlue, Color(0xFF2F5BFF)]
-        : const [_rpGreen, Color(0xFF34C99A)];
-    final mainEnabled = showStart || canCalc;
-
     return Container(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, bottom + 12),
       decoration: BoxDecoration(
         color: _rpBg,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 24)],
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.07))),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 20)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Encabezado (arrástralo hacia abajo para achicar el panel) ──
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragEnd: (d) {
-              final v = d.primaryVelocity ?? 0;
-              if (v > 150 && !_rpCollapsed) setState(() => _rpCollapsed = true);
-              if (v < -150 && _rpCollapsed) setState(() => _rpCollapsed = false);
-            },
-            onTap: () => setState(() => _rpCollapsed = !_rpCollapsed),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 6, 10, 6),
-              child: Column(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 4,
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(11),
-                          gradient: const LinearGradient(colors: [_rpBlue, _rpGreen]),
-                        ),
-                        child: const Icon(Icons.alt_route_rounded, color: Colors.white, size: 19),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Planificar ruta',
-                                style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w800, height: 1.2)),
-                            Text(subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.55), fontSize: 11.5)),
-                          ],
-                        ),
-                      ),
-                      _rpRoundButton(
-                        icon: Icons.health_and_safety_rounded,
-                        color: const Color(0xFFFFB547),
-                        bg: const Color(0xFFFFB547).withOpacity(0.10),
-                        onTap: _showSafetyReminder,
-                        tooltip: 'Antes de salir',
-                        size: 36,
-                      ),
-                      const SizedBox(width: 6),
-                      _rpRoundButton(
-                        icon: collapsed ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                        onTap: () => setState(() => _rpCollapsed = !_rpCollapsed),
-                        tooltip: collapsed ? 'Mostrar más' : 'Achicar',
-                        size: 36,
-                      ),
-                      const SizedBox(width: 6),
-                      _rpRoundButton(icon: Icons.close_rounded, onTap: _closeRoutePlanner, tooltip: 'Cerrar', size: 36),
-                    ],
-                  ),
-                ],
-              ),
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
             ),
           ),
-
-          if (!collapsed) ...[
-            // ── Rutas guardadas (una sola fila de chips) ──
-            if (_savedRoutes.isNotEmpty && !_loadingFavorites)
-              SizedBox(
-                height: 34,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  itemCount: _savedRoutes.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 6),
-                  itemBuilder: (_, i) {
-                    final fav = _savedRoutes[i];
-                    return Material(
-                      color: Colors.amberAccent.withOpacity(0.08),
-                      shape: StadiumBorder(side: BorderSide(color: Colors.amberAccent.withOpacity(0.25))),
-                      child: InkWell(
-                        customBorder: const StadiumBorder(),
-                        onTap: () => _loadFavoriteRoute(fav),
-                        onLongPress: () => _confirmDeleteFavorite(fav),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(fav.icon, style: const TextStyle(fontSize: 13)),
-                              const SizedBox(width: 5),
-                              Text(fav.name,
-                                  style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
-                              if (fav.distanceKm != null) ...[
-                                const SizedBox(width: 5),
-                                Text('${fav.distanceKm!.toStringAsFixed(1)} km',
-                                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.amberAccent, fontSize: 10.5)),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            if (_savedRoutes.isNotEmpty && !_loadingFavorites) const SizedBox(height: 6),
-
-            // ── Recorrido: tu ubicación y las paradas ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.06)),
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 132),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        _rpTimelineRow(
-                          dot: Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _rpBlue.withOpacity(0.18),
-                              border: Border.all(color: _rpBlue, width: 2),
-                            ),
-                            child: const Icon(Icons.my_location_rounded, color: _rpBlue, size: 11),
-                          ),
-                          title: 'Tu ubicación',
-                          last: n == 0,
-                        ),
-                        for (var i = 0; i < n; i++) _rpWpTile(i),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-
-            // ── Buscar una parada por nombre o dirección (como en Google Maps) ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Material(
-                color: Colors.white.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => _openPlaceSearch(addStop: true),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.search_rounded, color: _rpGreen, size: 19),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(n == 0 ? '¿A dónde vas? Busca un lugar' : 'Agregar otra parada…',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.6), fontSize: 13)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // ── Resultados en una línea ──
-            if (calculated) _rpResults(),
-          ],
-
-          // ── Acciones: marcar en el mapa · principal · guardar · borrar ──
-          Padding(
-            padding: EdgeInsets.fromLTRB(14, 8, 14, bottom + 10),
-            child: Row(
-              children: [
-                if (!collapsed) ...[
-                  _rpRoundButton(
-                    icon: _routeAddMode ? Icons.touch_app_rounded : Icons.add_location_alt_rounded,
-                    color: _routeAddMode ? _rpGreen : Colors.white70,
-                    bg: _routeAddMode ? _rpGreen.withOpacity(0.16) : null,
-                    onTap: () => setState(() => _routeAddMode = !_routeAddMode),
-                    tooltip: _routeAddMode ? 'Toca el mapa para agregar' : 'Marcar en el mapa',
-                    size: 46,
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Opacity(
-                    opacity: mainEnabled ? 1 : 0.4,
-                    child: GestureDetector(
-                      onTap: !mainEnabled
-                          ? null
-                          : (showStart ? _startNavigationMode : () => _calcRoute()),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        height: 46,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(15),
-                          gradient: LinearGradient(colors: mainColors),
-                          boxShadow: [
-                            if (mainEnabled)
-                              BoxShadow(color: mainColors.first.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 4)),
-                          ],
-                        ),
+          // Rutas guardadas (Casa, Trabajo…): mantén presionada para borrar.
+          if (_savedRoutes.isNotEmpty && !_loadingFavorites) ...[
+            SizedBox(
+              height: 42,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _savedRoutes.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final fav = _savedRoutes[i];
+                  return Material(
+                    color: Colors.white.withOpacity(0.05),
+                    shape: StadiumBorder(side: BorderSide(color: Colors.white.withOpacity(0.10))),
+                    child: InkWell(
+                      customBorder: const StadiumBorder(),
+                      onTap: () => _loadFavoriteRoute(fav),
+                      onLongPress: () => _confirmDeleteFavorite(fav),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (_routeCalculating)
-                              const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xFF06261A)))
-                            else
-                              Icon(showStart ? Icons.navigation_rounded : Icons.alt_route_rounded,
-                                  color: showStart ? Colors.white : const Color(0xFF06261A), size: 19),
+                            Text(fav.icon, style: const TextStyle(fontSize: 15)),
                             const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                _routeAddMode && !collapsed
-                                    ? 'Toca el mapa…'
-                                    : (_routeCalculating ? 'Calculando…' : (showStart ? 'Iniciar' : 'Calcular ruta')),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: showStart ? Colors.white : const Color(0xFF06261A),
-                                ),
+                            Text(
+                              fav.name,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                if (!collapsed && n > 0) ...[
-                  const SizedBox(width: 8),
-                  _rpRoundButton(
-                    icon: Icons.star_rounded,
-                    color: Colors.amberAccent,
-                    bg: Colors.amberAccent.withOpacity(0.10),
-                    onTap: () => _showSaveRouteFavorite(),
-                    tooltip: 'Guardar ruta',
-                    size: 46,
-                  ),
-                  const SizedBox(width: 8),
-                  _rpRoundButton(
-                    icon: Icons.delete_outline_rounded,
-                    color: Colors.redAccent,
-                    bg: Colors.redAccent.withOpacity(0.10),
-                    tooltip: 'Borrar paradas',
-                    size: 46,
-                    onTap: () {
-                      setState(() {
-                        _routeWps.clear();
-                        _routeDistKm = null;
-                        _routeDurMin = null;
-                      });
-                      _clearRouteLayers();
-                    },
-                  ),
-                ],
-              ],
+                  );
+                },
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Fila del recorrido con su punto y la línea que lo une con el siguiente.
-  Widget _rpTimelineRow({
-    required Widget dot,
-    required String title,
-    String? subtitle,
-    bool last = false,
-    Widget? trailing,
-  }) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: 22,
-            child: Column(
-              children: [
-                dot,
-                if (!last)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      margin: const EdgeInsets.symmetric(vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(1),
+            const SizedBox(height: 6),
+          ],
+          if (calculated) _rpResults(),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _rpRoundButton(
+                icon: _routeAddMode ? Icons.touch_app_rounded : Icons.add_location_alt_rounded,
+                color: _routeAddMode ? _rpGreen : Colors.white70,
+                bg: _routeAddMode ? _rpGreen.withOpacity(0.16) : null,
+                onTap: () => setState(() => _routeAddMode = !_routeAddMode),
+                tooltip: _routeAddMode ? 'Toca el mapa para elegir' : 'Marcar en el mapa',
+                size: 52,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Opacity(
+                  opacity: mainEnabled ? 1 : 0.4,
+                  child: SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: !mainEnabled
+                          ? null
+                          : (showStart ? _startNavigationMode : () => _calcRoute()),
+                      icon: _routeCalculating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xFF06261A)),
+                            )
+                          : Icon(showStart ? Icons.navigation_rounded : Icons.alt_route_rounded, size: 20),
+                      label: Text(
+                        _routeCalculating
+                            ? 'Calculando…'
+                            : (showStart ? 'Iniciar' : 'Calcular ruta'),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: showStart ? _rpBlue : _rpGreen,
+                        foregroundColor: showStart ? Colors.white : const Color(0xFF06261A),
+                        disabledBackgroundColor: _rpGreen,
+                        disabledForegroundColor: const Color(0xFF06261A),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: last ? 0 : 6, top: 1),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                  if (subtitle != null)
-                    Text(subtitle, style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withOpacity(0.45), fontSize: 11)),
-                ],
+                ),
               ),
-            ),
+              if (calculated) ...[
+                const SizedBox(width: 8),
+                _rpRoundButton(
+                  icon: Icons.star_rounded,
+                  color: Colors.amberAccent,
+                  bg: Colors.amberAccent.withOpacity(0.10),
+                  onTap: () => _showSaveRouteFavorite(),
+                  tooltip: 'Guardar ruta',
+                  size: 52,
+                ),
+              ],
+            ],
           ),
-          ?trailing,
         ],
-      ),
-    );
-  }
-
-  Widget _rpWpTile(int i) {
-    final wp = _routeWps[i];
-    final isLast = i == _routeWps.length - 1;
-    return _rpTimelineRow(
-      dot: Container(
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: isLast ? const Color(0xFFFF5B7A) : _rpGreen,
-        ),
-        child: Center(
-          child: isLast
-              ? const Icon(Icons.flag_rounded, color: Colors.white, size: 12)
-              : Text('${i + 1}',
-                  style: const TextStyle(color: Color(0xFF06261A), fontSize: 10.5, fontWeight: FontWeight.w800)),
-        ),
-      ),
-      title: wp.label,
-      last: isLast,
-      trailing: SizedBox(
-        width: 32,
-        height: 24,
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Quitar parada',
-          icon: Icon(Icons.close_rounded, color: Colors.white.withOpacity(0.35), size: 17),
-          onPressed: () {
-            setState(() {
-              _routeWps.removeAt(i);
-              _routeDistKm = null;
-              _routeDurMin = null;
-            });
-            _clearRouteLayers();
-            if (_routeWps.isNotEmpty) _redrawRoutePins();
-          },
-        ),
       ),
     );
   }
@@ -5515,7 +6449,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ? (_routeElevGain != null ? '${_routeElevGain!.toStringAsFixed(0)} m' : _routeDifficulty!)
               : '—');
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+      padding: const EdgeInsets.only(top: 4),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -5566,136 +6500,302 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   void _showSaveRouteFavorite() async {
     final favSvc = FavoritesService();
-    String selName = 'Mi ruta';
-    String selIcon = '📍';
-    await showModalBottomSheet(
+    // (emoji que se guarda, ícono que se muestra, nombre)
+    const presets = <(String, IconData, String)>[
+      ('🏠', Icons.home_rounded, 'Casa'),
+      ('💼', Icons.work_rounded, 'Trabajo'),
+      ('🎓', Icons.school_rounded, 'Universidad'),
+      ('🏋️', Icons.fitness_center_rounded, 'Gimnasio'),
+      ('🛒', Icons.shopping_cart_rounded, 'Supermercado'),
+      ('📍', Icons.place_rounded, 'Otro'),
+    ];
+    var sel = 0;
+    final nameCtrl = TextEditingController(text: presets[0].$3);
+    var saving = false;
+    final dest = _routeWps.isNotEmpty ? _routeWps.last.label : null;
+    final km = _routeDistKm;
+    const green = Color(0xFF3DDC84);
+
+    final saved = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setModal) {
-          return Container(
-            margin: const EdgeInsets.all(16),
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-              top: 20,
-              left: 16,
-              right: 16,
-            ),
-            decoration: glassDecoration(
-              radius: 24,
-              opacity: 0.18,
-              borderOpacity: 0.25,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Guardar ruta favorita',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: kFavoritePresets.map((p) {
-                    final active = selName == p['name'] && selIcon == p['icon'];
-                    return GestureDetector(
-                      onTap: () => setModal(() {
-                        selName = p['name']!;
-                        selIcon = p['icon']!;
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: glassDecoration(
-                          radius: 20,
-                          tint: active ? Colors.greenAccent : Colors.white,
-                          opacity: active ? 0.15 : 0.05,
-                          borderOpacity: active ? 0.35 : 0.1,
-                        ),
-                        child: Text(
-                          '${p['icon']} ${p['name']}',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: active ? Colors.greenAccent : Colors.white54,
-                            fontSize: 13,
-                            fontWeight: active
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await favSvc.save(
-                        FavoriteRoute(
-                          name: selName,
-                          icon: selIcon,
-                          waypoints: _routeWps
-                              .map(
-                                (w) => {
-                                  'lat': w.lat,
-                                  'lng': w.lng,
-                                  'name': w.label,
-                                },
-                              )
-                              .toList(),
-                          distanceKm: _routeDistKm,
-                        ),
-                      );
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Ruta "$selName" guardada',
-                              style: const TextStyle(fontFamily: 'Poppins'),
-                            ),
-                            backgroundColor: Colors.green,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            margin: const EdgeInsets.all(16),
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.greenAccent,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      textStyle: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
+          Future<void> save() async {
+            final name = nameCtrl.text.trim().isEmpty
+                ? presets[sel].$3
+                : nameCtrl.text.trim();
+            setModal(() => saving = true);
+            final res = await favSvc.save(
+              FavoriteRoute(
+                name: name,
+                icon: presets[sel].$1,
+                waypoints: _routeWps
+                    .map((w) => {'lat': w.lat, 'lng': w.lng, 'name': w.label})
+                    .toList(),
+                distanceKm: _routeDistKm,
+              ),
+            );
+            if (!ctx.mounted || !mounted) return;
+            if (res == null) {
+              setModal(() => saving = false);
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(content: Text('No se pudo guardar la ruta. Revisa tu conexión.')),
+              );
+              return;
+            }
+            Navigator.pop(ctx, name);
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + MediaQuery.of(ctx).padding.bottom),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF15161D),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    child: const Text('Guardar'),
                   ),
-                ),
-              ],
+                  // Encabezado
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.star_rounded, color: Colors.amber, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Guardar ruta',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              [
+                                if (km != null) '${km.toStringAsFixed(1).replaceAll('.', ',')} km',
+                                if (dest != null) 'hasta $dest',
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  // Tipo de lugar
+                  GridView.count(
+                    crossAxisCount: 3,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.25,
+                    children: [
+                      for (var i = 0; i < presets.length; i++)
+                        GestureDetector(
+                          onTap: () => setModal(() {
+                            final old = presets[sel].$3;
+                            sel = i;
+                            // Cambia el nombre si aún era el de un tipo.
+                            final txt = nameCtrl.text.trim();
+                            if (txt.isEmpty || txt == old ||
+                                presets.any((p) => p.$3 == txt)) {
+                              nameCtrl.text = i == presets.length - 1 ? '' : presets[i].$3;
+                            }
+                          }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            decoration: BoxDecoration(
+                              color: sel == i
+                                  ? green.withOpacity(0.12)
+                                  : Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: sel == i ? green : Colors.white.withOpacity(0.08),
+                                width: sel == i ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(presets[i].$2,
+                                    color: sel == i ? green : Colors.white70, size: 24),
+                                const SizedBox(height: 6),
+                                Text(
+                                  presets[i].$3,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: sel == i ? Colors.white : Colors.white70,
+                                    fontSize: 12.5,
+                                    fontWeight: sel == i ? FontWeight.w600 : FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Nombre
+                  TextField(
+                    controller: nameCtrl,
+                    maxLength: 30,
+                    textCapitalization: TextCapitalization.sentences,
+                    cursorColor: green,
+                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'Nombre (ej: Donde la abuela)',
+                      hintStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.35),
+                      ),
+                      counterText: '',
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.05),
+                      prefixIcon: Icon(Icons.edit_outlined, color: Colors.white.withOpacity(0.4), size: 19),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: green),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: saving ? null : save,
+                      icon: saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.black),
+                            )
+                          : const Icon(Icons.bookmark_add_rounded, size: 20),
+                      label: Text(saving ? 'Guardando…' : 'Guardar ruta'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: green,
+                        foregroundColor: Colors.black,
+                        disabledBackgroundColor: green.withOpacity(0.6),
+                        disabledForegroundColor: Colors.black,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
       ),
     );
+    nameCtrl.dispose();
+    if (saved == null || !mounted) return;
+    _loadFavorites(); // aparece al tiro en tus rutas guardadas
+    HapticFeedback.mediumImpact();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF15161D),
+          behavior: SnackBarBehavior.floating,
+          elevation: 8,
+          duration: const Duration(seconds: 3),
+          margin: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).size.height * 0.42),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: green.withOpacity(0.35)),
+          ),
+          content: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: green.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_rounded, color: green, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Ruta guardada',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    Text(
+                      '«$saved» quedó en tus rutas. Úsala desde Guardadas.',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   // Avanza el índice de progreso al coord más cercano adelante del usuario
@@ -5822,6 +6922,13 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   void _startNavigationMode() {
     if (_routeWps.isEmpty) return;
+    // Con el recorrido invertido, el primer punto era el origen: se navega
+    // desde donde estás hacia las paradas que siguen.
+    final fixedOrigin = !_rpFromGps && _routeWps.length >= 2;
+    if (fixedOrigin) {
+      _routeWps.removeAt(0);
+      _rpFromGps = true;
+    }
     setState(() {
       _navigating = true;
       _routeProgressIdx = 0;
@@ -5837,6 +6944,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     });
     _restartGps(); // Cambiar a GPS de máxima precisión
     if (_routeCoords.isNotEmpty) _trimRouteLine();
+    if (fixedOrigin) _calcRoute(countUsage: false);
   }
 
   /// Distancia restante (km) sumando los tramos desde el progreso actual
@@ -6055,198 +7163,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final m = d.inMinutes.remainder(60);
     if (h > 0) return '${h}h ${m}min';
     return '${m}min';
-  }
-
-  Widget _buildNavigationHud() {
-    final total = _routeDistKm ?? 0;
-    final done = _navDoneDistanceKm;
-    final progress = total > 0 ? (done / total).clamp(0.0, 1.0) : 0.0;
-    final avgSpeed = _navAvgSpeedKmh();
-    final nextStopKm = _navDistanceToNextStopKm();
-
-    return Positioned(
-      top: 100,
-      left: 16,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0E0E18).withOpacity(0.94),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_rerouting)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.orangeAccent,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Te saliste de la ruta — recalculando…',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.orangeAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 6,
-                backgroundColor: Colors.white12,
-                color: Colors.greenAccent,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${done.toStringAsFixed(1)} / ${total.toStringAsFixed(1)} km  ·  ${(progress * 100).round()}%',
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white70,
-                fontSize: 11.5,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _hudStat(Icons.access_time, 'ETA', _navEtaLabel()),
-                _hudStat(
-                  Icons.speed,
-                  'Prom.',
-                  avgSpeed != null
-                      ? '${avgSpeed.toStringAsFixed(1)} km/h'
-                      : '—',
-                ),
-                ValueListenableBuilder<double>(
-                  valueListenable: _speedNotifier,
-                  builder: (context, speed, _) => _hudStat(
-                    Icons.pedal_bike,
-                    'Ahora',
-                    '${speed.round()} km/h',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.flag_outlined, size: 14, color: Colors.grey[400]),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    nextStopKm != null
-                        ? '$_navNextStopLabel a ${nextStopKm.toStringAsFixed(1)} km'
-                        : _navNextStopLabel,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey[300],
-                      fontSize: 12,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                if (_routeWps.isNotEmpty)
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _skipCurrentStop,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                        side: const BorderSide(color: Colors.white24),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Saltar parada',
-                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12),
-                      ),
-                    ),
-                  ),
-                if (_routeWps.isNotEmpty) const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _stopNavigation,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Detener',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _hudStat(IconData icon, String label, String value) {
-    return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, size: 15, color: Colors.greenAccent),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.grey[500],
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _confirmDeleteFavorite(FavoriteRoute fav) async {
@@ -6520,38 +7436,215 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }
 
   Widget _drawerFooter() {
+    final muted = Colors.white.withOpacity(0.6);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+      child: Column(
         children: [
-          Text(
-            'Pedalea v1.0',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white.withOpacity(0.28),
-              fontSize: 11,
-            ),
-          ),
+          Divider(color: Colors.white.withOpacity(0.08), height: 1),
+          const SizedBox(height: 6),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(
-                Icons.location_on_rounded,
-                color: Colors.white.withOpacity(0.28),
-                size: 13,
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Mantén presionado el mapa en el lugar del problema para crear una alerta',
+                      ),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.info_outline_rounded, color: muted, size: 18),
+                label: Text(
+                  'Reportar un problema',
+                  style: TextStyle(fontFamily: 'Poppins', color: muted, fontSize: 13),
+                ),
               ),
-              const SizedBox(width: 3),
-              Text(
-                'Región Metropolitana',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.white.withOpacity(0.28),
-                  fontSize: 11,
+              TextButton.icon(
+                onPressed: () => _drawerGo(const SettingsPage()),
+                icon: Icon(Icons.settings_outlined, color: muted, size: 18),
+                label: Text(
+                  'Ajustes',
+                  style: TextStyle(fontFamily: 'Poppins', color: muted, fontSize: 13),
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// Tarjeta «Modo ciclista» del menú: interruptor del conteo de km.
+  Widget _drawerModoCard(String km) {
+    const green = Color(0xFF3DDC84);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: _modoActivo ? green.withOpacity(0.10) : Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: _modoActivo ? green.withOpacity(0.35) : Colors.white.withOpacity(0.08),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.directions_bike_rounded,
+            color: _modoActivo ? green : Colors.white54,
+            size: 26,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Modo ciclista',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  _modoActivo
+                      ? '${km.replaceAll('.', ',')} km en esta salida'
+                      : 'Actívalo para contar tus km',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _modoActivo,
+            onChanged: _setModoActivo,
+            activeThumbColor: Colors.black,
+            activeTrackColor: green,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Cuadro de la cuadrícula del menú (Planificar ruta, Momentos…).
+  Widget _drawerTile({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    bool primary = false,
+    int badge = 0,
+  }) {
+    const green = Color(0xFF3DDC84);
+    return Expanded(
+      child: Material(
+        color: primary ? green : Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Container(
+            height: 92,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: primary
+                  ? null
+                  : Border.all(color: Colors.white.withOpacity(0.07)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, color: color, size: 24),
+                    const Spacer(),
+                    if (badge > 0)
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF3B82F6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          badge > 9 ? '9+' : '$badge',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: primary ? Colors.black : Colors.white,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// «Rankings»: elegir entre ciclistas y comunas.
+  void _showRankingsChooser() {
+    Navigator.pop(context); // cierra el menú
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + MediaQuery.of(ctx).padding.bottom),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF15161D),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (icon, label, page) in <(IconData, String, Widget)>[
+              (Icons.emoji_events_outlined, 'Ranking de ciclistas', const RiderRankingPage()),
+              (Icons.leaderboard_outlined, 'Ranking de comunas', const RankingPage()),
+            ])
+              ListTile(
+                leading: Icon(icon, color: const Color(0xFF3DDC84)),
+                title: Text(
+                  label,
+                  style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                ),
+                trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -6876,73 +7969,63 @@ class _MapPageState extends State<MapPage> with RouteAware {
             ],
           ),
 
-          // Lo más usado: el conteo de km.
-          _drawerToggle(
-            icon: Icons.directions_bike_rounded,
-            label: 'Modo ciclista',
-            hint: _modoActivo
-                ? 'Contando tus km · $km km esta salida'
-                : 'Actívalo para contar tus km',
-            value: _modoActivo,
-            onChanged: _setModoActivo,
+          // Modo ciclista (conteo de km), destacado.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: _drawerModoCard(km),
           ),
-          _drawerDivider(),
 
-          _drawerGroup('EXPLORAR'),
-          _drawerRow(
-            icon: Icons.alt_route_outlined,
-            label: 'Planificar ruta',
-            onTap: () {
-              Navigator.pop(context);
-              setState(() {
-                _routePlannerOpen = true;
-                _rpCollapsed = false;
-              });
-              _loadFavorites();
-              _ensureLocationAccess(
-                force: true,
-                reason: 'Para calcular rutas desde donde estás necesitamos tu ubicación.',
-              ).then((_) => _maybeShowSafetyReminder());
-            },
-          ),
-          _drawerRow(
-            icon: Icons.auto_awesome_outlined,
-            label: 'Momentos',
-            onTap: () => _drawerGo(const MomentsPage()),
-          ),
-          _drawerRow(
-            icon: Icons.chat_bubble_outline_rounded,
-            label: 'Mensajes',
-            badge: _dmUnread,
-            onTap: () => _drawerGo(const MessagesPage(), then: _loadDmUnread),
-          ),
-          _drawerRow(
-            icon: Icons.event_outlined,
-            label: 'Eventos',
-            onTap: () => _drawerGo(const EventsPage(),
-                then: _checkAchievementsAndNotify),
-          ),
-          _drawerRow(
-            icon: Icons.add_location_alt_outlined,
-            label: 'Crear evento',
-            onTap: () => _drawerGo(const CreateEventPage(),
-                then: _checkAchievementsAndNotify),
-          ),
-          _drawerRow(
-            icon: Icons.report_gmailerrorred_outlined,
-            label: 'Reportar un problema',
-            onTap: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Mantén presionado el mapa en el lugar del problema para crear una alerta',
-                  ),
-                  duration: Duration(seconds: 3),
+          // Accesos principales en cuadrícula.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    _drawerTile(
+                      icon: Icons.alt_route_rounded,
+                      label: 'Planificar ruta',
+                      color: Colors.black,
+                      primary: true,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openPlanner();
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                    _drawerTile(
+                      icon: Icons.auto_awesome_outlined,
+                      label: 'Momentos',
+                      color: const Color(0xFFB794F6),
+                      onTap: () => _drawerGo(const MomentsPage()),
+                    ),
+                  ],
                 ),
-              );
-            },
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _drawerTile(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      label: 'Mensajes',
+                      color: const Color(0xFF60A5FA),
+                      badge: _dmUnread,
+                      onTap: () =>
+                          _drawerGo(const MessagesPage(), then: _loadDmUnread),
+                    ),
+                    const SizedBox(width: 10),
+                    _drawerTile(
+                      icon: Icons.calendar_month_outlined,
+                      label: 'Eventos',
+                      color: const Color(0xFFFFA726),
+                      onTap: () => _drawerGo(const EventsPage(),
+                          then: _checkAchievementsAndNotify),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 8),
 
           _drawerGroup('TU ACTIVIDAD'),
           _drawerRow(
@@ -6956,23 +8039,25 @@ class _MapPageState extends State<MapPage> with RouteAware {
             onTap: () => _drawerGo(const StatsPage()),
           ),
           _drawerRow(
-            icon: Icons.leaderboard_outlined,
-            label: 'Ranking de comunas',
-            onTap: () => _drawerGo(const RankingPage()),
-          ),
-          _drawerRow(
             icon: Icons.emoji_events_outlined,
-            label: 'Ranking de ciclistas',
-            onTap: () => _drawerGo(const RiderRankingPage()),
+            label: 'Rankings',
+            trailing: Text(
+              'Ciclistas · Comunas',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withOpacity(0.4),
+                fontSize: 11.5,
+              ),
+            ),
+            onTap: _showRankingsChooser,
           ),
           _drawerRow(
             icon: Icons.military_tech_outlined,
             label: 'Logros',
             onTap: () => _drawerGo(const AchievementsPage()),
           ),
-          _drawerDivider(),
+          const SizedBox(height: 6),
 
-          _drawerGroup('MAPA'),
           _mapStylePicker(),
           _drawerToggle(
             icon: Icons.dark_mode_outlined,
@@ -6987,34 +8072,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
               _styleIsLoaded = false;
               mapboxMap?.loadStyleURI(_currentStyle);
             },
-          ),
-          _drawerToggle(
-            icon: Icons.local_parking_outlined,
-            label: 'Estacionamientos',
-            value: _showBikeParkings,
-            loading: _bikeParkingsLoading,
-            onChanged: (_) => _toggleBikeParkings(),
-          ),
-          _drawerToggle(
-            icon: Icons.subway_outlined,
-            label: 'BiciMetro',
-            hint: 'Estaciones que permiten subir la bici',
-            value: _showBicimetro,
-            onChanged: (_) => _toggleBicimetro(),
-          ),
-          _drawerToggle(
-            icon: Icons.build_outlined,
-            label: 'Talleres, aire y agua',
-            value: _showBikeServices,
-            loading: _bikeServicesLoading,
-            onChanged: (_) => _toggleBikeServices(),
-          ),
-          _drawerToggle(
-            icon: Icons.wb_sunny_outlined,
-            label: 'CicloRecreoVía',
-            hint: 'Calles cerradas los domingos',
-            value: _showCicloRecreo,
-            onChanged: (_) => _toggleCicloRecreo(),
           ),
           _drawerToggle(
             icon: Icons.local_fire_department_outlined,
@@ -7083,11 +8140,6 @@ class _MapPageState extends State<MapPage> with RouteAware {
                       reason: 'Desbloquea funciones exclusivas con Pedalea Plus.',
                     ),
             ),
-          ),
-          _drawerRow(
-            icon: Icons.settings_outlined,
-            label: 'Configuración',
-            onTap: () => _drawerGo(const SettingsPage()),
           ),
           _drawerRow(
             icon: Icons.logout_rounded,
@@ -7186,7 +8238,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
           if (_showLayersTip)
             Positioned(
-              top: topInset + 118,
+              top: topInset + 168,
               left: 20,
               right: 20,
               child: AnimatedOpacity(
@@ -7270,31 +8322,27 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             ),
 
+          // ── Explorar: búsqueda, capas y clima / En ruta: próximo giro ────
           Positioned(
-            top: topInset + 68,
+            top: topInset + 10,
             left: 16,
             right: 16,
-            child: _buildTopBar(),
+            child: _navigating
+                ? _buildNavBanner()
+                : (_routePlannerOpen ? _buildPlannerTop() : _buildExploreTop()),
           ),
-          if (!_isPassenger)
-            Positioned(
-              top: topInset + 68,
-              right: 16,
-              child: _buildSideColumn(),
-            ),
           if (_stillThereAlert != null)
             Positioned(
-              top: topInset + 68,
+              top: topInset + 168,
               left: 16,
-              right: 76,
+              right: 16,
               child: _buildStillThereCard(_stillThereAlert!),
             ),
-          Positioned(left: 20, bottom: 64, child: _buildSpeedometer()),
 
           if (_isSelectingLocation && _selectedLocation != null)
             Positioned(
               bottom: 250,
-              right: 20,
+              right: 80,
               child: FloatingActionButton(
                 backgroundColor: Colors.greenAccent,
                 onPressed: _confirmLocationAndCreateAlert,
@@ -7302,150 +8350,60 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             ),
 
-          // ── Barra superior: menú · búsqueda · mensajes · perfil ──────────
-          Positioned(
-            top: topInset + 10,
-            left: 16,
-            right: 16,
-            child: Row(
-              children: [
-                _MenuToggleButton(
-                  open: _drawerOpen,
-                  onPressed: () {
-                    if (_drawerOpen) {
-                      _scaffoldKey.currentState?.closeDrawer();
-                    } else {
-                      _scaffoldKey.currentState?.openDrawer();
-                    }
-                  },
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: _buildSearchPill()),
-                const SizedBox(width: 10),
-                _buildMessagesButton(),
-                const SizedBox(width: 8),
-                _ProfileButton(
-                  isDayMode: _isDayMode,
-                  // Sello: verde = contando tus km, gris = en pausa,
-                  // celeste = vas de pasajero.
-                  statusColor: _isPassenger
-                      ? Colors.lightBlueAccent
-                      : _modoActivo
-                      ? Colors.greenAccent
-                      : Colors.grey,
-                  statusIcon: _isPassenger
-                      ? Icons.directions_bus_rounded
-                      : Icons.directions_bike_rounded,
-                ),
-              ],
-            ),
-          ),
-          // ── Controles del mapa (norte / seguir) ─────────────────
-          Positioned(right: 25, bottom: 138, child: _buildMapControls()),
-
-          // ── Botón de pánico ─────────────────────────────────────
-          Positioned(bottom: 64, right: 20, child: _PanicButton()),
-
-          // ── HUD de navegación (ETA, velocidad, progreso, parada) ─────────
-          if (_navigating) _buildNavigationHud(),
-
-          // ── Hint "toca el mapa" cuando _routeAddMode ─────────────────────
-          if (_routePlannerOpen && _routeAddMode)
-            Positioned(
-              top: topInset + 118,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.greenAccent.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.greenAccent.withOpacity(0.5),
-                    ),
-                  ),
-                  child: const Text(
-                    '📍 Toca el mapa para añadir una parada',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.greenAccent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // ── Botón cancelar ruta (visible cuando hay una ruta activa) ─────
-          if (_routePlannerOpen && _routeDistKm != null)
-            Positioned(
-              bottom: 220,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: _closeRoutePlanner,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade700.withOpacity(0.92),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Cancelar ruta',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // ── Panel planificador de ruta ────────────────────────────────────
-          if (_routePlannerOpen)
+          // ── Tarjeta inferior (explorar / en ruta) ────────────────────────
+          // Los controles del mapa van pegados encima de la tarjeta: suben y
+          // bajan con ella al plegarla o desplegarla.
+          if (!_routePlannerOpen)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              // Alto máximo: en pantallas chicas el panel se desplaza en vez
-              // de salirse por arriba.
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.6,
-                ),
-                child: SingleChildScrollView(
-                  child: _buildRoutePlannerPanel(),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16, bottom: 14),
+                    child: _navigating
+                        ? _buildNavControls()
+                        : _buildMapControls(),
+                  ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _navigating ? _buildNavCard() : _buildExploreCard(),
+                  ),
+                ],
+              ),
+            ),
+
+
+          // ── Planificador: SOS y controles sobre la hoja de abajo ─────────
+          if (_routePlannerOpen && !_navigating)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _PanicButton(compact: true),
+                        const Spacer(),
+                        _buildMapControls(),
+                      ],
+                    ),
+                  ),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.5,
+                    ),
+                    child: SingleChildScrollView(child: _buildPlannerSheet()),
+                  ),
+                ],
               ),
             ),
 
@@ -7630,6 +8588,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
   ///  • Logo y atribución: se mantienen visibles (requisito de Mapbox) pero se
   ///    suben para no chocar con la barra de navegación de Android.
   Future<void> _configureMapOrnaments(MapboxMap map) async {
+    // Logo e ⓘ justo encima de la tarjeta inferior.
+    final dockTop = _cardH + 6;
     try {
       await map.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
       await map.compass.updateSettings(CompassSettings(enabled: false));
@@ -7638,15 +8598,15 @@ class _MapPageState extends State<MapPage> with RouteAware {
       await map.logo.updateSettings(
         LogoSettings(
           position: OrnamentPosition.BOTTOM_LEFT,
-          marginLeft: 10,
-          marginBottom: 26,
+          marginLeft: 14,
+          marginBottom: dockTop,
         ),
       );
       await map.attribution.updateSettings(
         AttributionSettings(
           position: OrnamentPosition.BOTTOM_RIGHT,
-          marginRight: 10,
-          marginBottom: 26,
+          marginRight: 14,
+          marginBottom: dockTop,
         ),
       );
     } catch (e) {
@@ -11558,6 +12518,10 @@ class _LongPressRippleState extends State<_LongPressRipple>
 // ─── Botón de pánico ──────────────────────────────────────────────────────────
 
 class _PanicButton extends StatefulWidget {
+  /// Dentro de la tarjeta inferior: rectángulo rojo «SOS», sin la onda.
+  final bool compact;
+  const _PanicButton({this.compact = false});
+
   @override
   State<_PanicButton> createState() => _PanicButtonState();
 }
@@ -11685,6 +12649,38 @@ class _PanicButtonState extends State<_PanicButton>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.compact) {
+      return Tooltip(
+        message: 'Emergencia',
+        child: Material(
+          color: const Color(0xFFE53935),
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              _showEmergencyMenu(context);
+            },
+            child: const SizedBox(
+              width: 68,
+              height: 52,
+              child: Center(
+                child: Text(
+                  'SOS',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return SizedBox(
       width: 58,
       height: 58,
@@ -13151,4 +14147,18 @@ class _LogoutInlineButtonState extends State<_LogoutInlineButton> {
       ),
     );
   }
+}
+
+/// Un giro de la ruta (de las instrucciones de Mapbox).
+class _NavStep {
+  final int idx; // posición en _routeCoords
+  final String type; // turn, arrive, roundabout…
+  final String modifier; // left, right, slight left…
+  final String instruction; // «Gira a la derecha en Av. 4 Poniente»
+  const _NavStep({
+    required this.idx,
+    required this.type,
+    required this.modifier,
+    required this.instruction,
+  });
 }

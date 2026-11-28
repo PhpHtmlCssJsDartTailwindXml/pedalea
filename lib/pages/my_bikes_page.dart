@@ -53,6 +53,10 @@ class MyBikesPage extends StatefulWidget {
 class _MyBikesPageState extends State<MyBikesPage> {
   final _svc = BikeService.instance;
   bool _loading = true;
+  String? _uploadingFor; // bici a la que se le está cambiando la foto
+
+  static const _green = Color(0xFF3DDC84);
+  static const _card = Color(0xFF15171C);
 
   @override
   void initState() {
@@ -62,72 +66,124 @@ class _MyBikesPageState extends State<MyBikesPage> {
     });
   }
 
+  void _snack(String msg) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(msg, style: _t(13))));
+
   Future<void> _add() async {
     final saved = await showBikeEditor(context);
     if (saved == true && mounted) setState(() {});
+  }
+
+  Future<void> _changePhoto(Bike b) async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 82,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _uploadingFor = b.id);
+    try {
+      final url = await _svc.uploadPhoto(File(picked.path));
+      await _svc.update(b.id, name: b.name, type: b.type, baseKm: b.baseKm, photoUrl: url);
+    } catch (e) {
+      _snack('No se pudo cambiar la foto: $e');
+    } finally {
+      if (mounted) setState(() => _uploadingFor = null);
+    }
+  }
+
+  Future<void> _delete(Bike b) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _sheetBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text('Borrar "${b.name}"', style: _t(17, w: FontWeight.w700)),
+        content: Text(
+          'Se borran la bici y su historial de mantenciones. Tus km totales del perfil no cambian.',
+          style: _t(13.5, c: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar', style: _t(14, c: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Borrar', style: _t(14, w: FontWeight.w700, c: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _svc.delete(b.id);
+    } catch (e) {
+      _snack('No se pudo borrar: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBgDark,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text('Mis bicis', style: _t(19, w: FontWeight.w700)),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: _accent,
-        foregroundColor: Colors.black,
-        icon: const Icon(Icons.add_rounded),
-        label: Text('Agregar bici', style: _t(14, w: FontWeight.w700, c: Colors.black)),
-        onPressed: _add,
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _accent))
-          : ValueListenableBuilder<List<Bike>>(
-              valueListenable: _svc.bikes,
-              builder: (context, bikes, _) {
-                if (bikes.isEmpty) return _empty();
-                return RefreshIndicator(
-                  color: _accent,
-                  onRefresh: _svc.load,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
-                    children: [
-                      if (bikes.length > 1)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4, bottom: 10),
-                          child: Text(
-                            'Los km se suman a la bici activa. Cámbiala desde aquí o desde el mapa.',
-                            style: _t(12, c: Colors.white54),
-                          ),
-                        ),
-                      for (final b in bikes) _tile(b),
-                    ],
-                  ),
-                );
-              },
-            ),
-    );
-  }
-
-  Widget _empty() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+      body: SafeArea(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('🚲', style: TextStyle(fontSize: 56)),
-            const SizedBox(height: 14),
-            Text('Registra tu bici', style: _t(19, w: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text(
-              'Ponle nombre y foto. La app suma sus km mientras pedaleas y te avisa cuando toca lubricar la cadena, revisar frenos o neumáticos.',
-              textAlign: TextAlign.center,
-              style: _t(13, c: Colors.white60).copyWith(height: 1.45),
+            // Encabezado: volver · Mis bicis · agregar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Volver',
+                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text('Mis bicis', style: _t(24, w: FontWeight.w700))),
+                  Material(
+                    color: _green,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _add,
+                      child: const SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Icon(Icons.add_rounded, color: Colors.black, size: 26),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: _green))
+                  : ValueListenableBuilder<List<Bike>>(
+                      valueListenable: _svc.bikes,
+                      builder: (context, bikes, _) => RefreshIndicator(
+                        color: _green,
+                        onRefresh: _svc.load,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                          children: [
+                            if (bikes.isEmpty) _emptyIntro(),
+                            if (bikes.length > 1)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4, bottom: 12),
+                                child: Text(
+                                  'Los km se suman a la bici en uso.',
+                                  style: _t(12.5, c: Colors.white54),
+                                ),
+                              ),
+                            for (final b in bikes) _bikeCard(b, bikes.length),
+                            _addCard(bikes.isEmpty),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -135,72 +191,372 @@ class _MyBikesPageState extends State<MyBikesPage> {
     );
   }
 
-  Widget _tile(Bike b) {
+  Widget _emptyIntro() => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 24, 8, 20),
+    child: Column(
+      children: [
+        const Text('🚲', style: TextStyle(fontSize: 52)),
+        const SizedBox(height: 12),
+        Text('Registra tu bici', style: _t(19, w: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Text(
+          'La app suma sus km mientras pedaleas y te avisa cuando toca lubricar la cadena, revisar frenos o neumáticos.',
+          textAlign: TextAlign.center,
+          style: _t(13, c: Colors.white60).copyWith(height: 1.45),
+        ),
+      ],
+    ),
+  );
+
+  /// Estado de una parte de la bici según sus mantenciones (la peor manda).
+  (String, Color) _partStatus(Bike b, List<MaintenanceKind> kinds) {
+    final odo = b.odometerKm;
+    var worst = 0; // 0 ok · 1 pronto · 2 toca
+    for (final m in b.maintenance.where((m) => kinds.contains(m.kind))) {
+      final lvl = m.isDue(odo) ? 2 : (m.progress(odo) > 0.8 ? 1 : 0);
+      if (lvl > worst) worst = lvl;
+    }
+    return switch (worst) {
+      2 => ('Toca revisar', _warn),
+      1 => ('Pronto', const Color(0xFFFFD54F)),
+      _ => ('OK', _green),
+    };
+  }
+
+  Widget _bikeCard(Bike b, int count) {
     final due = b.dueMaintenance;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => BikeDetailPage(bikeId: b.id)),
-          ),
-          child: Ink(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: b.isActive ? _accent.withOpacity(0.45) : Colors.white.withOpacity(0.08),
-              ),
-            ),
-            child: Row(
+    final url = b.photoUrl;
+    final uploading = _uploadingFor == b.id;
+    final parts = <(String, List<MaintenanceKind>)>[
+      ('Cadena', [MaintenanceKind.lube, MaintenanceKind.chain]),
+      ('Frenos', [MaintenanceKind.brakes]),
+      ('Neumáticos', [MaintenanceKind.tires]),
+    ];
+
+    Widget stat(Widget value, String label) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            value,
+            const SizedBox(height: 2),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: _t(12.5, c: Colors.white54)),
+          ],
+        ),
+      ),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: b.isActive ? _green.withOpacity(0.35) : Colors.white.withOpacity(0.07),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Foto ──
+          SizedBox(
+            height: 150,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                _BikePhoto(bike: b, size: 72),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(b.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _t(16, w: FontWeight.w700)),
+                if (url != null && url.isNotEmpty)
+                  CachedNetworkImage(imageUrl: url, fit: BoxFit.cover)
+                else
+                  Container(
+                    color: const Color(0xFF173222),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.pedal_bike_rounded,
+                        size: 92, color: _green.withOpacity(0.55)),
+                  ),
+                // En uso / Usar esta bici
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: b.isActive
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _green,
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          if (b.isActive) ...[
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: Colors.black,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text('En uso', style: _t(13, w: FontWeight.w700, c: Colors.black)),
+                            ],
+                          ),
+                        )
+                      : (count > 1
+                          ? Material(
+                              color: Colors.black.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(20),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () => _svc.setActive(b.id),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  child: Text('Usar esta bici',
+                                      style: _t(13, w: FontWeight.w600, c: _green)),
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink()),
+                ),
+                // Cambiar foto
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: Material(
+                    color: Colors.black.withOpacity(0.65),
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: uploading ? null : () => _changePhoto(b),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            uploading
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.photo_camera_outlined, color: Colors.white, size: 16),
                             const SizedBox(width: 8),
-                            _pill('Activa', _accent),
+                            Text(uploading ? 'Subiendo…' : 'Cambiar foto',
+                                style: _t(13, w: FontWeight.w600)),
                           ],
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text('${b.type.emoji} ${b.type.label} · ${_km(b.odometerKm)} km',
-                          style: _t(12.5, c: Colors.white60)),
-                      const SizedBox(height: 6),
-                      due.isEmpty
-                          ? Text('Mantención al día', style: _t(12, c: _accent))
-                          : Text(
-                              due.length == 1
-                                  ? '🔧 Toca: ${due.first.kind.label.toLowerCase()}'
-                                  : '🔧 ${due.length} mantenciones pendientes',
-                              style: _t(12, w: FontWeight.w600, c: _warn),
-                            ),
-                    ],
+                    ),
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: Colors.white38),
               ],
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Nombre · tipo · editar ──
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(b.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: _t(22, w: FontWeight.w700)),
+                          Text('Bici ${b.type.label.toLowerCase()}',
+                              style: _t(13.5, c: Colors.white54)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Editar',
+                      color: _sheetBg,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      onSelected: (v) {
+                        if (v == 'edit') showBikeEditor(context, bike: b);
+                        if (v == 'delete') _delete(b);
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Text('Editar nombre y tipo', style: _t(14)),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Borrar bici', style: _t(14, c: Colors.redAccent)),
+                        ),
+                      ],
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                        ),
+                        child: const Icon(Icons.edit_outlined, color: Colors.white, size: 19),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // ── Km · mantención ──
+                Row(
+                  children: [
+                    stat(
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(_km(b.odometerKm).replaceAll('.', ','),
+                              style: _t(26, w: FontWeight.w800)),
+                          const SizedBox(width: 4),
+                          Text('km', style: _t(14, w: FontWeight.w700, c: _green)),
+                        ],
+                      ),
+                      b.baseKm > 0 ? 'Con Pedalea y de antes' : 'Recorridos con ella',
+                    ),
+                    const SizedBox(width: 10),
+                    stat(
+                      Text(
+                        due.isEmpty ? 'Al día' : '${due.length} pendiente${due.length == 1 ? '' : 's'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _t(due.isEmpty ? 26 : 20, w: FontWeight.w800,
+                            c: due.isEmpty ? _green : _warn),
+                      ),
+                      'Mantención',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                // ── Estado ──
+                Text('ESTADO',
+                    style: _t(11.5, w: FontWeight.w700, c: Colors.white54)
+                        .copyWith(letterSpacing: 1.4)),
+                const SizedBox(height: 4),
+                for (var i = 0; i < parts.length; i++) ...[
+                  if (i > 0) Divider(height: 1, color: Colors.white.withOpacity(0.06)),
+                  Builder(builder: (_) {
+                    final (label, color) = _partStatus(b, parts[i].$2);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(child: Text(parts[i].$1, style: _t(15))),
+                          Text(label, style: _t(13.5, w: FontWeight.w600, c: color)),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+                const SizedBox(height: 10),
+                // ── Registrar mantención ──
+                SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => BikeDetailPage(bikeId: b.id)),
+                    ),
+                    icon: const Icon(Icons.build_outlined, color: _green, size: 19),
+                    label: Text('Registrar mantención', style: _t(15, w: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.04),
+                      side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Tarjeta punteada para agregar otra bici.
+  Widget _addCard(bool first) {
+    return GestureDetector(
+      onTap: _add,
+      child: CustomPaint(
+        painter: _DashedBorderPainter(color: Colors.white.withOpacity(0.22), radius: 22),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.add_rounded, color: _green, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(first ? 'Agregar mi bici' : 'Agregar otra bici',
+                        style: _t(16, w: FontWeight.w600)),
+                    Text('Ruta, MTB, plegable o eléctrica',
+                        style: _t(13, c: Colors.white54)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Borde punteado con esquinas redondeadas.
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+  const _DashedBorderPainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+        Offset.zero & size,
+        Radius.circular(radius),
+      ));
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        canvas.drawPath(metric.extractPath(d, d + 6), paint);
+        d += 11;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter old) =>
+      old.color != color || old.radius != radius;
 }
 
 Widget _pill(String text, Color color) => Container(
@@ -328,6 +684,77 @@ class _BikeDetailPageState extends State<BikeDetailPage> {
     }
   }
 
+  static const _green = Color(0xFF3DDC84);
+
+  String _num(double v) {
+    // 1493 → «1.493», 6.8 → «6,8»
+    if (v >= 100) {
+      final s = v.round().toString();
+      final buf = StringBuffer();
+      for (var i = 0; i < s.length; i++) {
+        if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+        buf.write(s[i]);
+      }
+      return buf.toString();
+    }
+    return v.toStringAsFixed(1).replaceAll('.', ',');
+  }
+
+  Widget _roundBtn(IconData icon, String tip, VoidCallback onTap) => Tooltip(
+    message: tip,
+    child: Material(
+      color: Colors.white.withOpacity(0.05),
+      shape: CircleBorder(side: BorderSide(color: Colors.white.withOpacity(0.12))),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(width: 46, height: 46, child: Icon(icon, color: Colors.white, size: 20)),
+      ),
+    ),
+  );
+
+  /// Ajustar cada cuántos km se hace cada mantención.
+  void _showIntervals(Bike b) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + MediaQuery.of(ctx).padding.bottom),
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+        decoration: BoxDecoration(
+          color: _sheetBg,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Text('Ajustar intervalos', style: _t(17, w: FontWeight.w700)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text('Cada cuántos km se hace cada mantención en tu bici.',
+                  style: _t(12.5, c: Colors.white54)),
+            ),
+            for (final m in b.maintenance)
+              ListTile(
+                title: Text(m.kind.label, style: _t(14.5)),
+                trailing: Text('cada ${_num(m.intervalKm)} km',
+                    style: _t(13.5, w: FontWeight.w600, c: _green)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editInterval(m);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<List<Bike>>(
@@ -336,87 +763,215 @@ class _BikeDetailPageState extends State<BikeDetailPage> {
         final b = _find(bikes);
         return Scaffold(
           backgroundColor: kBgDark,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            iconTheme: const IconThemeData(color: Colors.white),
-            title: Text(b?.name ?? 'Bici', style: _t(19, w: FontWeight.w700)),
-            actions: [
-              if (b != null) ...[
-                IconButton(
-                  tooltip: 'Editar',
-                  icon: const Icon(Icons.edit_rounded),
-                  onPressed: () => showBikeEditor(context, bike: b),
-                ),
-                IconButton(
-                  tooltip: 'Borrar',
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  onPressed: () => _delete(b),
-                ),
-              ],
-            ],
+          body: SafeArea(
+            child: b == null
+                ? const Center(child: CircularProgressIndicator(color: _green))
+                : _body(b, bikes.length),
           ),
-          body: b == null
-              ? const Center(child: CircularProgressIndicator(color: _accent))
-              : _body(b, bikes.length),
         );
       },
     );
   }
 
   Widget _body(Bike b, int bikeCount) {
+    final odo = b.odometerKm;
+    final due = b.dueMaintenance;
+    // Próxima mantención (la que queda más cerca).
+    Maintenance? next;
+    for (final m in b.maintenance) {
+      if (m.isDue(odo)) continue;
+      if (next == null || m.remainingKm(odo) < next.remainingKm(odo)) next = m;
+    }
+    final url = b.photoUrl;
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        Center(child: _BikePhoto(bike: b, size: 150, radius: 32)),
-        const SizedBox(height: 16),
-        Center(
-          child: Text('${b.type.emoji} ${b.type.label}', style: _t(13.5, c: Colors.white60)),
-        ),
-        const SizedBox(height: 4),
-        Center(
-          child: Text('${_km(b.odometerKm)} km',
-              style: _t(36, w: FontWeight.w800, c: _accent)),
-        ),
-        Center(
-          child: Text(
-            b.baseKm > 0
-                ? '${_km(b.appKm)} km con Pedalea · ${_km(b.baseKm)} km de antes'
-                : 'pedaleados con Pedalea',
-            style: _t(12, c: Colors.white54),
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (!b.isActive && bikeCount > 1)
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => _svc.setActive(b.id),
-              icon: const Icon(Icons.check_circle_outline_rounded, size: 19),
-              label: Text('Usar esta bici', style: _t(14, w: FontWeight.w600, c: _accent)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _accent,
-                side: BorderSide(color: _accent.withOpacity(0.5)),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        // ── Barra: volver · editar · más ──
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Volver',
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            const Spacer(),
+            _roundBtn(Icons.edit_outlined, 'Editar', () => showBikeEditor(context, bike: b)),
+            const SizedBox(width: 10),
+            PopupMenuButton<String>(
+              tooltip: 'Más',
+              color: _sheetBg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              onSelected: (v) {
+                if (v == 'use') _svc.setActive(b.id);
+                if (v == 'delete') _delete(b);
+              },
+              itemBuilder: (_) => [
+                if (!b.isActive && bikeCount > 1)
+                  PopupMenuItem(value: 'use', child: Text('Usar esta bici', style: _t(14))),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Borrar bici', style: _t(14, c: Colors.redAccent)),
+                ),
+              ],
+              child: IgnorePointer(
+                child: _roundBtn(Icons.more_vert_rounded, 'Más', () {}),
               ),
             ),
-          )
-        else if (b.isActive)
-          Center(child: _pill('Bici activa: aquí se suman tus km', _accent)),
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 10),
-          child: Text('MANTENCIÓN',
-              style: _t(11, w: FontWeight.w700, c: Colors.white54).copyWith(letterSpacing: 1.2)),
+          ],
         ),
+        const SizedBox(height: 20),
+
+        // ── Foto · nombre · estado ──
+        Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: SizedBox(
+                width: 92,
+                height: 92,
+                child: url != null && url.isNotEmpty
+                    ? CachedNetworkImage(imageUrl: url, fit: BoxFit.cover)
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF173222),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: _green.withOpacity(0.2)),
+                        ),
+                        child: Icon(Icons.pedal_bike_rounded, size: 52, color: _green.withOpacity(0.7)),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(b.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: _t(28, w: FontWeight.w700)),
+                  Text('Bici ${b.type.label.toLowerCase()}', style: _t(14, c: Colors.white54)),
+                  const SizedBox(height: 8),
+                  if (b.isActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _green.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _green.withOpacity(0.35)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 7),
+                          Text('Activa · suma tus km', style: _t(12.5, w: FontWeight.w600, c: _green)),
+                        ],
+                      ),
+                    )
+                  else if (bikeCount > 1)
+                    GestureDetector(
+                      onTap: () => _svc.setActive(b.id),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: Text('Usar esta bici', style: _t(12.5, w: FontWeight.w600, c: _green)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // ── Km · resumen de mantención ──
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withOpacity(0.07)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(_num(odo), style: _t(32, w: FontWeight.w800)),
+                        const SizedBox(width: 6),
+                        Text('km', style: _t(15, w: FontWeight.w700, c: _green)),
+                      ],
+                    ),
+                    Text(
+                      b.baseKm > 0
+                          ? '${_num(b.appKm)} con Pedalea · ${_num(b.baseKm)} de antes'
+                          : 'pedaleados con Pedalea',
+                      style: _t(12.5, c: Colors.white54),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      due.isEmpty
+                          ? 'Todo al día'
+                          : '${due.length} pendiente${due.length == 1 ? '' : 's'}',
+                      style: _t(16, w: FontWeight.w700, c: due.isEmpty ? _green : _warn),
+                    ),
+                    Text(
+                      due.isNotEmpty
+                          ? 'Toca: ${due.first.kind.action}'
+                          : (next != null
+                              ? 'Próxima: ${next.kind.action.split(' ').first} en ${_num(next.remainingKm(odo))} km'
+                              : 'Sin mantenciones'),
+                      textAlign: TextAlign.right,
+                      style: _t(12.5, c: Colors.white54),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // ── Mantención ──
+        Row(
+          children: [
+            Expanded(
+              child: Text('MANTENCIÓN',
+                  style: _t(12, w: FontWeight.w700, c: Colors.white54).copyWith(letterSpacing: 1.4)),
+            ),
+            GestureDetector(
+              onTap: () => _showIntervals(b),
+              child: Text('Ajustar intervalos', style: _t(13.5, w: FontWeight.w600, c: _green)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         for (final m in b.maintenance) _maintenanceCard(b, m),
         if (b.maintenance.isEmpty)
           Text('Sin mantenciones registradas.', style: _t(13, c: Colors.white54)),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Text(
-          'Los intervalos son referencias generales; tócalos para ajustarlos a tu bici.',
-          style: _t(11.5, c: Colors.white38),
+          'La barra muestra cuánto queda antes de la próxima mantención. Los intervalos son referencias generales.',
+          style: _t(12, c: Colors.white38).copyWith(height: 1.5),
         ),
       ],
     );
@@ -425,59 +980,73 @@ class _BikeDetailPageState extends State<BikeDetailPage> {
   Widget _maintenanceCard(Bike b, Maintenance m) {
     final odo = b.odometerKm;
     final due = m.isDue(odo);
-    final p = m.progress(odo);
-    final color = due ? _warn : (p > 0.8 ? _warn.withOpacity(0.8) : _accent);
+    final left = (1 - m.progress(odo)).clamp(0.0, 1.0);
+    final color = due ? _warn : (left < 0.2 ? const Color(0xFFFFD54F) : _green);
     final remaining = m.remainingKm(odo);
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: due ? _warn.withOpacity(0.5) : Colors.white.withOpacity(0.07)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Expanded(
-                child: InkWell(
-                  onTap: () => _editInterval(m),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(m.kind.label, style: _t(14.5, w: FontWeight.w600)),
-                      Text(
-                        due
-                            ? '¡Toca hacerla! (cada ${m.intervalKm.toStringAsFixed(0)} km)'
-                            : 'Faltan ${_km(remaining)} km · cada ${m.intervalKm.toStringAsFixed(0)} km',
-                        style: _t(12, c: due ? _warn : Colors.white54),
-                      ),
-                    ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      m.kind == MaintenanceKind.chain ? 'Desgaste de cadena' : m.kind.label,
+                      style: _t(16, w: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    due
+                        ? Text('¡Toca hacerla! · cada ${_num(m.intervalKm)} km',
+                            style: _t(12.5, w: FontWeight.w600, c: _warn))
+                        : Text.rich(
+                            TextSpan(children: [
+                              const TextSpan(text: 'Faltan '),
+                              TextSpan(
+                                text: '${_num(remaining)} km',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                              ),
+                              TextSpan(text: ' · cada ${_num(m.intervalKm)} km'),
+                            ]),
+                            style: _t(12.5, c: Colors.white54),
+                          ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 40,
+                child: OutlinedButton.icon(
+                  onPressed: () => _done(b, m),
+                  icon: Icon(Icons.check_rounded, size: 17, color: due ? Colors.black : _green),
+                  label: Text('Hecho',
+                      style: _t(13.5, w: FontWeight.w600, c: due ? Colors.black : Colors.white)),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: due ? _warn : Colors.white.withOpacity(0.04),
+                    side: BorderSide(color: due ? _warn : Colors.white.withOpacity(0.14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: () => _done(b, m),
-                style: TextButton.styleFrom(
-                  foregroundColor: due ? Colors.black : _accent,
-                  backgroundColor: due ? _warn : Colors.transparent,
-                  minimumSize: const Size(48, 40),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text('Listo',
-                    style: _t(13, w: FontWeight.w700, c: due ? Colors.black : _accent)),
-              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: p,
+              value: left,
               minHeight: 6,
-              backgroundColor: Colors.white10,
+              backgroundColor: Colors.white.withOpacity(0.08),
               valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
