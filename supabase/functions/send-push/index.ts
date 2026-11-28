@@ -367,6 +367,44 @@ Deno.serve(async (req) => {
   }
 });
 
+/** Columna de `notification_prefs` que controla cada tipo de aviso. */
+const PREF_OF: Record<string, string> = {
+  dm: "messages",
+  chat: "messages",
+  follow_req: "social",
+  follow_accept: "social",
+  like: "social",
+  comment: "social",
+  reply: "social",
+  alert_impact: "impact",
+  weekly_summary: "weekly",
+  streak_reminder: "streak",
+  app_update: "news",
+  plus_promo: "news",
+};
+
+/** Quita a quienes apagaron este tipo de aviso (sin fila = todo encendido). */
+async function allowedRecipients(type: string, to: string[]): Promise<string[]> {
+  const col = PREF_OF[type];
+  if (!col || to.length === 0) return to;
+  const off = new Set<string>();
+  // De a 500 para no armar URLs demasiado largas.
+  for (let i = 0; i < to.length; i += 500) {
+    const { data, error } = await supabase
+      .from("notification_prefs")
+      .select("user_id")
+      .in("user_id", to.slice(i, i + 500))
+      .eq(col, false);
+    if (error) {
+      // Si la tabla aún no existe o falla la consulta, se envía igual.
+      console.error("notification_prefs:", error.message);
+      return to;
+    }
+    for (const r of data ?? []) off.add(r.user_id as string);
+  }
+  return to.filter((u) => !off.has(u));
+}
+
 /** Guarda la copia en el centro de notificaciones (si [store]) y envía por FCM. */
 async function deliver(push: Push, store: boolean): Promise<{ sent: number; removed: number }> {
   // Centro de notificaciones: se guarda una copia para verla en la app
@@ -391,10 +429,15 @@ async function deliver(push: Push, store: boolean): Promise<{ sent: number; remo
     return { sent: 0, removed: 0 };
   }
 
+  // Quienes apagaron este tipo de aviso en Configuración no reciben el push
+  // (si corresponde, igual les queda la copia en la campana).
+  const to = await allowedRecipients(push.type, push.to);
+  if (to.length === 0) return { sent: 0, removed: 0 };
+
   const { data: rows } = await supabase
     .from("device_tokens")
     .select("token")
-    .in("user_id", push.to);
+    .in("user_id", to);
   const tokens = (rows ?? []).map((t) => t.token as string);
   if (tokens.length === 0) return { sent: 0, removed: 0 };
 

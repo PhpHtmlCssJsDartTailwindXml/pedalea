@@ -12,6 +12,7 @@ import '../pages/paywall_page.dart';
 import '../pages/profile_page.dart';
 import '../pages/stats_page.dart';
 import 'app_update_service.dart';
+import 'notification_prefs_service.dart';
 
 /// Servicio centralizado de notificaciones locales (alertas push).
 ///
@@ -211,6 +212,7 @@ class NotificationService {
     required String sender,
     required String body,
   }) async {
+    if (!NotificationPrefs.allows('messages')) return; // apagado en Configuración
     await _ensureInit();
     try {
       await _plugin.show(
@@ -247,6 +249,8 @@ class NotificationService {
     required String body,
     required String payload,
   }) async {
+    // Respeta los tipos apagados en Configuración (mensajes, social…).
+    if (!NotificationPrefs.allowsPayload(payload)) return;
     await _ensureInit();
     try {
       await _plugin.show(

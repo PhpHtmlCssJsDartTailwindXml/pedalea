@@ -17,6 +17,7 @@ import 'services/ride_heat_service.dart';
 import 'services/subscription_service.dart';
 import 'core/route_observer.dart';
 import 'core/app_navigator.dart';
+import 'services/notification_prefs_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +40,7 @@ Future<void> main() async {
   unawaited(PlusPrefsService.init()); // personalización Plus desde profiles
   unawaited(SubscriptionService.instance.init());
   unawaited(PushService.instance.init()); // push real (FCM), si está configurado
+  unawaited(NotificationPrefs.load()); // tipos de aviso apagados en Configuración
   ChatNotificationsService.instance.start(); // avisa mensajes de grupos
   SocialNotificationsService.instance.start(); // avisa seguidores / momentos
 

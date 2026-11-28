@@ -32,6 +32,8 @@ el orden alfabético de los archivos es el orden en que se aplican.
 | 14 | `20261118124024_plus_share_uses.sql` | Imágenes Plus gratis al compartir estadísticas (2 por semana). |
 | 15 | `20261123140815_bike_speed_limits.sql` | Velocidad máxima realista (tope 60 km/h) y limpieza de las velocidades de auto o micro. |
 | 16 | `20261126170747_engagement_pushes.sql` | Logro «Primer pedaleo», resumen semanal (lunes 8:00) y aviso de racha (18:00) con pg_cron. |
+| 17 | `20261127230500_fix_protect_triggers.sql` | Seguridad: los triggers que protegen alertas, eventos y suscripciones vuelven a funcionar (se ejecutan con el rol real). |
+| 18 | `20261127231000_notification_prefs_alert_lifecycle.sql` | Preferencias de notificaciones y vigencia de las alertas («¿Sigue ahí?» y vencimiento automático cada hora). |
 
 ## Seguridad
 

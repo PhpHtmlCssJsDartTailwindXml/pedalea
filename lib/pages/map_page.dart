@@ -94,6 +94,7 @@ import '../widgets/weather_widget.dart';
 import '../widgets/rain_overlay.dart';
 import '../widgets/plus_medal.dart';
 import '../services/weather_service.dart';
+import '../services/alert_life.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -116,6 +117,11 @@ class _MapPageState extends State<MapPage> with RouteAware {
   final PresenceService _presenceService = PresenceService();
   final EventsService _eventsService = EventsService();
   final AlertsService _alertsService = AlertsService();
+  // «¿Sigue ahí?»: alerta sobre la que se pregunta al pasar cerca, y las que
+  // ya se preguntaron en esta sesión (para no insistir).
+  Map<String, dynamic>? _stillThereAlert;
+  Timer? _stillThereTimer;
+  final Set<String> _stillThereAsked = {};
 
   bool _isFollowingUser = false;
   bool _cicloviasAdded = false;
@@ -144,6 +150,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
   bool _routeIsCurrent = true;
   bool _showLayersTip = false;
   Offset? _helpBubblePos;
+  // La burbuja de ayuda (ampolleta) se va sola a los 20 s de abrir la app.
+  bool _helpBubbleHidden = false;
+  Timer? _helpBubbleTimer;
   bool _helpBubbleBounce = false;
   bool _showHelpTipText = false;
   int _helpTipIndex = 0;
@@ -281,7 +290,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         final active = BikeService.instance.activeBike;
         final photo = active?.photoUrl ?? '';
         return Padding(
-          padding: const EdgeInsets.only(left: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Tooltip(
             message: 'Bici activa: ${active?.name ?? ''}',
             child: GestureDetector(
@@ -296,18 +305,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
                   );
                 }
               },
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: _dayNightBox(radius: 19),
-                padding: const EdgeInsets.all(3),
+              child: SizedBox(
+                width: 28,
+                height: 28,
                 child: ClipOval(
                   child: photo.isNotEmpty
                       ? CachedNetworkImage(imageUrl: photo, fit: BoxFit.cover)
                       : Center(
                           child: Text(
                             active?.type.emoji ?? '🚲',
-                            style: const TextStyle(fontSize: 17),
+                            style: const TextStyle(fontSize: 16),
                           ),
                         ),
                 ),
@@ -366,32 +373,18 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             );
         },
-        child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: _dayNightBox(radius: 19),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 20,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(3),
-                ),
+        child: SizedBox(
+          width: 48,
+          height: 34,
+          child: Center(
+            child: Container(
+              width: 20,
+              height: 5,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
               ),
-              const SizedBox(width: 7),
-              Text(
-                'Ciclovías',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: _overlayText,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1008,6 +1001,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
     _checkLocationPermission();
     _loadMyUsername();
     _loadFallDetectionPref();
+    _helpBubbleTimer = Timer(const Duration(seconds: 20), () {
+      if (mounted) setState(() => _helpBubbleHidden = true);
+    });
     _loadRainState();
 
     // Restaurar preferencia de conteo en segundo plano (encendido por defecto).
@@ -1156,6 +1152,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   @override
   void dispose() {
+    _stillThereTimer?.cancel();
+    _helpBubbleTimer?.cancel();
     routeObserver.unsubscribe(this);
     // Invalida cualquier operación async de mapa en curso (ver
     // _ensureEventsIcon) antes de que el widget termine de destruirse.
@@ -1434,7 +1432,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
     final nearby = _proximityService.alertsToNotify(
       position.latitude,
       position.longitude,
-      _currentAlerts,
+      _currentAlerts.where((a) => !_alertExpired(a)).toList(),
     );
     for (final alert in nearby) {
       // "Tu aporte ayudó a…": este ciclista recibió el aviso de la alerta.
@@ -1445,7 +1443,148 @@ class _MapPageState extends State<MapPage> with RouteAware {
         title: '⚠️ Incidente cerca: ${_alertTypeLabel(type)}',
         body: alert['title'] as String? ?? 'Hay un reporte en tu trayecto',
       );
+      _maybeAskStillThere(alert);
     }
+  }
+
+  static DateTime? _alertFreshSince(Map alert) => AlertLife.freshSince(alert);
+  static bool _alertExpired(Map alert) => AlertLife.isExpired(alert);
+
+  /// Al pasar cerca de una alerta de otra persona que no tenga más de unos
+  /// minutos, pregunta si sigue ahí (una vez por alerta y por sesión).
+  void _maybeAskStillThere(Map<String, dynamic> alert) {
+    final id = alert['id']?.toString();
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (id == null || uid == null || _stillThereAlert != null) return;
+    if (_stillThereAsked.contains(id) || alert['user_id']?.toString() == uid) {
+      return;
+    }
+    bool voted(String k) =>
+        (alert[k] as List?)?.map((e) => e.toString()).contains(uid) ?? false;
+    if (voted('voters_up') || voted('voters_down')) return;
+    final since = _alertFreshSince(alert);
+    if (since != null && DateTime.now().difference(since).inMinutes < 20) return;
+    _stillThereAsked.add(id);
+    setState(() => _stillThereAlert = alert);
+    _stillThereTimer?.cancel();
+    _stillThereTimer = Timer(const Duration(seconds: 20), () {
+      if (mounted) setState(() => _stillThereAlert = null);
+    });
+  }
+
+  Future<void> _answerStillThere(bool stillThere) async {
+    final alert = _stillThereAlert;
+    _stillThereTimer?.cancel();
+    setState(() => _stillThereAlert = null);
+    final id = alert?['id']?.toString();
+    if (id == null) return;
+    HapticFeedback.selectionClick();
+    final ok = stillThere
+        ? await _alertsService.voteUp(id)
+        : await _alertsService.voteDown(id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? (stillThere
+                    ? '¡Gracias! La alerta sigue visible para los demás.'
+                    : '¡Gracias! Si otros lo confirman, la alerta se quita.')
+              : 'No se pudo enviar tu respuesta. Intenta de nuevo.',
+        ),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  /// Tarjeta «¿Sigue ahí?» que aparece arriba unos segundos.
+  Widget _buildStillThereCard(Map<String, dynamic> alert) {
+    final type = alert['type'] as String? ?? 'other';
+    final color = _getAlertColor(type);
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF101016),
+          borderRadius: BorderRadius.circular(18),
+          border: Border(left: BorderSide(color: color, width: 3)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(_getAlertIcon(type), color: color, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '¿Sigue ahí? ${alert['title'] ?? _alertTypeLabel(type)}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 26, top: 2),
+              child: Text(
+                'Pasaste cerca. Tu respuesta mantiene el mapa al día.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 11.5,
+                ),
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => _answerStillThere(false),
+                  child: const Text(
+                    'Ya no está',
+                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: () => _answerStillThere(true),
+                  style: TextButton.styleFrom(
+                    backgroundColor: color.withOpacity(0.18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: Text(
+                    'Sigue ahí',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _alertTypeLabel(String type) {
@@ -2919,6 +3058,9 @@ class _MapPageState extends State<MapPage> with RouteAware {
         final lat = (alert["latitude"] as num?)?.toDouble();
         final lng = (alert["longitude"] as num?)?.toDouble();
         if (lat == null || lng == null) continue;
+        if (_alertExpired(alert)) continue; // nadie confirmó que siga
+        final since = _alertFreshSince(alert);
+        final ageH = since == null ? 0 : DateTime.now().difference(since).inHours;
 
         final alertType = alert["type"] as String? ?? 'other';
         final validTypes = {'danger', 'theft', 'construction', 'accident'};
@@ -2937,6 +3079,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
             "user_name": alert["user_name"],
             "votes_up": alert["votes_up"],
             "votes_down": alert["votes_down"],
+            "age_h": ageH,
           },
           "geometry": {
             "type": "Point",
@@ -2989,6 +3132,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
         _alertsLayerId,
         'icon-image',
         jsonEncode(['get', 'icon_id']),
+      );
+      // Las alertas sin confirmar hace rato se ven más tenues.
+      await style.setStyleLayerProperty(
+        _alertsLayerId,
+        'icon-opacity',
+        jsonEncode(['step', ['get', 'age_h'], 1, 6, 0.8, 24, 0.55]),
       );
 
       _alertsLayerAdded = true;
@@ -3181,6 +3330,12 @@ class _MapPageState extends State<MapPage> with RouteAware {
         chips: [
           _sheetChip(Icons.schedule_rounded,
               _formatDate(DateTime.parse(alert['created_at']))),
+          if (alert['confirmed_at'] != null)
+            _sheetChip(
+              Icons.verified_rounded,
+              'Sigue ahí · ${_formatDate(DateTime.parse(alert['confirmed_at'].toString()).toLocal()).toLowerCase()}',
+              color: Colors.greenAccent,
+            ),
           GestureDetector(
             onTap: () => _openUserProfile(alert['user_id']?.toString()),
             child: _sheetChip(Icons.person_rounded, '${alert['user_name']}'),
@@ -3350,16 +3505,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
-          child: Container(
-            height: 52,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isActive
-                    ? color.withOpacity(0.5)
-                    : Colors.white.withOpacity(0.08),
-              ),
-            ),
+          child: SizedBox(
+            height: 48,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -3897,142 +4044,111 @@ class _MapPageState extends State<MapPage> with RouteAware {
     );
   }
 
-  /// Fila de chips bajo la barra superior: estado (ciclista / pasajero) a la
-  /// izquierda y clima a la derecha.
+  /// Bajo la búsqueda, solo si vas de pasajero: «Vas en micro» y el botón
+  /// para volver a pedalear. El estado de ciclista va como sello en tu foto.
   Widget _buildTopBar() {
+    if (!_isPassenger) return const SizedBox.shrink();
     final accent =
         _isDayMode ? const Color(0xFF00A86B) : Colors.greenAccent;
-    final statusColor = _isPassenger ? Colors.lightBlueAccent : accent;
-    final vInfo = _vehicleInfo(_passengerVehicle);
-    final statusIcon = _isPassenger
-        ? (_passengerVehicle == 'micro'
-              ? Icons.directions_bus_rounded
-              : _passengerVehicle == 'metro'
-              ? Icons.subway_rounded
-              : Icons.directions_car_rounded)
-        : Icons.directions_bike;
-    final statusText =
-        _isPassenger ? 'Pasajero · ${vInfo.label}' : 'Ciclista activo';
-
+    final v = _vehicleInfo(_passengerVehicle);
     return Row(
       children: [
-        Flexible(
-          child: Container(
-            height: 38,
-            padding: const EdgeInsets.only(left: 12, right: 5),
-            decoration: _dayNightBox(radius: 19),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
+        Container(
+          height: 38,
+          padding: const EdgeInsets.only(left: 14, right: 5),
+          decoration: _dayNightBox(radius: 19),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${v.emoji} Vas en ${v.label}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: _overlayText,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => _exitPassengerMode(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: statusColor.withOpacity(0.6),
-                        blurRadius: 6,
-                        spreadRadius: 1,
-                      ),
-                    ],
+                    color: accent,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  statusIcon,
-                  color: _isPassenger ? Colors.lightBlue : accent,
-                  size: 17,
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    statusText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: const Text(
+                    'Pedalear',
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      color: _overlayText,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12.5,
+                      color: Colors.black,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-                const SizedBox(width: 7),
-                if (_isPassenger)
-                  GestureDetector(
-                    onTap: () => _exitPassengerMode(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.greenAccent.withOpacity(0.4),
-                        ),
-                      ),
-                      child: const Text(
-                        '🚴 Pedalear',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.greenAccent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  const SizedBox(width: 5),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        if (!_isPassenger) ...[
-          const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  /// Columna derecha bajo la búsqueda: clima, color de las ciclovías y bici
+  /// activa, apilados en una sola cápsula angosta.
+  Widget _buildSideColumn() {
+    Widget line() => Container(
+      width: 22,
+      height: 1,
+      color: _overlayText.withOpacity(0.12),
+    );
+    return Container(
+      width: 48,
+      decoration: _dayNightBox(radius: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Clima, con el recordatorio «Toca para ver el clima» a la izquierda.
           Stack(
             clipBehavior: Clip.none,
+            alignment: Alignment.center,
             children: [
-              Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                alignment: Alignment.center,
-                decoration: _dayNightBox(radius: 19),
-                child: WeatherPill(isDayMode: _isDayMode),
+              SizedBox(
+                width: 48,
+                height: 44,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: WeatherPill(isDayMode: _isDayMode),
+                    ),
+                  ),
+                ),
               ),
-              // Recordatorio pequeño: se oculta tras abrir el detalle 3 veces.
               Positioned(
-                top: 42,
-                left: -30,
-                right: -30,
+                right: 54,
                 child: IgnorePointer(
                   child: ValueListenableBuilder<bool>(
                     valueListenable: WeatherPill.showHint,
                     builder: (_, show, _) => AnimatedOpacity(
                       duration: const Duration(milliseconds: 300),
                       opacity: show ? 1 : 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.55),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Text(
-                            'Toca para ver el clima',
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: Colors.white,
-                              fontSize: 9.5,
-                            ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Toca para ver el clima',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 9.5,
                           ),
                         ),
                       ),
@@ -4042,11 +4158,16 @@ class _MapPageState extends State<MapPage> with RouteAware {
               ),
             ],
           ),
-          const SizedBox(width: 8),
+          line(),
           _buildCicloviaLegend(),
-          _buildBikeSwitcher(),
+          ValueListenableBuilder<List<Bike>>(
+            valueListenable: BikeService.instance.bikes,
+            builder: (_, bikes, _) => bikes.isEmpty
+                ? const SizedBox.shrink()
+                : Column(children: [line(), _buildBikeSwitcher()]),
+          ),
         ],
-      ],
+      ),
     );
   }
 
@@ -7155,6 +7276,19 @@ class _MapPageState extends State<MapPage> with RouteAware {
             right: 16,
             child: _buildTopBar(),
           ),
+          if (!_isPassenger)
+            Positioned(
+              top: topInset + 68,
+              right: 16,
+              child: _buildSideColumn(),
+            ),
+          if (_stillThereAlert != null)
+            Positioned(
+              top: topInset + 68,
+              left: 16,
+              right: 76,
+              child: _buildStillThereCard(_stillThereAlert!),
+            ),
           Positioned(left: 20, bottom: 64, child: _buildSpeedometer()),
 
           if (_isSelectingLocation && _selectedLocation != null)
@@ -7190,7 +7324,19 @@ class _MapPageState extends State<MapPage> with RouteAware {
                 const SizedBox(width: 10),
                 _buildMessagesButton(),
                 const SizedBox(width: 8),
-                _ProfileButton(isDayMode: _isDayMode),
+                _ProfileButton(
+                  isDayMode: _isDayMode,
+                  // Sello: verde = contando tus km, gris = en pausa,
+                  // celeste = vas de pasajero.
+                  statusColor: _isPassenger
+                      ? Colors.lightBlueAccent
+                      : _modoActivo
+                      ? Colors.greenAccent
+                      : Colors.grey,
+                  statusIcon: _isPassenger
+                      ? Icons.directions_bus_rounded
+                      : Icons.directions_bike_rounded,
+                ),
               ],
             ),
           ),
@@ -7305,7 +7451,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
           // ── Burbuja flotante de ayuda: se puede arrastrar por todo el
           // mapa; al tocarla hace un pequeño efecto y muestra un tip corto
-          // al lado, sin abrir ningún modal.
+          // al lado, sin abrir ningún modal. Se va sola a los 20 s.
+          if (!_helpBubbleHidden)
           Builder(
             builder: (context) {
               final size = MediaQuery.of(context).size;
@@ -9263,168 +9410,126 @@ class _MapPageState extends State<MapPage> with RouteAware {
   }) {
     final bottomPad = MediaQuery.of(ctx).padding.bottom;
     return Container(
-      margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomPad),
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(ctx).size.height * 0.85,
       ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0E0E18),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 30,
-            offset: const Offset(0, 8),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        color: Color(0xFF101016),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ── Cabecera ─────────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 10, 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [color.withOpacity(0.2), color.withOpacity(0.0)],
-                  ),
-                ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Línea del color del tipo de punto.
+            Container(height: 3, color: color),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(bottom: bottomPad),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 38,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                color,
-                                Color.lerp(color, Colors.black, 0.3)!,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(17),
-                            boxShadow: [
-                              BoxShadow(
-                                color: color.withOpacity(0.35),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
+                    // ── Cabecera ──
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Icon(icon, color: color, size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            title,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontFamily: 'Poppins',
+                                              color: Colors.white,
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.25,
+                                            ),
+                                          ),
+                                        ),
+                                        if (titleTrailing != null) ...[
+                                          const SizedBox(width: 6),
+                                          titleTrailing,
+                                        ],
+                                      ],
+                                    ),
+                                    if (subtitle != null && subtitle.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          subtitle,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            color: Colors.white.withOpacity(0.45),
+                                            fontSize: 12.5,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Cerrar',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => Navigator.pop(ctx),
+                                icon: const Icon(Icons.close_rounded,
+                                    color: Colors.white38, size: 20),
                               ),
                             ],
                           ),
-                          child: Icon(icon, color: Colors.white, size: 26),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        title,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: Colors.white,
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.25,
-                                        ),
-                                      ),
-                                    ),
-                                    if (titleTrailing != null) ...[
-                                      const SizedBox(width: 6),
-                                      titleTrailing,
-                                    ],
-                                  ],
-                                ),
-                                if (subtitle != null && subtitle.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      subtitle,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        color: Colors.white.withOpacity(0.55),
-                                        fontSize: 12.5,
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                          if (chips.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 30),
+                              child: Wrap(spacing: 14, runSpacing: 6, children: chips),
                             ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Cerrar',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => Navigator.pop(ctx),
-                          icon: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.07),
-                            ),
-                            child: const Icon(Icons.close_rounded,
-                                color: Colors.white60, size: 18),
-                          ),
-                        ),
-                      ],
+                          ],
+                        ],
+                      ),
                     ),
-                    if (chips.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Wrap(spacing: 6, runSpacing: 6, children: chips),
-                    ],
+                    Divider(height: 1, color: Colors.white.withOpacity(0.06)),
+                    ?hero,
+                    if (body.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: body,
+                        ),
+                      ),
+                    if (footer != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                        child: footer,
+                      )
+                    else
+                      const SizedBox(height: 16),
                   ],
                 ),
               ),
-              ?hero,
-              if (body.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(16, hero != null ? 14 : 0, 16, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: body,
-                  ),
-                ),
-              if (footer != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                  child: footer,
-                )
-              else
-                const SizedBox(height: 16),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -9432,36 +9537,26 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   /// Chip compacto de la cabecera (hora, autor, velocidad…).
   Widget _sheetChip(IconData icon, String text, {Color? color}) {
-    final c = color ?? Colors.white70;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: (color ?? Colors.white).withOpacity(color != null ? 0.12 : 0.07),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: (color ?? Colors.white).withOpacity(color != null ? 0.3 : 0.1),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: c),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: c,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-              ),
+    final c = color ?? Colors.white54;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: c),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: c,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -9472,19 +9567,14 @@ class _MapPageState extends State<MapPage> with RouteAware {
     String? title,
     Map<int, Color> valueColors = const {},
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (title != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 2),
+              padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 title,
                 style: TextStyle(
@@ -9498,33 +9588,17 @@ class _MapPageState extends State<MapPage> with RouteAware {
             ),
           for (int i = 0; i < facts.length; i++) ...[
             if (i > 0)
-              Divider(
-                height: 1,
-                indent: 52,
-                endIndent: 14,
-                color: Colors.white.withOpacity(0.06),
-              ),
+              Divider(height: 1, color: Colors.white.withOpacity(0.05)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(
                 children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: (valueColors[i] ?? color).withOpacity(0.13),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Icon(facts[i].$1,
-                        color: valueColors[i] ?? color, size: 16),
-                  ),
-                  const SizedBox(width: 10),
                   Text(
                     facts[i].$2,
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 12.5,
+                      color: Colors.white.withOpacity(0.45),
+                      fontSize: 13,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -9551,14 +9625,8 @@ class _MapPageState extends State<MapPage> with RouteAware {
 
   /// Bloque de texto libre (descripción).
   Widget _sheetText(String text, {String? label}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -9614,7 +9682,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
           ),
           textStyle: const TextStyle(
             fontFamily: 'Poppins',
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             fontSize: 14.5,
           ),
         ),
@@ -9637,8 +9705,7 @@ class _MapPageState extends State<MapPage> with RouteAware {
         label: Text(label),
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
-          backgroundColor: color.withOpacity(0.08),
-          side: BorderSide(color: color.withOpacity(0.45)),
+          side: BorderSide.none,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(25),
           ),
@@ -10107,45 +10174,32 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
         HapticFeedback.selectionClick();
         setState(() => _selectedType = key);
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutBack,
-            width: selected ? 54 : 44,
-            height: selected ? 54 : 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: selected ? info.color : Colors.white.withOpacity(0.06),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: info.color.withOpacity(0.55),
-                        blurRadius: 18,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Icon(
-              info.icon,
-              color: selected ? Colors.white : Colors.white54,
-              size: selected ? 26 : 21,
-            ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? info.color.withOpacity(0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? info.color : Colors.white.withOpacity(0.12),
           ),
-          const SizedBox(height: 6),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 200),
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              color: selected ? Colors.white : Colors.white38,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(info.icon, size: 16, color: selected ? info.color : Colors.white54),
+            const SizedBox(width: 6),
+            Text(
+              info.label,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12.5,
+                color: selected ? Colors.white : Colors.white60,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
             ),
-            child: Text(info.label),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -10222,16 +10276,9 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
         duration: const Duration(milliseconds: 300),
         decoration: BoxDecoration(
           color: _bg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          // Un brillo del color del tipo arriba: llamativo pero limpio.
-          // Colores sólidos (mezclados sobre el fondo) para que el mapa no
-          // se transparente detrás del formulario.
-          gradient: RadialGradient(
-            center: const Alignment(0, -1.4),
-            radius: 1.1,
-            colors: [Color.alphaBlend(accent.withOpacity(0.28), _bg), _bg],
-          ),
-          border: Border(top: BorderSide(color: accent.withOpacity(0.5), width: 1.5)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          // Línea fina del color del tipo elegido.
+          border: Border(top: BorderSide(color: accent, width: 3)),
         ),
         child: SafeArea(
           top: false,
@@ -10256,26 +10303,22 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
                   const SizedBox(height: 14),
                   const Text(
                     'Nueva alerta',
-                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
-                  // Tipo: cinco círculos, el elegido crece y brilla.
-                  SizedBox(
-                    height: 82,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: _alertTypes.entries
-                          .map((e) => _typeDot(e.key, e.value))
-                          .toList(),
-                    ),
+                  // Tipo: etiquetas con ícono; la elegida se marca con su color.
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _alertTypes.entries
+                        .map((e) => _typeDot(e.key, e.value))
+                        .toList(),
                   ),
                   const SizedBox(height: 18),
 
@@ -10288,30 +10331,10 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       color: Colors.white,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                     ),
-                    decoration: InputDecoration(
-                      hintText: '¿Qué está pasando?',
-                      hintStyle: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white30,
-                        fontSize: 19,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      counterText: '',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                      enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-                      ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: accent, width: 2),
-                      ),
-                      errorBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.redAccent),
-                      ),
-                    ),
+                    decoration: _softField('¿Qué está pasando?', accent),
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Escribe o elige qué está pasando'
                         : null,
@@ -10332,15 +10355,18 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
                           duration: const Duration(milliseconds: 180),
                           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                           decoration: BoxDecoration(
-                            color: picked ? accent : accent.withOpacity(0.1),
+                            color: picked ? accent.withOpacity(0.16) : Colors.transparent,
                             borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: picked ? accent : Colors.white.withOpacity(0.10),
+                            ),
                           ),
                           child: Text(
                             sug,
                             style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 12,
-                              color: picked ? Colors.white : accent,
+                              color: picked ? Colors.white : Colors.white60,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -10441,19 +10467,10 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
                     onTap: _uploadingPhoto ? null : _submit,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      height: 54,
+                      height: 50,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        gradient: LinearGradient(
-                          colors: [accent, Color.lerp(accent, Colors.black, 0.25)!],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: accent.withOpacity(0.45),
-                            blurRadius: 20,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
+                        borderRadius: BorderRadius.circular(25),
+                        color: accent,
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -10465,8 +10482,8 @@ class _SimpleAlertFormDialogState extends State<_SimpleAlertFormDialog> {
                             style: const TextStyle(
                               fontFamily: 'Poppins',
                               color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -10862,7 +10879,13 @@ class _DrawerProfileHeaderState extends State<_DrawerProfileHeader> {
 /// Botón circular de perfil para la barra superior del mapa.
 class _ProfileButton extends StatefulWidget {
   final bool isDayMode;
-  const _ProfileButton({this.isDayMode = false});
+  final Color? statusColor;
+  final IconData? statusIcon;
+  const _ProfileButton({
+    this.isDayMode = false,
+    this.statusColor,
+    this.statusIcon,
+  });
 
   @override
   State<_ProfileButton> createState() => _ProfileButtonState();
@@ -10987,6 +11010,21 @@ class _ProfileButtonState extends State<_ProfileButton> {
               bottom: -3,
               right: -3,
               child: PlusMedal(size: 16, ringColor: Color(0xFF0A1A0A)),
+            ),
+          if (widget.statusColor != null)
+            Positioned(
+              bottom: -3,
+              left: -3,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: widget.statusColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF0A0A12), width: 2),
+                ),
+                child: Icon(widget.statusIcon, size: 10, color: Colors.black),
+              ),
             ),
         ],
       ),
